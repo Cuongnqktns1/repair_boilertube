@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hệ Thống Quản Lý Đo Kiểm Tra Ống - Nghi Sơn 1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f3f4f6; color: #111827; padding-bottom: 20px; -webkit-tap-highlight-color: transparent; }
+        .hidden { display: none !important; }
+        
+        /* Spinner Loading */
+        #loading-spinner { position: fixed; inset: 0; background: rgba(17,24,39,0.7); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .spinner { width: 44px; height: 44px; border: 4px solid #3b82f6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Form Đăng nhập & Đăng ký */
+        .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(to top right, #eff6ff, #f3f4f6); }
+        .auth-card { background: #fff; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; width: 100%; max-w: 400px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .logo-badge { background: #2563eb; color: #fff; font-weight: bold; padding: 6px 12px; border-radius: 10px; display: inline-block; font-size: 16px; margin-bottom: 8px; }
+        .auth-title { font-size: 18px; font-weight: bold; text-align: center; text-transform: uppercase; color: #1f2937; }
+        .auth-sub { font-size: 12px; color: #6b7280; text-align: center; margin-top: 4px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 14px; }
+        .form-label { display: block; font-size: 11px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
+        .form-input, .form-select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; background: #fff; outline: none; }
+        .form-input:focus, .form-select:focus { border-color: #2563eb; }
+        .btn-primary { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 8px; }
+        .btn-primary:active { background: #1d4ed8; }
+        .auth-toggle { font-size: 12px; color: #2563eb; font-weight: 600; text-align: center; margin-top: 12px; cursor: pointer; display: block; }
+
+        /* Navigation Bar */
+        .navbar { background: #111827; color: #fff; padding: 10px 14px; position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center; }
+        .nav-title { font-size: 13px; font-weight: bold; }
+        .user-pill { background: #1f2937; border: 1px solid #374151; padding: 4px 8px; border-radius: 8px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+        .role-tag { background: #1e3a8a; color: #bfdbfe; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+
+        /* Tabs bar */
+        .tab-bar { background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 48px; z-index: 40; display: flex; gap: 8px; padding: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .tab-btn { padding: 8px 14px; font-size: 12px; font-weight: bold; border-radius: 8px; border: none; white-space: nowrap; background: transparent; color: #4b5563; cursor: pointer; flex-shrink: 0; }
+        .tab-btn.active { background: #2563eb; color: #fff; }
+
+        /* Main Container */
+        .container { max-width: 1200px; margin: 0 auto; padding: 12px; }
+        .card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+
+        /* Grid Thống kê */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+        .stat-box { padding: 10px; border-radius: 10px; border: 1px solid #e5e7eb; }
+        .stat-box.blue { background: #eff6ff; border-color: #dbeafe; }
+        .stat-box.green { background: #f0fdf4; border-color: #dcfce7; }
+        .stat-box.red { background: #fef2f2; border-color: #fee2e2; grid-column: span 2; }
+        .stat-num { font-size: 20px; font-weight: 900; }
+
+        /* Tables Responsive */
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+        th { background: #1f2937; color: #fff; font-weight: 600; padding: 8px 10px; text-align: left; }
+        td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+        tr:nth-child(even) { background: #f9fafb; }
+        
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; border: 1px solid transparent; }
+        .badge-red { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .badge-green { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 640px) {
+            .grid-form { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        }
+        @media (min-width: 641px) {
+            .grid-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading -->
+    <div id="loading-spinner" class="hidden">
+        <div class="spinner"></div>
+        <p style="color:#fff; font-size:12px; margin-top:10px; font-weight:bold;">Đang đồng bộ dữ liệu với hệ thống...</p>
+    </div>
+
+    <!-- Auth Section -->
+    <div id="auth-wrapper" class="auth-container">
+        <div id="login-card" class="auth-card">
+            <div style="text-align: center;">
+                <div class="logo-badge">NS1</div>
+                <h2 class="auth-title">Đăng Nhập Hệ Thống</h2>
+                <p class="auth-sub">Giám sát số liệu đo kiểm tra ống lò Nghi Sơn 1</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email tài khoản</label>
+                <input type="email" id="login-email" placeholder="Nhập email của anh" class="form-input">
+            </div>
+            <button onclick="login()" class="btn-primary">Đăng Nhập</button>
+            <span onclick="toggleAuth(true)" class="auth-toggle">Chưa có tài khoản? Đăng ký ngay</span>
+        </div>
+
+        <div id="register-card" class="auth-card hidden">
+            <div style="text-align: center;">
+                <h2 class="auth-title">Đăng Ký Tài Khoản</h2>
+                <p class="auth-sub">Tạo yêu cầu cấp quyền truy cập hệ thống</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Họ và Tên</label>
+                <input type="text" id="reg-name" placeholder="Ví dụ: Nguyễn Văn A" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email đăng ký</label>
+                <input type="email" id="reg-email" placeholder="example@gmail.com" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Thuộc Đơn Vị</label>
+                <select id="reg-org" class="form-select">
+                    <option value="Công ty nhiệt điện Nghi Sơn">Công ty nhiệt điện Nghi Sơn</option>
+                    <option value="Nhà thầu XYZ">Nhà thầu XYZ (Đơn vị NDT)</option>
+                    <option value="Phòng/PX/LĐ công ty">Phòng / Phân xưởng / Lãnh đạo công ty</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tên tổ đội / phòng ban cụ thể</label>
+                <input type="text" id="reg-detail" placeholder="PX Sửa chữa, Tổ lò..." class="form-input">
+            </div>
+            <button onclick="register()" class="btn-primary">Gửi Yêu Cầu Đăng Ký</button>
+            <span onclick="toggleAuth(false)" class="auth-toggle">Đã có tài khoản? Đăng nhập</span>
+        </div>
+    </div>
+
+    <!-- App Main Layout -->
+    <div id="main-wrapper" class="hidden">
+        <nav class="navbar">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="background:#2563eb; font-weight:bold; padding:2px 6px; border-radius:6px; font-size:12px;">NS1</span>
+                <span class="nav-title">QUẢN LÝ ĐO KIỂM TRA ỐNG</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div class="user-pill">
+                    <span id="txt-username" style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">...</span>
+                    <span id="txt-role" class="role-tag">...</span>
+                </div>
+                <button onclick="logout()" style="background:#374151; color:#f87171; border:none; padding:5px 8px; border-radius:6px; font-weight:bold; font-size:11px;">Thoát</button>
+            </div>
+        </nav>
+
+        <div class="tab-bar">
+            <button onclick="switchTab('tab-nhaplieu')" id="btn-tab-nhaplieu" class="tab-btn active">📁 1. Kiểm Tra & Nhập Liệu</button>
+            <button onclick="switchTab('tab-suachua')" id="btn-tab-suachua" class="tab-btn">🔧 2. Sửa Chữa (<70%)</button>
+            <button onclick="switchTab('tab-admin')" id="btn-tab-admin" class="tab-btn hidden">🛡️ 3. Quản Lý Duyệt User</button>
+        </div>
+
+        <main class="container">
+            <!-- Summary Dashboard -->
+            <div class="card">
+                <h3 style="font-size:12px; font-weight:bold; text-transform:uppercase; color:#374151; border-bottom:1px solid #f3f4f6; padding-bottom:6px;">📋 Tổng Hợp Khối Lượng Đo</h3>
+                <div class="stats-grid">
+                    <div class="stat-box blue">
+                        <span style="font-size:10px; color:#2563eb; font-weight:bold; display:block;">ĐÃ KIỂM TRA</span>
+                        <span id="stat-total" class="stat-num" style="color:#1e3a8a;">0</span>
+                        <span style="font-size:10px; color:#9ca3af;">đoạn ống</span>
+                    </div>
+                    <div class="stat-box green">
+                        <span style="font-size:10px; color:#16a34a; font-weight:bold; display:block;">ỐNG AN TOÀN</span>
+                        <span id="stat-safe" class="stat-num" style="color:#14532d;">0</span>
+                        <span id="stat-safe-pct" style="font-size:10px; color:#15803d; font-weight:bold;">(0%)</span>
+                    </div>
+                    <div class="stat-box red">
+                        <span style="font-size:10px; color:#dc2626; font-weight:bold; display:block;">PHẢI CẮT THAY SỬA CHỮA (< 70%)</span>
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span id="stat-repair" class="stat-num" style="color:#7f1d1d; font-size:24px;">0</span>
+                            <span id="stat-repair-pct" style="font-size:12px; color:#b91c1c; font-weight:bold;">(0%)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 1: Nhập liệu -->
+            <div id="tab-nhaplieu" class="tab-content">
+                <div class="card" style="background: linear-gradient(to right, #eff6ff, #fff);">
+                    <h3 style="font-size:13px; font-weight:bold; color:#1f2937;">Import File Excel Hàng Loạt</h3>
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="font-size:11px; margin-top:8px; width:100%;">
+                </div>
+
+                <div class="card">
+                    <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:12px;">Cập Nhật Số Liệu Đo Ống</h3>
+                    <form id="measureForm">
+                        <div class="grid-form">
+                            <div class="form-group"><label class="form-label">1. Hệ thống</label><input type="text" id="m-system" required class="form-input"></div>
+                            <div class="form-group"><label class="form-label">2. Thiết bị</label><input type="text" id="m-device" required class="form-input"></div>
+                            <div class="form-group"><label class="form-label">3. Vị trí</label><input type="text" id="m-location" required class="form-input"></div>
+                            <div class="form-group"><label class="form-label">4. Lớp ống</label><input type="text" id="m-layer" class="form-input" placeholder="Lớp ngoài"></div>
+                            <div class="form-group"><label class="form-label">5. Đường kính</label><input type="text" id="m-diameter" class="form-input" placeholder="d38x5"></div>
+                            <div class="form-group"><label class="form-label">6. Chiều dày thiết kế ($S_{tk}$)</label><input type="number" step="0.1" inputmode="decimal" id="m-s-design" required class="form-input" placeholder="mm"></div>
+                            <div class="form-group"><label class="form-label">7. Chiều dày thực tế ($S_{tt}$)</label><input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input" placeholder="mm"></div>
+                            <div class="form-group"><label class="form-label">8. Ngoại dạng</label><input type="text" id="m-visual" class="form-input" placeholder="Bình thường"></div>
+                            <div class="form-group"><label class="form-label">9. Ngày kiểm tra</label><input type="date" id="m-date" required class="form-input"></div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                            <button type="button" onclick="resetForm()" style="padding:10px 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; font-size:12px; font-weight:bold;">Xóa Form</button>
+                            <button type="submit" style="padding:10px 16px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:12px; font-weight:bold;">Lưu Dữ Liệu</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card" style="padding:0; overflow:hidden;">
+                    <div style="padding:10px 14px; background:#f9fafb; border-bottom:1px solid #e5e7eb; display:flex; justify-between; align-items:center;">
+                        <span style="font-size:11px; font-weight:bold; text-transform:uppercase;">Danh Sách Thông Số Đo</span>
+                        <span id="total-records" style="font-size:10px; background:#dbeafe; color:#1e40af; font-weight:bold; padding:2px 8px; border-radius:10px;">0 Bản ghi</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="text-align:center;">STT</th>
+                                    <th>Hệ thống</th>
+                                    <th>Thiết bị</th>
+                                    <th>Vị trí</th>
+                                    <th>Lớp</th>
+                                    <th style="text-align:center;">Đường kính</th>
+                                    <th style="text-align:center;">S_tk</th>
+                                    <th style="text-align:center;">S_tt</th>
+                                    <th style="text-align:center;">Tỷ lệ</th>
+                                    <th>Ngoại dạng</th>
+                                    <th style="text-align:center;">Ngày đo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dataTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Sửa chữa -->
+            <div id="tab-suachua" class="tab-content hidden">
+                <div class="card" style="padding:0; overflow:hidden;">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="text-align:center;">Hệ thống / Thiết bị / Vị trí</th>
+                                    <th style="text-align:center;">S_tk / S_tt</th>
+                                    <th style="text-align:center;">1. Cắt ống</th>
+                                    <th style="text-align:center;">2. Hàn ống</th>
+                                    <th style="text-align:center;">3. Kết quả PAUT</th>
+                                </tr>
+                            </thead>
+                            <tbody id="repairTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Admin -->
+            <div id="tab-admin" class="tab-content hidden">
+                <div class="card" style="padding:0; overflow:hidden;">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Họ và Tên</th>
+                                    <th>Email</th>
+                                    <th>Đơn vị</th>
+                                    <th>Quyền Hiện Tại</th>
+                                    <th style="text-align:center;">Thay Đổi Quyền</th>
+                                    <th style="text-align:center;">Trạng Thái</th>
+                                    <th style="text-align:center;">Hành Động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCO3WC4mwJyT7qyLKB37Ht5j0szrCO103id8_D_qiJbpa4GJ5oToZ9GOuVxZp2rsQp/exec";
+
+        let currentUser = null;
+        let allRecords = [];
+
+        function getDisplayName(r) {
+            let keyParts = [
+                r.system ? String(r.system).trim() : "",
+                r.device ? String(r.device).trim() : "",
+                r.location ? String(r.location).trim() : ""
+            ];
+            if (r.layer && String(r.layer).trim() !== "-" && String(r.layer).trim() !== "") {
+                keyParts.push(String(r.layer).trim());
+            }
+            return keyParts.filter(Boolean).join(" - ");
+        }
+
+        function getRecordKey(r) { return r.id ? String(r.id) : getDisplayName(r); }
+
+        function showLoading(status) { document.getElementById('loading-spinner').classList.toggle('hidden', !status); }
+
+        function toggleAuth(isReg) {
+            document.getElementById('login-card').classList.toggle('hidden', isReg);
+            document.getElementById('register-card').classList.toggle('hidden', !isReg);
+        }
+
+        function getDefaultWelds(parentKey) {
+            return [
+                { id: `${parentKey} - w1`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" },
+                { id: `${parentKey} - w2`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" }
+            ];
+        }
+
+        async function syncRecordData(item, localWelds) {
+            if(!item || !item.id) return false;
+            showLoading(true);
+            try {
+                let response = await fetch(SCRIPT_URL, {
+                    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'updateRecordStatus',
+                        id: String(item.id).trim(),
+                        isCut: item.isCut,
+                        isWeld: item.isWeld,
+                        paut: item.paut,
+                        weldsJson: JSON.stringify(localWelds)
+                    })
+                });
+                await loadDataFromGoogleSheet();
+                return true;
+            } catch(e) {
+                alert('Lỗi kết nối máy chủ!');
+                showLoading(false);
+                return false;
+            }
+        }
+
+        async function login() {
+            let email = document.getElementById('login-email').value.trim().toLowerCase();
+            if(!email) { alert('Vui lòng nhập Email!'); return; }
+
+            showLoading(true);
+            try {
+                let resUsers = await fetch(SCRIPT_URL, { 
+                    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'getUsers' }) 
+                });
+                let users = await resUsers.json();
+                localStorage.setItem('users', JSON.stringify(users));
+
+                let userInSheet = users.find(u => u.email === email);
+                if(!userInSheet) { alert('Tài khoản này không tồn tại!'); showLoading(false); return; }
+                if(userInSheet.status !== 'Đã duyệt') { alert('Tài khoản chờ phê duyệt!'); showLoading(false); return; }
+
+                currentUser = userInSheet;
+                document.getElementById('auth-wrapper').classList.add('hidden');
+                document.getElementById('main-wrapper').classList.remove('hidden');
+                document.getElementById('txt-username').innerText = currentUser.name;
+                document.getElementById('txt-role').innerText = currentUser.role;
+
+                setupRoleAccess();
+                await loadDataFromGoogleSheet();
+
+            } catch (err) { alert('Lỗi kết nối máy chủ!'); }
+            showLoading(false);
+        }
+
+        async function register() {
+            let name = document.getElementById('reg-name').value.trim();
+            let email = document.getElementById('reg-email').value.trim().toLowerCase();
+            let org = document.getElementById('reg-org').value;
+            let detail = document.getElementById('reg-detail').value.trim();
+
+            if(!name || !email || !detail) { alert('Vui lòng điền đầy đủ!'); return; }
+            showLoading(true);
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveUser', data: { email, name, org, detail, status: 'Chờ duyệt', role: 'Chưa phân quyền' } }) });
+                alert('Đã gửi yêu cầu đăng ký!'); toggleAuth(false);
+            } catch(e) { alert('Lỗi đường truyền!'); }
+            showLoading(false);
+        }
+
+        function logout() {
+            currentUser = null; document.getElementById('main-wrapper').classList.add('hidden');
+            document.getElementById('auth-wrapper').classList.remove('hidden');
+        }
+
+        function setupRoleAccess() {
+            const userRole = currentUser.role ? currentUser.role.trim().toLowerCase() : "";
+            document.getElementById('btn-tab-admin').classList.toggle('hidden', userRole !== 'admin');
+            const formInputs = document.querySelectorAll('#measureForm input, #measureForm select, #excel-file-input');
+            if (userRole === 'kỹ thuật viên' || userRole === 'admin') {
+                formInputs.forEach(i => i.removeAttribute('disabled')); document.getElementById('btn-tab-nhaplieu').classList.remove('hidden');
+            } else {
+                formInputs.forEach(i => i.setAttribute('disabled', 'true'));
+                if (userRole === 'nhà thầu ndt') { switchTab('tab-suachua'); document.getElementById('btn-tab-nhaplieu').classList.add('hidden'); }
+            }
+        }
+
+        async function loadDataFromGoogleSheet() {
+            showLoading(true);
+            try {
+                let resRecords = await fetch(SCRIPT_URL, { 
+                    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'getRecords' }) 
+                });
+                allRecords = await resRecords.json();
+
+                allRecords.forEach(r => {
+                    if (r.weldsJson && typeof r.weldsJson === 'string' && r.weldsJson.trim().startsWith("[")) {
+                        try {
+                            localStorage.setItem(`welds_${getRecordKey(r)}`, r.weldsJson);
+                        } catch(e) {}
+                    }
+                });
+
+                localStorage.setItem('records', JSON.stringify(allRecords));
+                renderDataTable(allRecords); 
+                renderRepairTable(allRecords); 
+                calculateDashboard(allRecords);
+
+                if (currentUser.role === 'Admin') {
+                    let resUsers = await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'getUsers' }) });
+                    let users = await resUsers.json(); renderUserTable(users);
+                }
+            } catch (err) { console.error("Lỗi đồng bộ:", err); }
+            showLoading(false);
+        }
+
+        function calculateDashboard(records) {
+            let total = records.length; let safe = 0, repair = 0;
+            records.forEach(r => {
+                let sDesign = parseFloat(r.sDesign) || 0; let sActual = parseFloat(r.sActual) || 0;
+                if (sDesign <= 0) return;
+                let pct = (sActual / sDesign) * 100;
+                if (pct < 70) repair++; else safe++;
+            });
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-safe').innerText = safe;
+            document.getElementById('stat-safe-pct').innerText = total > 0 ? `(${Math.round((safe/total)*100)}%)` : '(0%)';
+            document.getElementById('stat-repair').innerText = repair;
+            document.getElementById('stat-repair-pct').innerText = total > 0 ? `(${Math.round((repair/total)*100)}%)` : '(0%)';
+        }
+
+        function renderDataTable(records) {
+            const tbody = document.getElementById('dataTableBody'); document.getElementById('total-records').innerText = `${records.length} Bản ghi`; tbody.innerHTML = '';
+            records.forEach((row, index) => {
+                let sDesign = parseFloat(row.sDesign) || 0; let sActual = parseFloat(row.sActual) || 0;
+                let pct = sDesign > 0 ? Math.round((sActual / sDesign) * 1000) / 10 : 0;
+                let pctClass = pct < 70 ? "badge badge-red" : "badge badge-green";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="text-align:center; font-weight:bold; color:#9ca3af;">${row.id ? row.id : index + 1}</td>
+                    <td style="font-weight:bold;">${row.system || ''}</td>
+                    <td>${row.device || ''}</td>
+                    <td>${row.location || ''}</td>
+                    <td>${row.layer || '-'}</td>
+                    <td style="text-align:center;">${row.diameter || '-'}</td>
+                    <td style="text-align:center; font-weight:bold;">${sDesign}</td>
+                    <td style="text-align:center; font-weight:bold; color:#2563eb;">${sActual}</td>
+                    <td style="text-align:center;"><span class="${pctClass}">${pct}%</span></td>
+                    <td>${row.visual || 'Bình thường'}</td>
+                    <td style="text-align:center;">${row.date ? String(row.date).slice(0, 10) : ''}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderRepairTable(records) {
+            const tbody = document.getElementById('repairTableBody'); tbody.innerHTML = '';
+            const alertRecords = records.filter(r => { let sD = parseFloat(r.sDesign), sA = parseFloat(r.sActual); if (!sD || sD <= 0) return false; return (sA / sD) * 100 < 70; });
+
+            if(alertRecords.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#16a34a; font-weight:bold;">🎉 Không có ống nào mỏng dưới 70%.</td></tr>`; return; }
+
+            alertRecords.forEach(row => {
+                let pct = Math.round((parseFloat(row.sActual) / parseFloat(row.sDesign)) * 1000) / 10;
+                const parentKey = getDisplayName(row); const recordKey = getRecordKey(row);
+
+                let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+
+                const trGroup = document.createElement('tr'); trGroup.style.background = "#f3f4f6";
+                trGroup.innerHTML = `
+                    <td colspan="2" style="font-weight:bold; padding:10px;">🔧 ${parentKey} <span class="badge badge-red">${row.sActual}/${row.sDesign} mm (${pct}%)</span></td>
+                    <td style="text-align:center;"><label><input type="checkbox" ${String(row.isCut).toLowerCase() === 'true' ? 'checked' : ''} onchange="toggleRepairStatus('${row.id}', 'isCut')"> <b>Đã Cắt</b></label></td>
+                    <td colspan="2" style="text-align:right;"><button onclick="addMeasureWeld('${recordKey}', '${parentKey}')" style="background:#8b5cf6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-weight:bold; font-size:11px;">+ Mối Hàn Biện Pháp</button></td>`;
+                tbody.appendChild(trGroup);
+
+                localWelds.forEach(weld => {
+                    const trWeld = document.createElement('tr');
+                    trWeld.innerHTML = `
+                        <td colspan="2" style="padding-left:20px;">Mã: <b>${weld.id}</b> (${weld.type})</td>
+                        <td style="text-align:center;"><select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'status', this.value)" style="padding:4px; border-radius:6px;"><option value="Chưa hàn" ${weld.status === 'Chưa hàn' ? 'selected' : ''}>Chưa hàn</option><option value="Đã hàn" ${weld.status === 'Đã hàn' ? 'selected' : ''}>🔥 Đã hàn</option></select></td>
+                        <td colspan="2" style="text-align:center;">PAUT: <select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'paut', this.value)" style="padding:4px; border-radius:6px; font-weight:bold;"><option value="Chưa NDT" ${weld.paut === 'Chưa NDT' ? 'selected' : ''}>Chưa NDT</option><option value="Đạt" ${weld.paut === 'Đạt' ? 'selected' : ''}>🟢 ĐẠT</option><option value="Reject" ${weld.paut === 'Reject' ? 'selected' : ''}>🔴 REJECT</option></select></td>`;
+                    tbody.appendChild(trWeld);
+                });
+            });
+        }
+
+        async function addMeasureWeld(recordKey, parentKey) {
+            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+            let bpList = localWelds.filter(w => w.type === "Biện pháp");
+            let nextIndex = bpList.length + 1;
+            let newBpId = `${parentKey} - w_bp${nextIndex}`;
+
+            while (localWelds.some(w => w.id === newBpId)) { nextIndex++; newBpId = `${parentKey} - w_bp${nextIndex}`; }
+            localWelds.push({ id: newBpId, type: "Biện pháp", status: "Chưa hàn", paut: "Chưa NDT" });
+            localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
+            
+            let item = allRecords.find(r => getRecordKey(r) === recordKey);
+            if (item) await syncRecordData(item, localWelds);
+        }
+
+        async function updateWeldStatus(recordKey, weldId, field, value) {
+            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || []; 
+            let weld = localWelds.find(w => w.id === weldId);
+            if(weld) {
+                weld[field] = value; 
+                localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
+                let allWeldDone = localWelds.every(w => w.status === "Đã hàn"), allPautPassed = localWelds.every(w => w.paut === "Đạt"), hasReject = localWelds.some(w => w.paut === "Reject");
+                let item = allRecords.find(r => getRecordKey(r) === recordKey);
+                if(item) {
+                    item.isWeld = allWeldDone; item.paut = hasReject ? "Reject" : (allPautPassed ? "Đạt" : "Chưa NDT");
+                    await syncRecordData(item, localWelds);
+                }
+            }
+        }
+
+        async function toggleRepairStatus(id, field) {
+            let item = allRecords.find(r => String(r.id).trim() === String(id).trim());
+            if(item) {
+                item[field] = !item[field];
+                let localWelds = JSON.parse(localStorage.getItem(`welds_${getRecordKey(item)}`)) || getDefaultWelds(getDisplayName(item)); 
+                await syncRecordData(item, localWelds);
+            }
+        }
+
+        document.getElementById('measureForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); showLoading(true);
+            let sDesign = parseFloat(document.getElementById('m-s-design').value) || 0, sActual = parseFloat(document.getElementById('m-s-actual').value) || 0;
+            let pct = sDesign > 0 ? ((sActual / sDesign) * 100).toFixed(1) : "0.0";
+            let nextStt = String(allRecords.length + 1);
+
+            const newRecord = {
+                id: nextStt, system: document.getElementById('m-system').value.trim(), device: document.getElementById('m-device').value.trim(), location: document.getElementById('m-location').value.trim(),
+                layer: document.getElementById('m-layer').value.trim(), diameter: document.getElementById('m-diameter').value.trim(), sDesign: sDesign, sActual: sActual, pct: pct,
+                date: document.getElementById('m-date').value || new Date().toISOString().split('T')[0], visual: document.getElementById('m-visual').value || 'Bình thường', isCut: false, isWeld: false, paut: "Chưa NDT"
+            };
+            try { 
+                await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveRecord', data: newRecord }) }); 
+                alert('Đã lưu dữ liệu!'); resetForm(); await loadDataFromGoogleSheet(); 
+            } catch (err) { alert("Lỗi mạng!"); }
+            showLoading(false);
+        });
+
+        document.getElementById('excel-file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, { type: 'array' }); const worksheet = workbook.Sheets[workbook.SheetNames[0]]; const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                    let countSuccess = 0; showLoading(true);
+                    let currentRecordCount = allRecords.length;
+
+                    for (let i = 1; i < jsonData.length; i++) {
+                        const row = jsonData[i]; if (!row || row.length === 0 || (!row[0] && !row[1] && !row[2])) continue;
+                        let isShifted = false; let sttVal = "";
+                        if (row[0] !== undefined && row[0] !== null && row[0] !== "") { 
+                            if (!isNaN(String(row[0]).trim()) && Number(String(row[0]).trim()) > 0) { isShifted = true; sttVal = String(row[0]).trim(); }
+                        }
+                        if (!sttVal) { currentRecordCount++; sttVal = String(currentRecordCount); }
+
+                        let sDesign = parseFloat(String(row[isShifted ? 6 : 5]).replace(/,/g, '.')), sActual = parseFloat(String(row[isShifted ? 7 : 6]).replace(/,/g, '.'));
+                        if (isNaN(sDesign) || isNaN(sActual) || sDesign <= 0) continue;
+                        let pct = Math.round((sActual / sDesign) * 1000) / 10;
+                        
+                        let recordItem = {
+                            id: sttVal, system: row[isShifted ? 1 : 0] ? String(row[isShifted ? 1 : 0]).trim() : "", device: row[isShifted ? 2 : 1] ? String(row[isShifted ? 2 : 1]).trim() : "", location: row[isShifted ? 3 : 2] ? String(row[isShifted ? 3 : 2]).trim() : "",
+                            layer: row[isShifted ? 4 : 3] ? String(row[isShifted ? 4 : 3]).trim() : "", diameter: row[isShifted ? 5 : 4] ? String(row[isShifted ? 5 : 4]).trim() : "", sDesign: sDesign, sActual: sActual, pct: pct.toFixed(1),
+                            date: new Date().toISOString().split('T')[0], visual: row[isShifted ? 8 : 7] ? String(row[isShifted ? 8 : 7]).trim() : "Bình thường", isCut: pct < 70 ? false : '', isWeld: pct < 70 ? false : '', paut: pct < 70 ? 'Chưa NDT' : ''
+                        };
+                        try { await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveRecord', data: recordItem }) }); countSuccess++; } catch(err) {}
+                    }
+                    alert(`Đã import thành công ${countSuccess} dòng!`); await loadDataFromGoogleSheet();
+                } catch (err) { alert('Lỗi file!'); } finally { showLoading(false); }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function renderUserTable(users) {
+            const tbody = document.getElementById('userTableBody'); tbody.innerHTML = '';
+            users.forEach(u => {
+                if(u.email === 'admin@gmail.com') return;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.org}</td><td>${u.role}</td><td style="text-align:center;"><select onchange="updateUserRole('${u.email}', this.value)"><option value="">-- Cấp quyền --</option><option value="Chỉ xem" ${u.role === 'Chỉ xem' ? 'selected':''}>Chỉ xem</option><option value="Kỹ thuật viên" ${u.role === 'Kỹ thuật viên' ? 'selected':''}>Kỹ thuật viên</option><option value="Nhà thầu NDT" ${u.role === 'Nhà thầu NDT' ? 'selected':''}>Nhà thầu NDT</option><option value="Admin" ${u.role === 'Admin' ? 'selected':''}>Admin</option></select></td><td style="text-align:center;"><b>${u.status}</b></td><td style="text-align:center;">${u.status === 'Chờ duyệt' ? `<button onclick="approveUser('${u.email}')" style="background:#16a34a; color:#fff; border:none; padding:4px 8px; border-radius:6px;">Duyệt</button>` : '✓'}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function updateUserRole(email, role) { let users = JSON.parse(localStorage.getItem('users')) || []; let u = users.find(x => x.email === email); if(u) { u.role = role; showLoading(true); await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'updateUser', email: u.email, status: u.status, role: u.role }) }); await loadDataFromGoogleSheet(); } }
+        async function approveUser(email) { let users = JSON.parse(localStorage.getItem('users')) || []; let u = users.find(x => x.email === email); if(u) { u.status = 'Đã duyệt'; showLoading(true); await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'updateUser', email: u.email, status: u.status, role: u.role }) }); await loadDataFromGoogleSheet(); } }
+        function switchTab(tabId) { document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden')); document.getElementById(tabId).classList.remove('hidden'); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById('btn-' + tabId).classList.add('active'); }
+        function resetForm() { document.getElementById('measureForm').reset(); }
+    </script>
+</body>
+</html>
