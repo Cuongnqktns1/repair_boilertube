@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Hệ Thống Quản Lý Đo Kiểm Tra Ống - Nghi Sơn 1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: #f3f4f6; color: #111827; padding-bottom: 30px; -webkit-tap-highlight-color: transparent; }
@@ -41,13 +42,16 @@
         .container { max-width: 1200px; margin: 0 auto; padding: 12px; }
         .card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        /* Dashboard Stats */
+        /* Dashboard Stats & Charts Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
         .stat-box { padding: 10px; border-radius: 10px; border: 1px solid #e5e7eb; }
         .stat-box.blue { background: #eff6ff; border-color: #dbeafe; }
         .stat-box.green { background: #f0fdf4; border-color: #dcfce7; }
         .stat-box.red { background: #fef2f2; border-color: #fee2e2; grid-column: span 2; }
         .stat-num { font-size: 20px; font-weight: 900; }
+
+        .charts-container { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+        @media (min-width: 768px) { .charts-container { grid-template-columns: repeat(2, 1fr); } }
 
         /* Cards View cho Mobile */
         .mobile-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -61,6 +65,9 @@
 
         .weld-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
         .weld-row { display: flex; justify-content: space-between; align-items: center; }
+
+        .btn-delete-weld { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .btn-delete-weld:active { background: #fca5a5; }
 
         .grid-form { display: grid; grid-template-columns: 1fr; gap: 8px; }
         @media (min-width: 640px) { .grid-form { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
@@ -130,6 +137,7 @@
         </div>
 
         <main class="container">
+            <!-- Khối Thống Kê Tổng Hợp & Biểu Đồ Trực Quan -->
             <div class="card">
                 <h3 style="font-size:12px; font-weight:bold; text-transform:uppercase; color:#374151;">📋 Tổng Hợp Khối Lượng Đo</h3>
                 <div class="stats-grid">
@@ -149,6 +157,32 @@
                             <span id="stat-repair" class="stat-num" style="color:#7f1d1d; font-size:22px;">0</span>
                             <span id="stat-repair-pct" style="font-size:12px; color:#b91c1c; font-weight:bold;">(0%)</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Thống kê tiến độ thi công mối hàn -->
+                <div style="margin-top:12px; padding-top:8px; border-top:1px solid #f3f4f6; font-size:11px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="color:#6b7280;">1. Khối lượng đã cắt ống:</span>
+                        <b id="stat-cut" style="color:#111827;">0 / 0 ống</b>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="color:#6b7280;">2. Khối lượng đã hàn mối:</span>
+                        <b id="stat-weld" style="color:#111827;">0 / 0 mối</b>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#6b7280;">3. Siêu âm PAUT đạt:</span>
+                        <b id="stat-paut" style="color:#16a34a;">0 / 0 mối</b>
+                    </div>
+                </div>
+
+                <!-- Biểu đồ Khối lượng -->
+                <div class="charts-container">
+                    <div style="position: relative; width: 100%; height: 180px;">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                    <div style="position: relative; width: 100%; height: 180px;">
+                        <canvas id="barChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -194,10 +228,12 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyfs1IhkexCeEGcrurlhNaSYA9UwZf0thgnd32Sc4qu42PIvlUI9N7irLE4h2DNVZ2ntw/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCO3WC4mwJyT7qyLKB37Ht5j0szrCO103id8_D_qiJbpa4GJ5oToZ9GOuVxZp2rsQp/exec";
 
         let currentUser = null;
         let allRecords = [];
+        let pieChartObj = null;
+        let barChartObj = null;
 
         function showSyncToast(msg, isLoading = true) {
             const toast = document.getElementById('sync-toast');
@@ -233,7 +269,6 @@
             ];
         }
 
-        // ĐỒNG BỘ NGẦM SIÊU TỐC - CẬP NHẬT GIAO DIỆN MÁY ĐIỆN THOẠI TRONG 0.05 BẮT ĐẦU NẠP
         function syncRecordDataBackground(item, localWelds) {
             showSyncToast("⚡ Đã cập nhật máy! Đang lưu về Sheet...", true);
             fetch(SCRIPT_URL, {
@@ -332,13 +367,30 @@
             showSyncToast("✓ Sẵn sàng", false);
         }
 
+        // TÍNH TOÁN DỮ LIỆU VÀ VẼ BIỂU ĐỒ TRỰC QUAN
         function calculateDashboard(records) {
             let total = records.length; let safe = 0, repair = 0;
+            let totalNeedRepair = 0, countCut = 0, totalWeldsCount = 0, countWeldAchieved = 0, countPautAchieved = 0;
+
             records.forEach(r => {
                 let sDesign = parseFloat(r.sDesign) || 0; let sActual = parseFloat(r.sActual) || 0;
                 if (sDesign <= 0) return;
+                
                 let pct = (sActual / sDesign) * 100;
-                if (pct < 70) repair++; else safe++;
+                if (pct < 70) {
+                    repair++; totalNeedRepair++;
+                    if (String(r.isCut).toLowerCase() === 'true') countCut++;
+
+                    const parentKey = getDisplayName(r);
+                    const recordKey = getRecordKey(r);
+                    let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+                    
+                    localWelds.forEach(w => { 
+                        totalWeldsCount++; 
+                        if (w.status === "Đã hàn") countWeldAchieved++; 
+                        if (w.paut === "Đạt") countPautAchieved++; 
+                    });
+                } else safe++;
             });
 
             document.getElementById('stat-total').innerText = total;
@@ -346,6 +398,44 @@
             document.getElementById('stat-safe-pct').innerText = total > 0 ? `(${Math.round((safe/total)*100)}%)` : '(0%)';
             document.getElementById('stat-repair').innerText = repair;
             document.getElementById('stat-repair-pct').innerText = total > 0 ? `(${Math.round((repair/total)*100)}%)` : '(0%)';
+            
+            document.getElementById('stat-cut').innerText = `${countCut} / ${totalNeedRepair} ống`;
+            document.getElementById('stat-weld').innerText = `${countWeldAchieved} / ${totalWeldsCount} mối`;
+            document.getElementById('stat-paut').innerText = `${countPautAchieved} / ${totalWeldsCount} mối`;
+
+            // Vẽ Biểu Đồ Tròn
+            if (pieChartObj) pieChartObj.destroy();
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChartObj = new Chart(ctxPie, {
+                type: 'pie', 
+                data: { 
+                    labels: ['An Toàn (≥70%)', 'Sửa Chữa (<70%)'], 
+                    datasets: [{ data: [safe, repair], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 2, borderColor: '#ffffff' }] 
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, weight: 'bold' } } } } 
+                }
+            });
+
+            // Vẽ Biểu Đồ Cột Tiến Độ
+            if (barChartObj) barChartObj.destroy();
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChartObj = new Chart(ctxBar, {
+                type: 'bar', 
+                data: { 
+                    labels: ['Cần thay', 'Đã Cắt', 'Đã Hàn', 'PAUT Đạt'], 
+                    datasets: [{ label: 'Khối lượng', data: [totalNeedRepair, countCut, countWeldAchieved, countPautAchieved], backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#06b6d4'], borderRadius: 4 }] 
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    scales: { 
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 9 } }, grid: { color: '#f1f5f9' } }, 
+                        x: { ticks: { font: { size: 10, weight: 'bold' } }, grid: { display: false } } 
+                    }, 
+                    plugins: { legend: { display: false } } 
+                }
+            });
         }
 
         function renderMobileCards(records) {
@@ -398,10 +488,13 @@
 
                 localWelds.forEach(weld => {
                     let pautColor = weld.paut === "Đạt" ? "#16a34a" : (weld.paut === "Reject" ? "#dc2626" : "#6b7280");
+                    let isBp = weld.type === "Biện pháp";
+
                     weldsHtml += `
                         <div class="weld-item">
                             <div class="weld-row">
-                                <span style="font-weight:bold; font-size:11px;">Mã: ${weld.id} <small>(${weld.type})</small></span>
+                                <span style="font-weight:bold; font-size:11px;">Mã: ${weld.id} <small style="color:${isBp ? '#8b5cf6' : '#6b7280'}">(${weld.type})</small></span>
+                                ${isBp ? `<button onclick="deleteWeld('${recordKey}', '${weld.id}')" class="btn-delete-weld">Xóa</button>` : ''}
                             </div>
                             <div class="weld-row">
                                 <div>
@@ -450,9 +543,41 @@
                 let item = allRecords.find(r => getRecordKey(r) === recordKey);
                 if(item) {
                     item.isWeld = allWeldDone; item.paut = hasReject ? "Reject" : (allPautPassed ? "Đạt" : "Chưa NDT");
-                    renderRepairCards(allRecords); // Đổi giao diện lập tức 0.01 giây
-                    syncRecordDataBackground(item, localWelds); // Đẩy ngầm
+                    renderRepairCards(allRecords);
+                    calculateDashboard(allRecords);
+                    syncRecordDataBackground(item, localWelds);
                 }
+            }
+        }
+
+        // BỔ SUNG TÍNH NĂNG XÓA MỐI HÀN BIỆN PHÁP
+        function deleteWeld(recordKey, weldId) {
+            if(!confirm("Anh có chắc chắn muốn xóa mối hàn biện pháp này không?")) return;
+            
+            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || []; 
+            localWelds = localWelds.filter(w => w.id !== weldId); 
+
+            let item = allRecords.find(r => getRecordKey(r) === recordKey);
+            let parentKey = getDisplayName(item || {});
+            
+            // Đánh số lại các mối hàn biện pháp w_bp1, w_bp2...
+            let bpIndex = 1;
+            localWelds.forEach(w => {
+                if (w.type === "Biện pháp") {
+                    w.id = `${parentKey} - w_bp${bpIndex}`;
+                    bpIndex++;
+                }
+            });
+
+            localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
+            
+            let allWeldDone = localWelds.every(w => w.status === "Đã hàn"), allPautPassed = localWelds.every(w => w.paut === "Đạt"), hasReject = localWelds.some(w => w.paut === "Reject");
+            if(item) {
+                item.isWeld = allWeldDone; 
+                item.paut = hasReject ? "Reject" : (allPautPassed ? "Đạt" : "Chưa NDT"); 
+                renderRepairCards(allRecords);
+                calculateDashboard(allRecords);
+                syncRecordDataBackground(item, localWelds);
             }
         }
 
@@ -461,6 +586,7 @@
             if(item) {
                 item[field] = !item[field];
                 let localWelds = JSON.parse(localStorage.getItem(`welds_${getRecordKey(item)}`)) || getDefaultWelds(getDisplayName(item)); 
+                calculateDashboard(allRecords);
                 syncRecordDataBackground(item, localWelds);
             }
         }
@@ -477,6 +603,7 @@
             
             let item = allRecords.find(r => getRecordKey(r) === recordKey);
             renderRepairCards(allRecords);
+            calculateDashboard(allRecords);
             if (item) syncRecordDataBackground(item, localWelds);
         }
 
@@ -492,14 +619,12 @@
                 date: document.getElementById('m-date').value || new Date().toISOString().split('T')[0], visual: document.getElementById('m-visual').value || 'Bình thường', isCut: false, isWeld: false, paut: "Chưa NDT"
             };
 
-            // Đổi giao diện tức thì
             allRecords.push(newRecord);
             localStorage.setItem('records', JSON.stringify(allRecords));
             renderMobileCards(allRecords);
             calculateDashboard(allRecords);
             resetForm();
 
-            // Đẩy ngầm
             showSyncToast("⚡ Đã thêm mới! Đang lưu về Sheet...", true);
             fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveRecord', data: newRecord }) })
             .then(() => showSyncToast("✓ Đã đồng bộ xong với Google Sheet!", false))
