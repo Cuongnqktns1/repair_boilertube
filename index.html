@@ -11,7 +11,7 @@
         body { background-color: #f3f4f6; color: #111827; padding-bottom: 30px; -webkit-tap-highlight-color: transparent; }
         .hidden { display: none !important; }
 
-        /* Toast thông báo tức thì */
+        /* Toast thông báo */
         #sync-toast { position: fixed; bottom: 16px; right: 16px; left: 16px; max-width: 360px; margin: 0 auto; background: rgba(17,24,39,0.9); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 10px 25px rgba(0,0,0,0.3); z-index: 1000; transition: all 0.2s ease; }
         .spinner-mini { width: 14px; height: 14px; border: 2px solid #3b82f6; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; margin-right: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -53,7 +53,7 @@
         .charts-container { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
         @media (min-width: 768px) { .charts-container { grid-template-columns: repeat(2, 1fr); } }
 
-        /* Cards View cho Mobile */
+        /* Mobile Cards View */
         .mobile-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .mobile-card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
         .mobile-card-title { font-size: 13px; font-weight: bold; color: #111827; }
@@ -63,11 +63,20 @@
         .badge-red { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
         .badge-green { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
 
-        .weld-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+        /* Accordion Cấp 1 (Hệ thống / Thiết bị) */
+        .group-header { background: #1e293b; color: #fff; padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 8px; }
+        .group-header:active { background: #0f172a; }
+        
+        /* Accordion Cấp 2 (Ống cần sửa) */
+        .pipe-accordion { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+        .pipe-header { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #fff; border-bottom: 1px solid #f1f5f9; }
+        .pipe-header:active { background: #f1f5f9; }
+        .pipe-body { padding: 10px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+
+        .weld-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
         .weld-row { display: flex; justify-content: space-between; align-items: center; }
 
         .btn-delete-weld { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
-        .btn-delete-weld:active { background: #fca5a5; }
 
         .grid-form { display: grid; grid-template-columns: 1fr; gap: 8px; }
         @media (min-width: 640px) { .grid-form { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
@@ -130,14 +139,13 @@
             </div>
         </nav>
 
+        <!-- Chỉ giữ 2 Tab chính -->
         <div class="tab-bar">
             <button onclick="switchTab('tab-nhaplieu')" id="btn-tab-nhaplieu" class="tab-btn active">📁 1. Kiểm Tra & Nhập Liệu</button>
             <button onclick="switchTab('tab-suachua')" id="btn-tab-suachua" class="tab-btn">🔧 2. Sửa Chữa (<70%)</button>
-            <button onclick="switchTab('tab-admin')" id="btn-tab-admin" class="tab-btn hidden">🛡️ 3. Quản Lý Duyệt User</button>
         </div>
 
         <main class="container">
-            <!-- Khối Thống Kê Tổng Hợp & Biểu Đồ Trực Quan -->
             <div class="card">
                 <h3 style="font-size:12px; font-weight:bold; text-transform:uppercase; color:#374151;">📋 Tổng Hợp Khối Lượng Đo</h3>
                 <div class="stats-grid">
@@ -160,7 +168,6 @@
                     </div>
                 </div>
 
-                <!-- Thống kê tiến độ thi công mối hàn -->
                 <div style="margin-top:12px; padding-top:8px; border-top:1px solid #f3f4f6; font-size:11px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                         <span style="color:#6b7280;">1. Khối lượng đã cắt ống:</span>
@@ -176,7 +183,6 @@
                     </div>
                 </div>
 
-                <!-- Biểu đồ Khối lượng -->
                 <div class="charts-container">
                     <div style="position: relative; width: 100%; height: 180px;">
                         <canvas id="pieChart"></canvas>
@@ -187,6 +193,7 @@
                 </div>
             </div>
 
+            <!-- TAB 1: NHẬP LIỆU -->
             <div id="tab-nhaplieu" class="tab-content">
                 <div class="card">
                     <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:10px;">Cập Nhật Số Liệu Đo Ống</h3>
@@ -217,12 +224,9 @@
                 <div id="mobileCardsContainer"></div>
             </div>
 
+            <!-- TAB 2: SỬA CHỮA (XỔ 2 CẤP THÔNG MINH) -->
             <div id="tab-suachua" class="tab-content hidden">
                 <div id="repairCardsContainer"></div>
-            </div>
-
-            <div id="tab-admin" class="tab-content hidden">
-                <div id="userCardsContainer"></div>
             </div>
         </main>
     </div>
@@ -234,6 +238,10 @@
         let allRecords = [];
         let pieChartObj = null;
         let barChartObj = null;
+
+        // Lưu trạng thái mở/đóng của các Accordion để không bị tự đóng khi thao tác
+        let expandedSystemGroups = {};
+        let expandedPipes = {};
 
         function showSyncToast(msg, isLoading = true) {
             const toast = document.getElementById('sync-toast');
@@ -255,6 +263,12 @@
             return keyParts.filter(Boolean).join(" - ");
         }
 
+        function getSystemGroupKey(r) {
+            let sys = r.system ? String(r.system).trim() : "Khác";
+            let dev = r.device ? String(r.device).trim() : "Thiết bị";
+            return `${sys} - ${dev}`;
+        }
+
         function getRecordKey(r) { return r.id ? String(r.id) : getDisplayName(r); }
 
         function toggleAuth(isReg) {
@@ -270,7 +284,7 @@
         }
 
         function syncRecordDataBackground(item, localWelds) {
-            showSyncToast("⚡ Đã cập nhật máy! Đang lưu về Sheet...", true);
+            showSyncToast("⚡ Đã cập nhật! Đang lưu về Sheet...", true);
             fetch(SCRIPT_URL, {
                 method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({
@@ -282,9 +296,9 @@
                     weldsJson: JSON.stringify(localWelds)
                 })
             }).then(() => {
-                showSyncToast("✓ Đã đồng bộ xong với Google Sheet!", false);
+                showSyncToast("✓ Đã đồng bộ xong!", false);
             }).catch(() => {
-                showSyncToast("⚠️ Lưu máy thành công (Mạng chờ kết nối lại)", false);
+                showSyncToast("⚠️ Đã lưu máy cục bộ", false);
             });
         }
 
@@ -311,7 +325,6 @@
                 document.getElementById('txt-username').innerText = currentUser.name;
                 document.getElementById('txt-role').innerText = currentUser.role;
 
-                setupRoleAccess();
                 await loadDataFromGoogleSheet();
 
             } catch (err) { alert('Lỗi kết nối máy chủ!'); }
@@ -338,11 +351,6 @@
             document.getElementById('auth-wrapper').classList.remove('hidden');
         }
 
-        function setupRoleAccess() {
-            const userRole = currentUser.role ? currentUser.role.trim().toLowerCase() : "";
-            document.getElementById('btn-tab-admin').classList.toggle('hidden', userRole !== 'admin');
-        }
-
         async function loadDataFromGoogleSheet() {
             showSyncToast("Đang tải dữ liệu...", true);
             try {
@@ -367,7 +375,6 @@
             showSyncToast("✓ Sẵn sàng", false);
         }
 
-        // TÍNH TOÁN DỮ LIỆU VÀ VẼ BIỂU ĐỒ TRỰC QUAN
         function calculateDashboard(records) {
             let total = records.length; let safe = 0, repair = 0;
             let totalNeedRepair = 0, countCut = 0, totalWeldsCount = 0, countWeldAchieved = 0, countPautAchieved = 0;
@@ -403,7 +410,6 @@
             document.getElementById('stat-weld').innerText = `${countWeldAchieved} / ${totalWeldsCount} mối`;
             document.getElementById('stat-paut').innerText = `${countPautAchieved} / ${totalWeldsCount} mối`;
 
-            // Vẽ Biểu Đồ Tròn
             if (pieChartObj) pieChartObj.destroy();
             const ctxPie = document.getElementById('pieChart').getContext('2d');
             pieChartObj = new Chart(ctxPie, {
@@ -418,7 +424,6 @@
                 }
             });
 
-            // Vẽ Biểu Đồ Cột Tiến Độ
             if (barChartObj) barChartObj.destroy();
             const ctxBar = document.getElementById('barChart').getContext('2d');
             barChartObj = new Chart(ctxBar, {
@@ -472,64 +477,135 @@
             renderMobileCards(filtered);
         }
 
+        // TAB SỬA CHỮA: HIỂN THỊ DẠNG XỔ 2 CẤP THÔNG MINH
         function renderRepairCards(records) {
-            const container = document.getElementById('repairCardsContainer'); container.innerHTML = '';
-            const alertRecords = records.filter(r => { let sD = parseFloat(r.sDesign), sA = parseFloat(r.sActual); if (!sD || sD <= 0) return false; return (sA / sD) * 100 < 70; });
+            const container = document.getElementById('repairCardsContainer'); 
+            container.innerHTML = '';
 
-            if(alertRecords.length === 0) { container.innerHTML = `<div class="card" style="text-align:center; color:#16a34a; font-weight:bold;">🎉 Không có ống nào mỏng dưới 70%.</div>`; return; }
+            const alertRecords = records.filter(r => { 
+                let sD = parseFloat(r.sDesign), sA = parseFloat(r.sActual); 
+                if (!sD || sD <= 0) return false; 
+                return (sA / sD) * 100 < 70; 
+            });
 
+            if(alertRecords.length === 0) { 
+                container.innerHTML = `<div class="card" style="text-align:center; color:#16a34a; font-weight:bold;">🎉 Không có ống nào mỏng dưới 70%.</div>`; 
+                return; 
+            }
+
+            // Gộp theo Cấp 1: Hệ thống / Thiết bị
+            let groups = {};
             alertRecords.forEach(row => {
-                let pct = Math.round((parseFloat(row.sActual) / parseFloat(row.sDesign)) * 1000) / 10;
-                const parentKey = getDisplayName(row); const recordKey = getRecordKey(row);
-                let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+                let groupKey = getSystemGroupKey(row);
+                if(!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(row);
+            });
 
-                const card = document.createElement('div'); card.className = "mobile-card";
-                let weldsHtml = "";
+            // Vẽ Cấp 1
+            Object.keys(groups).forEach((sysKey, sysIdx) => {
+                let groupPipes = groups[sysKey];
+                let isSysExpanded = expandedSystemGroups[sysKey] || false;
 
-                localWelds.forEach(weld => {
-                    let pautColor = weld.paut === "Đạt" ? "#16a34a" : (weld.paut === "Reject" ? "#dc2626" : "#6b7280");
-                    let isBp = weld.type === "Biện pháp";
+                const sysBox = document.createElement('div');
+                sysBox.style.marginBottom = "10px";
 
-                    weldsHtml += `
-                        <div class="weld-item">
-                            <div class="weld-row">
-                                <span style="font-weight:bold; font-size:11px;">Mã: ${weld.id} <small style="color:${isBp ? '#8b5cf6' : '#6b7280'}">(${weld.type})</small></span>
-                                ${isBp ? `<button onclick="deleteWeld('${recordKey}', '${weld.id}')" class="btn-delete-weld">Xóa</button>` : ''}
+                let sysHeader = document.createElement('div');
+                sysHeader.className = "group-header";
+                sysHeader.onclick = () => {
+                    expandedSystemGroups[sysKey] = !expandedSystemGroups[sysKey];
+                    renderRepairCards(allRecords);
+                };
+                sysHeader.innerHTML = `
+                    <div>🏗️ ${sysKey} <span style="font-size:11px; background:#ef4444; color:#fff; padding:2px 6px; border-radius:10px; margin-left:6px;">${groupPipes.length} ống lỗi</span></div>
+                    <span>${isSysExpanded ? '▲ Thu gọn' : '▼ Mở rộng'}</span>`;
+                sysBox.appendChild(sysHeader);
+
+                // Nếu mở Cấp 1, vẽ Cấp 2 (Danh sách Các Ống Lỗi)
+                if(isSysExpanded) {
+                    let sysBody = document.createElement('div');
+                    sysBody.style.paddingLeft = "4px";
+
+                    groupPipes.forEach(row => {
+                        let pct = Math.round((parseFloat(row.sActual) / parseFloat(row.sDesign)) * 1000) / 10;
+                        const parentKey = getDisplayName(row); 
+                        const recordKey = getRecordKey(row);
+                        let isPipeExpanded = expandedPipes[recordKey] || false;
+
+                        let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+
+                        const pipeBox = document.createElement('div'); 
+                        pipeBox.className = "pipe-accordion";
+
+                        // Header Cấp 2
+                        let pipeHeader = document.createElement('div');
+                        pipeHeader.className = "pipe-header";
+                        pipeHeader.onclick = () => {
+                            expandedPipes[recordKey] = !expandedPipes[recordKey];
+                            renderRepairCards(allRecords);
+                        };
+                        pipeHeader.innerHTML = `
+                            <div>
+                                <div style="font-size:12px; font-weight:bold; color:#1e293b;">📍 Vị trí: ${row.location || parentKey} ${row.layer ? '('+row.layer+')' : ''}</div>
+                                <div style="font-size:10px; color:#64748b;">Dày đo: ${row.sActual}/${row.sDesign} mm</div>
                             </div>
-                            <div class="weld-row">
-                                <div>
-                                    <span style="font-size:10px; color:#6b7280;">Hàn:</span>
-                                    <select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'status', this.value)" style="padding:4px; border-radius:6px; font-size:11px;">
-                                        <option value="Chưa hàn" ${weld.status === 'Chưa hàn' ? 'selected' : ''}>Chưa hàn</option>
-                                        <option value="Đã hàn" ${weld.status === 'Đã hàn' ? 'selected' : ''}>🔥 Đã hàn</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <span style="font-size:10px; color:#6b7280;">PAUT:</span>
-                                    <select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'paut', this.value)" style="padding:4px; border-radius:6px; font-size:11px; font-weight:bold; color:${pautColor};">
-                                        <option value="Chưa NDT" ${weld.paut === 'Chưa NDT' ? 'selected' : ''}>Chưa NDT</option>
-                                        <option value="Đạt" ${weld.paut === 'Đạt' ? 'selected' : ''}>🟢 ĐẠT</option>
-                                        <option value="Reject" ${weld.paut === 'Reject' ? 'selected' : ''}>🔴 REJECT</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>`;
-                });
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span class="badge badge-red">${pct}%</span>
+                                <span style="font-size:10px; color:#64748b;">${isPipeExpanded ? '▲' : '▼'}</span>
+                            </div>`;
+                        pipeBox.appendChild(pipeHeader);
 
-                card.innerHTML = `
-                    <div class="mobile-card-header">
-                        <div>
-                            <div class="mobile-card-title">🔧 ${parentKey}</div>
-                            <div class="mobile-card-sub">Chiều dày: ${row.sActual}/${row.sDesign} mm</div>
-                        </div>
-                        <span class="badge badge-red">${pct}%</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <label style="font-size:12px; font-weight:bold; color:#1e40af;"><input type="checkbox" ${String(row.isCut).toLowerCase() === 'true' ? 'checked' : ''} onchange="toggleRepairStatus('${row.id}', 'isCut')"> Đã Cắt Ống</label>
-                        <button onclick="addMeasureWeld('${recordKey}', '${parentKey}')" style="background:#8b5cf6; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; font-size:11px;">+ Mối Biện Pháp</button>
-                    </div>
-                    ${weldsHtml}`;
-                container.appendChild(card);
+                        // Body Cấp 2: Xổ Mối hàn ra khi kích vào Ống
+                        if(isPipeExpanded) {
+                            let pipeBody = document.createElement('div');
+                            pipeBody.className = "pipe-body";
+
+                            let weldsHtml = "";
+                            localWelds.forEach(weld => {
+                                let pautColor = weld.paut === "Đạt" ? "#16a34a" : (weld.paut === "Reject" ? "#dc2626" : "#6b7280");
+                                let isBp = weld.type === "Biện pháp";
+
+                                weldsHtml += `
+                                    <div class="weld-item">
+                                        <div class="weld-row">
+                                            <span style="font-weight:bold; font-size:11px;">Mã: ${weld.id} <small style="color:${isBp ? '#8b5cf6' : '#6b7280'}">(${weld.type})</small></span>
+                                            ${isBp ? `<button onclick="deleteWeld('${recordKey}', '${weld.id}')" class="btn-delete-weld">Xóa</button>` : ''}
+                                        </div>
+                                        <div class="weld-row">
+                                            <div>
+                                                <span style="font-size:10px; color:#6b7280;">Hàn:</span>
+                                                <select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'status', this.value)" style="padding:4px; border-radius:6px; font-size:11px;">
+                                                    <option value="Chưa hàn" ${weld.status === 'Chưa hàn' ? 'selected' : ''}>Chưa hàn</option>
+                                                    <option value="Đã hàn" ${weld.status === 'Đã hàn' ? 'selected' : ''}>🔥 Đã hàn</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <span style="font-size:10px; color:#6b7280;">PAUT:</span>
+                                                <select onchange="updateWeldStatus('${recordKey}', '${weld.id}', 'paut', this.value)" style="padding:4px; border-radius:6px; font-size:11px; font-weight:bold; color:${pautColor};">
+                                                    <option value="Chưa NDT" ${weld.paut === 'Chưa NDT' ? 'selected' : ''}>Chưa NDT</option>
+                                                    <option value="Đạt" ${weld.paut === 'Đạt' ? 'selected' : ''}>🟢 ĐẠT</option>
+                                                    <option value="Reject" ${weld.paut === 'Reject' ? 'selected' : ''}>🔴 REJECT</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>`;
+                            });
+
+                            pipeBody.innerHTML = `
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#fff; padding:6px 8px; border-radius:6px; border:1px solid #e2e8f0;">
+                                    <label style="font-size:12px; font-weight:bold; color:#1e40af;"><input type="checkbox" ${String(row.isCut).toLowerCase() === 'true' ? 'checked' : ''} onchange="toggleRepairStatus('${row.id}', 'isCut')"> Đã Cắt Ống</label>
+                                    <button onclick="addMeasureWeld('${recordKey}', '${parentKey}')" style="background:#8b5cf6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-weight:bold; font-size:11px;">+ Mối Biện Pháp</button>
+                                </div>
+                                ${weldsHtml}`;
+                            pipeBox.appendChild(pipeBody);
+                        }
+
+                        sysBody.appendChild(pipeBox);
+                    });
+
+                    sysBox.appendChild(sysBody);
+                }
+
+                container.appendChild(sysBox);
             });
         }
 
@@ -550,7 +626,6 @@
             }
         }
 
-        // BỔ SUNG TÍNH NĂNG XÓA MỐI HÀN BIỆN PHÁP
         function deleteWeld(recordKey, weldId) {
             if(!confirm("Anh có chắc chắn muốn xóa mối hàn biện pháp này không?")) return;
             
@@ -560,7 +635,6 @@
             let item = allRecords.find(r => getRecordKey(r) === recordKey);
             let parentKey = getDisplayName(item || {});
             
-            // Đánh số lại các mối hàn biện pháp w_bp1, w_bp2...
             let bpIndex = 1;
             localWelds.forEach(w => {
                 if (w.type === "Biện pháp") {
@@ -627,8 +701,8 @@
 
             showSyncToast("⚡ Đã thêm mới! Đang lưu về Sheet...", true);
             fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveRecord', data: newRecord }) })
-            .then(() => showSyncToast("✓ Đã đồng bộ xong với Google Sheet!", false))
-            .catch(() => showSyncToast("⚠️ Lưu máy thành công", false));
+            .then(() => showSyncToast("✓ Đã đồng bộ xong!", false))
+            .catch(() => showSyncToast("⚠️ Đã lưu máy cục bộ", false));
         });
 
         function switchTab(tabId) { 
