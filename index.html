@@ -184,64 +184,54 @@
                 </div>
             </div>
 
-            <!-- FORM NHẬP LIỆU CHUẨN HOÁ MỚI -->
             <div id="tab-nhaplieu" class="tab-content">
                 <div class="card">
                     <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:10px;">Cập Nhật Số Liệu Đo Ống</h3>
                     <form id="measureForm">
                         <div class="grid-form">
-                            <!-- 1. Hệ thống -->
                             <div class="form-group">
                                 <label class="form-label">1. Hệ thống</label>
                                 <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ danh sách..." onchange="autoLookupSpecs()" onblur="validateInputFromList('m-system', 'list-systems')">
                                 <datalist id="list-systems"></datalist>
                             </div>
 
-                            <!-- 2. Thiết bị -->
                             <div class="form-group">
                                 <label class="form-label">2. Thiết bị</label>
                                 <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ danh sách..." onchange="autoLookupSpecs()" onblur="validateInputFromList('m-device', 'list-devices')">
                                 <datalist id="list-devices"></datalist>
                             </div>
 
-                            <!-- 3. Vị trí -->
                             <div class="form-group">
                                 <label class="form-label">3. Vị trí (1-1000)</label>
                                 <input type="number" id="m-location" min="1" max="1000" required class="form-input" placeholder="Nhập số vị trí..." oninput="autoLookupSpecs()">
                             </div>
 
-                            <!-- 4. Lớp ống -->
                             <div class="form-group">
                                 <label class="form-label">4. Lớp ống</label>
                                 <input type="number" id="m-layer" min="1" max="100" class="form-input" placeholder="Ví dụ: 1" oninput="autoLookupSpecs()">
                             </div>
 
-                            <!-- 5. Đường kính -->
                             <div class="form-group">
                                 <label class="form-label">5. Đường kính</label>
                                 <input type="text" id="m-diameter" readonly class="form-input form-input-disabled" placeholder="Tự động nhảy...">
                             </div>
 
-                            <!-- 6. Chiều dày thiết kế -->
                             <div class="form-group">
                                 <label class="form-label">6. Chiều dày thiết kế (mm)</label>
                                 <input type="number" step="0.1" id="m-s-design" readonly class="form-input form-input-disabled" placeholder="Tự động nhảy...">
                             </div>
 
-                            <!-- 7. Chiều dày thực tế -->
                             <div class="form-group">
                                 <label class="form-label">7. Chiều dày thực tế (mm)</label>
                                 <input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input" placeholder="Nhập độ dày đo thực tế...">
                             </div>
 
-                            <!-- 8. Ngoại dạng -->
                             <div class="form-group">
                                 <label class="form-label">8. Ngoại dạng</label>
                                 <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-visual', 'list-visuals')">
                                 <datalist id="list-visuals"></datalist>
                             </div>
 
-                            <!-- 9. Ngày đo -->
                             <div class="form-group">
                                 <label class="form-label">9. Ngày đo</label>
                                 <input type="date" id="m-date" required class="form-input">
@@ -269,7 +259,7 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw053iEHeABYtbfUE4o8yoturlSQR4oX2iMbHwDjRV0ojz9hWx9qniT8H4PDLqYIW02Pg/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCO3WC4mwJyT7qyLKB37Ht5j0szrCO103id8_D_qiJbpa4GJ5oToZ9GOuVxZp2rsQp/exec";
 
         let currentUser = null;
         let allRecords = [];
@@ -360,12 +350,14 @@
         }
 
         function getDisplayName(r) {
-            let keyParts = [
-                r.system ? String(r.system).trim() : "",
-                r.device ? String(r.device).trim() : "",
-                r.location ? String(r.location).trim() : ""
-            ];
-            if (r.layer && String(r.layer).trim() !== "-" && String(r.layer).trim() !== "") keyParts.push("Lớp " + String(r.layer).trim());
+            if (!r) return "";
+            let sys = r.system ? String(r.system).trim() : "";
+            let dev = r.device ? String(r.device).trim() : "";
+            let loc = r.location ? String(r.location).trim() : "";
+            let layer = (r.layer && String(r.layer).trim() !== "-" && String(r.layer).trim() !== "") ? String(r.layer).trim() : "";
+            
+            let keyParts = [sys, dev, loc];
+            if (layer) keyParts.push(layer);
             return keyParts.filter(Boolean).join(" - ");
         }
 
@@ -383,9 +375,10 @@
         }
 
         function getDefaultWelds(parentKey) {
+            let cleanKey = parentKey ? String(parentKey).trim() : "Mối hàn";
             return [
-                { id: `${parentKey} - w1`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" },
-                { id: `${parentKey} - w2`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" }
+                { id: `${cleanKey} - w1`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" },
+                { id: `${cleanKey} - w2`, type: "Chính thức", status: "Chưa hàn", paut: "Chưa NDT" }
             ];
         }
 
@@ -814,6 +807,11 @@
                 isCut: false, isWeld: false, paut: "Chưa NDT"
             };
 
+            // Tự động khởi tạo 2 mối hàn chuẩn theo tên bản ghi thực tế
+            let realParentKey = getDisplayName(newRecord);
+            let initialWelds = getDefaultWelds(realParentKey);
+            localStorage.setItem(`welds_${getRecordKey(newRecord)}`, JSON.stringify(initialWelds));
+
             allRecords.push(newRecord);
             localStorage.setItem('records', JSON.stringify(allRecords));
             renderMobileCards(allRecords);
@@ -821,8 +819,14 @@
             resetForm();
 
             showSyncToast("⚡ Đã thêm mới! Đang lưu về Sheet...", true);
-            fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveRecord', data: newRecord }) })
-            .then(() => showSyncToast("✓ Đã đồng bộ xong!", false))
+            fetch(SCRIPT_URL, { 
+                method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, 
+                body: JSON.stringify({ action: 'saveRecord', data: newRecord }) 
+            })
+            .then(() => {
+                // Tự động đẩy 2 mối hàn chuẩn về tab Moihan
+                syncRecordDataBackground(newRecord, initialWelds);
+            })
             .catch(() => showSyncToast("⚠️ Đã lưu máy cục bộ", false));
         });
 
