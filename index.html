@@ -11,12 +11,10 @@
         body { background-color: #f3f4f6; color: #111827; padding-bottom: 30px; -webkit-tap-highlight-color: transparent; }
         .hidden { display: none !important; }
 
-        /* Toast thông báo */
         #sync-toast { position: fixed; bottom: 16px; right: 16px; left: 16px; max-width: 360px; margin: 0 auto; background: rgba(17,24,39,0.9); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 10px 25px rgba(0,0,0,0.3); z-index: 1000; transition: all 0.2s ease; }
         .spinner-mini { width: 14px; height: 14px; border: 2px solid #3b82f6; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; margin-right: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Auth Screen */
         .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(to top right, #eff6ff, #f3f4f6); }
         .auth-card { background: #fff; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; width: 100%; max-width: 380px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
         .logo-badge { background: #2563eb; color: #fff; font-weight: bold; padding: 6px 12px; border-radius: 10px; display: inline-block; font-size: 16px; margin-bottom: 8px; }
@@ -27,22 +25,18 @@
         .form-input, .form-select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; background: #fff; outline: none; }
         .btn-primary { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 12px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 8px; }
 
-        /* Header & Nav */
         .navbar { background: #111827; color: #fff; padding: 10px 14px; position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center; }
         .nav-title { font-size: 13px; font-weight: bold; }
         .user-pill { background: #1f2937; border: 1px solid #374151; padding: 4px 8px; border-radius: 8px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
         .role-tag { background: #1e3a8a; color: #bfdbfe; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
-        /* Tabs */
         .tab-bar { background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 48px; z-index: 40; display: flex; gap: 6px; padding: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .tab-btn { padding: 8px 12px; font-size: 12px; font-weight: bold; border-radius: 8px; border: none; white-space: nowrap; background: transparent; color: #4b5563; cursor: pointer; flex-shrink: 0; }
         .tab-btn.active { background: #2563eb; color: #fff; }
 
-        /* Container */
         .container { max-width: 1200px; margin: 0 auto; padding: 12px; }
         .card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        /* Dashboard Stats & Charts Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
         .stat-box { padding: 10px; border-radius: 10px; border: 1px solid #e5e7eb; }
         .stat-box.blue { background: #eff6ff; border-color: #dbeafe; }
@@ -53,7 +47,6 @@
         .charts-container { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
         @media (min-width: 768px) { .charts-container { grid-template-columns: repeat(2, 1fr); } }
 
-        /* Mobile Cards View */
         .mobile-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .mobile-card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
         .mobile-card-title { font-size: 13px; font-weight: bold; color: #111827; }
@@ -63,11 +56,9 @@
         .badge-red { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
         .badge-green { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
 
-        /* Accordion Cấp 1 (Hệ thống / Thiết bị) */
         .group-header { background: #1e293b; color: #fff; padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 8px; }
         .group-header:active { background: #0f172a; }
         
-        /* Accordion Cấp 2 (Ống cần sửa) */
         .pipe-accordion { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
         .pipe-header { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #fff; border-bottom: 1px solid #f1f5f9; }
         .pipe-header:active { background: #f1f5f9; }
@@ -139,7 +130,6 @@
             </div>
         </nav>
 
-        <!-- Chỉ giữ 2 Tab chính -->
         <div class="tab-bar">
             <button onclick="switchTab('tab-nhaplieu')" id="btn-tab-nhaplieu" class="tab-btn active">📁 1. Kiểm Tra & Nhập Liệu</button>
             <button onclick="switchTab('tab-suachua')" id="btn-tab-suachua" class="tab-btn">🔧 2. Sửa Chữa (<70%)</button>
@@ -193,21 +183,62 @@
                 </div>
             </div>
 
-            <!-- TAB 1: NHẬP LIỆU -->
+            <!-- TAB 1: NHẬP LIỆU LẤY TỪ DANH MỤC SHEET DYNAMIC -->
             <div id="tab-nhaplieu" class="tab-content">
                 <div class="card">
                     <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:10px;">Cập Nhật Số Liệu Đo Ống</h3>
                     <form id="measureForm">
                         <div class="grid-form">
-                            <div class="form-group"><label class="form-label">1. Hệ thống</label><input type="text" id="m-system" required class="form-input"></div>
-                            <div class="form-group"><label class="form-label">2. Thiết bị</label><input type="text" id="m-device" required class="form-input"></div>
-                            <div class="form-group"><label class="form-label">3. Vị trí</label><input type="text" id="m-location" required class="form-input"></div>
-                            <div class="form-group"><label class="form-label">4. Lớp ống</label><input type="text" id="m-layer" class="form-input" placeholder="Lớp ngoài"></div>
-                            <div class="form-group"><label class="form-label">5. Đường kính</label><input type="text" id="m-diameter" class="form-input" placeholder="d38x5"></div>
-                            <div class="form-group"><label class="form-label">6. Chiều dày TK (mm)</label><input type="number" step="0.1" inputmode="decimal" id="m-s-design" required class="form-input"></div>
-                            <div class="form-group"><label class="form-label">7. Chiều dày đo được (mm)</label><input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input"></div>
-                            <div class="form-group"><label class="form-label">8. Ngoại dạng</label><input type="text" id="m-visual" class="form-input" placeholder="Bình thường"></div>
-                            <div class="form-group"><label class="form-label">9. Ngày đo</label><input type="date" id="m-date" required class="form-input"></div>
+                            <div class="form-group">
+                                <label class="form-label">1. Hệ thống</label>
+                                <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-system', 'list-systems')">
+                                <datalist id="list-systems"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">2. Thiết bị</label>
+                                <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-device', 'list-devices')">
+                                <datalist id="list-devices"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">3. Vị trí</label>
+                                <input type="text" id="m-location" list="list-locations" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-location', 'list-locations')">
+                                <datalist id="list-locations"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">4. Lớp ống</label>
+                                <input type="text" id="m-layer" list="list-layers" class="form-input" placeholder="Lớp ngoài" onblur="validateInputFromList('m-layer', 'list-layers')">
+                                <datalist id="list-layers"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">5. Đường kính</label>
+                                <input type="text" id="m-diameter" list="list-diameters" class="form-input" placeholder="d38x5" onblur="validateInputFromList('m-diameter', 'list-diameters')">
+                                <datalist id="list-diameters"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">6. $S_{tk}$ (mm)</label>
+                                <input type="number" step="0.1" inputmode="decimal" id="m-s-design" required class="form-input">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">7. $S_{tt}$ (mm)</label>
+                                <input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">8. Ngoại dạng</label>
+                                <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Bình thường" onblur="validateInputFromList('m-visual', 'list-visuals')">
+                                <datalist id="list-visuals"></datalist>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">9. Ngày đo</label>
+                                <input type="date" id="m-date" required class="form-input">
+                            </div>
                         </div>
                         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
                             <button type="button" onclick="resetForm()" style="padding:10px 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; font-size:12px; font-weight:bold;">Xóa Form</button>
@@ -224,7 +255,7 @@
                 <div id="mobileCardsContainer"></div>
             </div>
 
-            <!-- TAB 2: SỬA CHỮA (XỔ 2 CẤP THÔNG MINH) -->
+            <!-- TAB 2: SỬA CHỮA -->
             <div id="tab-suachua" class="tab-content hidden">
                 <div id="repairCardsContainer"></div>
             </div>
@@ -239,7 +270,6 @@
         let pieChartObj = null;
         let barChartObj = null;
 
-        // Lưu trạng thái mở/đóng của các Accordion để không bị tự đóng khi thao tác
         let expandedSystemGroups = {};
         let expandedPipes = {};
 
@@ -251,6 +281,72 @@
             icon.className = isLoading ? "spinner-mini" : "";
             toast.classList.remove('hidden');
             if(!isLoading) setTimeout(() => toast.classList.add('hidden'), 2000);
+        }
+
+        // TẢI TAB "danhmuc" TỪ GOOGLE SHEET VỀ ĐIỆN THOẠI
+        async function loadDanhMucFromSheet() {
+            try {
+                let resDM = await fetch(SCRIPT_URL, { 
+                    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'getDanhMuc' }) 
+                });
+                let dmData = await resDM.json();
+
+                let systems = new Set(dmData.systems || []);
+                let devices = new Set(dmData.devices || []);
+                let locations = new Set(dmData.locations || []);
+                let layers = new Set(dmData.layers || []);
+                let diameters = new Set(dmData.diameters || []);
+                let visuals = new Set(dmData.visuals || []);
+
+                // Gộp thêm dữ liệu từ bản ghi sẵn có
+                allRecords.forEach(r => {
+                    if (r.system) systems.add(String(r.system).trim());
+                    if (r.device) devices.add(String(r.device).trim());
+                    if (r.location) locations.add(String(r.location).trim());
+                    if (r.layer && r.layer !== '-') layers.add(String(r.layer).trim());
+                    if (r.diameter && r.diameter !== '-') diameters.add(String(r.diameter).trim());
+                    if (r.visual) visuals.add(String(r.visual).trim());
+                });
+
+                populateDatalist('list-systems', Array.from(systems));
+                populateDatalist('list-devices', Array.from(devices));
+                populateDatalist('list-locations', Array.from(locations));
+                populateDatalist('list-layers', Array.from(layers));
+                populateDatalist('list-diameters', Array.from(diameters));
+                populateDatalist('list-visuals', Array.from(visuals));
+            } catch(e) {
+                console.error("Lỗi tải danh mục:", e);
+            }
+        }
+
+        function populateDatalist(elementId, items) {
+            const datalist = document.getElementById(elementId);
+            if (!datalist) return;
+            datalist.innerHTML = '';
+            items.forEach(item => {
+                if(item) {
+                    const opt = document.createElement('option');
+                    opt.value = item;
+                    datalist.appendChild(opt);
+                }
+            });
+        }
+
+        function validateInputFromList(inputId, datalistId) {
+            const input = document.getElementById(inputId);
+            const datalist = document.getElementById(datalistId);
+            if (!input || !datalist) return;
+
+            const val = input.value.trim();
+            if (!val) return;
+
+            const options = Array.from(datalist.options).map(o => o.value.toLowerCase());
+            if (!options.includes(val.toLowerCase())) {
+                alert(`⚠️ Tên "${val}" chưa có trong tab Danh Mục trên Google Sheet! Vui lòng chọn đúng tên gợi ý trong danh sách.`);
+                input.value = '';
+                input.focus();
+            }
         }
 
         function getDisplayName(r) {
@@ -367,6 +463,7 @@
                 });
 
                 localStorage.setItem('records', JSON.stringify(allRecords));
+                await loadDanhMucFromSheet(); // Nạp Datalist chuẩn từ tab danhmuc
                 renderMobileCards(allRecords); 
                 renderRepairCards(allRecords); 
                 calculateDashboard(allRecords);
@@ -477,7 +574,6 @@
             renderMobileCards(filtered);
         }
 
-        // TAB SỬA CHỮA: HIỂN THỊ DẠNG XỔ 2 CẤP THÔNG MINH
         function renderRepairCards(records) {
             const container = document.getElementById('repairCardsContainer'); 
             container.innerHTML = '';
@@ -493,7 +589,6 @@
                 return; 
             }
 
-            // Gộp theo Cấp 1: Hệ thống / Thiết bị
             let groups = {};
             alertRecords.forEach(row => {
                 let groupKey = getSystemGroupKey(row);
@@ -501,8 +596,7 @@
                 groups[groupKey].push(row);
             });
 
-            // Vẽ Cấp 1
-            Object.keys(groups).forEach((sysKey, sysIdx) => {
+            Object.keys(groups).forEach((sysKey) => {
                 let groupPipes = groups[sysKey];
                 let isSysExpanded = expandedSystemGroups[sysKey] || false;
 
@@ -520,7 +614,6 @@
                     <span>${isSysExpanded ? '▲ Thu gọn' : '▼ Mở rộng'}</span>`;
                 sysBox.appendChild(sysHeader);
 
-                // Nếu mở Cấp 1, vẽ Cấp 2 (Danh sách Các Ống Lỗi)
                 if(isSysExpanded) {
                     let sysBody = document.createElement('div');
                     sysBody.style.paddingLeft = "4px";
@@ -536,7 +629,6 @@
                         const pipeBox = document.createElement('div'); 
                         pipeBox.className = "pipe-accordion";
 
-                        // Header Cấp 2
                         let pipeHeader = document.createElement('div');
                         pipeHeader.className = "pipe-header";
                         pipeHeader.onclick = () => {
@@ -554,7 +646,6 @@
                             </div>`;
                         pipeBox.appendChild(pipeHeader);
 
-                        // Body Cấp 2: Xổ Mối hàn ra khi kích vào Ống
                         if(isPipeExpanded) {
                             let pipeBody = document.createElement('div');
                             pipeBody.className = "pipe-body";
@@ -683,6 +774,11 @@
 
         document.getElementById('measureForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            
+            validateInputFromList('m-system', 'list-systems');
+            validateInputFromList('m-device', 'list-devices');
+            validateInputFromList('m-location', 'list-locations');
+
             let sDesign = parseFloat(document.getElementById('m-s-design').value) || 0, sActual = parseFloat(document.getElementById('m-s-actual').value) || 0;
             let pct = sDesign > 0 ? ((sActual / sDesign) * 100).toFixed(1) : "0.0";
             let nextStt = String(allRecords.length + 1);
