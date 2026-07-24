@@ -183,7 +183,7 @@
                 </div>
             </div>
 
-            <!-- TAB 1: NHẬP LIỆU LẤY TỪ DANH MỤC SHEET DYNAMIC -->
+            <!-- TAB 1: NHẬP LIỆU LẤY 100% TỪ TAB DANHMUC SHEET -->
             <div id="tab-nhaplieu" class="tab-content">
                 <div class="card">
                     <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:10px;">Cập Nhật Số Liệu Đo Ống</h3>
@@ -191,31 +191,31 @@
                         <div class="grid-form">
                             <div class="form-group">
                                 <label class="form-label">1. Hệ thống</label>
-                                <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-system', 'list-systems')">
+                                <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-system', 'list-systems')">
                                 <datalist id="list-systems"></datalist>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">2. Thiết bị</label>
-                                <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-device', 'list-devices')">
+                                <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-device', 'list-devices')">
                                 <datalist id="list-devices"></datalist>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">3. Vị trí</label>
-                                <input type="text" id="m-location" list="list-locations" required class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-location', 'list-locations')">
+                                <input type="text" id="m-location" list="list-locations" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-location', 'list-locations')">
                                 <datalist id="list-locations"></datalist>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">4. Lớp ống</label>
-                                <input type="text" id="m-layer" list="list-layers" class="form-input" placeholder="Lớp ngoài" onblur="validateInputFromList('m-layer', 'list-layers')">
+                                <input type="text" id="m-layer" list="list-layers" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-layer', 'list-layers')">
                                 <datalist id="list-layers"></datalist>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">5. Đường kính</label>
-                                <input type="text" id="m-diameter" list="list-diameters" class="form-input" placeholder="d38x5" onblur="validateInputFromList('m-diameter', 'list-diameters')">
+                                <input type="text" id="m-diameter" list="list-diameters" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-diameter', 'list-diameters')">
                                 <datalist id="list-diameters"></datalist>
                             </div>
 
@@ -231,7 +231,7 @@
 
                             <div class="form-group">
                                 <label class="form-label">8. Ngoại dạng</label>
-                                <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Bình thường" onblur="validateInputFromList('m-visual', 'list-visuals')">
+                                <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-visual', 'list-visuals')">
                                 <datalist id="list-visuals"></datalist>
                             </div>
 
@@ -283,7 +283,7 @@
             if(!isLoading) setTimeout(() => toast.classList.add('hidden'), 2000);
         }
 
-        // TẢI TAB "danhmuc" TỪ GOOGLE SHEET VỀ ĐIỆN THOẠI
+        // TẢI DUY NHẤT VÀ CHÍNH XÁC TAB "danhmuc" TỪ GOOGLE SHEET VỀ ĐIỆN THOẠI
         async function loadDanhMucFromSheet() {
             try {
                 let resDM = await fetch(SCRIPT_URL, { 
@@ -292,31 +292,15 @@
                 });
                 let dmData = await resDM.json();
 
-                let systems = new Set(dmData.systems || []);
-                let devices = new Set(dmData.devices || []);
-                let locations = new Set(dmData.locations || []);
-                let layers = new Set(dmData.layers || []);
-                let diameters = new Set(dmData.diameters || []);
-                let visuals = new Set(dmData.visuals || []);
-
-                // Gộp thêm dữ liệu từ bản ghi sẵn có
-                allRecords.forEach(r => {
-                    if (r.system) systems.add(String(r.system).trim());
-                    if (r.device) devices.add(String(r.device).trim());
-                    if (r.location) locations.add(String(r.location).trim());
-                    if (r.layer && r.layer !== '-') layers.add(String(r.layer).trim());
-                    if (r.diameter && r.diameter !== '-') diameters.add(String(r.diameter).trim());
-                    if (r.visual) visuals.add(String(r.visual).trim());
-                });
-
-                populateDatalist('list-systems', Array.from(systems));
-                populateDatalist('list-devices', Array.from(devices));
-                populateDatalist('list-locations', Array.from(locations));
-                populateDatalist('list-layers', Array.from(layers));
-                populateDatalist('list-diameters', Array.from(diameters));
-                populateDatalist('list-visuals', Array.from(visuals));
+                // Lấy ĐÚNG VÀ CHỈ ĐÚNG danh sách trong tab danhmuc
+                populateDatalist('list-systems', dmData.systems || []);
+                populateDatalist('list-devices', dmData.devices || []);
+                populateDatalist('list-locations', dmData.locations || []);
+                populateDatalist('list-layers', dmData.layers || []);
+                populateDatalist('list-diameters', dmData.diameters || []);
+                populateDatalist('list-visuals', dmData.visuals || []);
             } catch(e) {
-                console.error("Lỗi tải danh mục:", e);
+                console.error("Lỗi tải tab danhmuc:", e);
             }
         }
 
@@ -325,14 +309,15 @@
             if (!datalist) return;
             datalist.innerHTML = '';
             items.forEach(item => {
-                if(item) {
+                if(item && String(item).trim() !== "") {
                     const opt = document.createElement('option');
-                    opt.value = item;
+                    opt.value = String(item).trim();
                     datalist.appendChild(opt);
                 }
             });
         }
 
+        // KIỂM TRA CHẶT CHẼ: BẮT BUỘC CHỈ ĐƯỢC CHỌN TÊN TRONG TAB "danhmuc"
         function validateInputFromList(inputId, datalistId) {
             const input = document.getElementById(inputId);
             const datalist = document.getElementById(datalistId);
@@ -343,7 +328,7 @@
 
             const options = Array.from(datalist.options).map(o => o.value.toLowerCase());
             if (!options.includes(val.toLowerCase())) {
-                alert(`⚠️ Tên "${val}" chưa có trong tab Danh Mục trên Google Sheet! Vui lòng chọn đúng tên gợi ý trong danh sách.`);
+                alert(`⚠️ Tên "${val}" CHƯA CÓ trong tab "danhmuc" trên Google Sheet!\n\nVui lòng chỉ chọn các tên chuẩn có sẵn trong danh sách gợi ý.`);
                 input.value = '';
                 input.focus();
             }
@@ -463,7 +448,7 @@
                 });
 
                 localStorage.setItem('records', JSON.stringify(allRecords));
-                await loadDanhMucFromSheet(); // Nạp Datalist chuẩn từ tab danhmuc
+                await loadDanhMucFromSheet(); // Chỉ nạp danh mục chuẩn từ tab "danhmuc"
                 renderMobileCards(allRecords); 
                 renderRepairCards(allRecords); 
                 calculateDashboard(allRecords);
