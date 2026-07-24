@@ -23,6 +23,7 @@
         .form-group { margin-bottom: 12px; }
         .form-label { display: block; font-size: 11px; font-weight: bold; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
         .form-input, .form-select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; background: #fff; outline: none; }
+        .form-input-disabled { background-color: #f3f4f6 !important; color: #2563eb !important; font-weight: bold; border-color: #e5e7eb; cursor: not-allowed; }
         .btn-primary { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 12px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 8px; }
 
         .navbar { background: #111827; color: #fff; padding: 10px 14px; position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center; }
@@ -183,58 +184,64 @@
                 </div>
             </div>
 
-            <!-- TAB 1: NHẬP LIỆU LẤY 100% TỪ TAB DANHMUC SHEET -->
+            <!-- FORM NHẬP LIỆU CHUẨN HOÁ MỚI -->
             <div id="tab-nhaplieu" class="tab-content">
                 <div class="card">
                     <h3 style="font-size:12px; font-weight:bold; color:#1f2937; text-transform:uppercase; margin-bottom:10px;">Cập Nhật Số Liệu Đo Ống</h3>
                     <form id="measureForm">
                         <div class="grid-form">
+                            <!-- 1. Hệ thống -->
                             <div class="form-group">
                                 <label class="form-label">1. Hệ thống</label>
-                                <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-system', 'list-systems')">
+                                <input type="text" id="m-system" list="list-systems" required class="form-input" placeholder="Chọn từ danh sách..." onchange="autoLookupSpecs()" onblur="validateInputFromList('m-system', 'list-systems')">
                                 <datalist id="list-systems"></datalist>
                             </div>
 
+                            <!-- 2. Thiết bị -->
                             <div class="form-group">
                                 <label class="form-label">2. Thiết bị</label>
-                                <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-device', 'list-devices')">
+                                <input type="text" id="m-device" list="list-devices" required class="form-input" placeholder="Chọn từ danh sách..." onchange="autoLookupSpecs()" onblur="validateInputFromList('m-device', 'list-devices')">
                                 <datalist id="list-devices"></datalist>
                             </div>
 
+                            <!-- 3. Vị trí -->
                             <div class="form-group">
-                                <label class="form-label">3. Vị trí</label>
-                                <input type="text" id="m-location" list="list-locations" required class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-location', 'list-locations')">
-                                <datalist id="list-locations"></datalist>
+                                <label class="form-label">3. Vị trí (1-1000)</label>
+                                <input type="number" id="m-location" min="1" max="1000" required class="form-input" placeholder="Nhập số vị trí..." oninput="autoLookupSpecs()">
                             </div>
 
+                            <!-- 4. Lớp ống -->
                             <div class="form-group">
                                 <label class="form-label">4. Lớp ống</label>
-                                <input type="text" id="m-layer" list="list-layers" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-layer', 'list-layers')">
-                                <datalist id="list-layers"></datalist>
+                                <input type="number" id="m-layer" min="1" max="100" class="form-input" placeholder="Ví dụ: 1" oninput="autoLookupSpecs()">
                             </div>
 
+                            <!-- 5. Đường kính -->
                             <div class="form-group">
                                 <label class="form-label">5. Đường kính</label>
-                                <input type="text" id="m-diameter" list="list-diameters" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-diameter', 'list-diameters')">
-                                <datalist id="list-diameters"></datalist>
+                                <input type="text" id="m-diameter" readonly class="form-input form-input-disabled" placeholder="Tự động nhảy...">
                             </div>
 
+                            <!-- 6. Chiều dày thiết kế -->
                             <div class="form-group">
-                                <label class="form-label">6. $S_{tk}$ (mm)</label>
-                                <input type="number" step="0.1" inputmode="decimal" id="m-s-design" required class="form-input">
+                                <label class="form-label">6. Chiều dày thiết kế (mm)</label>
+                                <input type="number" step="0.1" id="m-s-design" readonly class="form-input form-input-disabled" placeholder="Tự động nhảy...">
                             </div>
 
+                            <!-- 7. Chiều dày thực tế -->
                             <div class="form-group">
-                                <label class="form-label">7. $S_{tt}$ (mm)</label>
-                                <input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input">
+                                <label class="form-label">7. Chiều dày thực tế (mm)</label>
+                                <input type="number" step="0.1" inputmode="decimal" id="m-s-actual" required class="form-input" placeholder="Nhập độ dày đo thực tế...">
                             </div>
 
+                            <!-- 8. Ngoại dạng -->
                             <div class="form-group">
                                 <label class="form-label">8. Ngoại dạng</label>
-                                <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Chọn từ tab danhmuc..." onblur="validateInputFromList('m-visual', 'list-visuals')">
+                                <input type="text" id="m-visual" list="list-visuals" class="form-input" placeholder="Chọn từ danh sách..." onblur="validateInputFromList('m-visual', 'list-visuals')">
                                 <datalist id="list-visuals"></datalist>
                             </div>
 
+                            <!-- 9. Ngày đo -->
                             <div class="form-group">
                                 <label class="form-label">9. Ngày đo</label>
                                 <input type="date" id="m-date" required class="form-input">
@@ -255,7 +262,6 @@
                 <div id="mobileCardsContainer"></div>
             </div>
 
-            <!-- TAB 2: SỬA CHỮA -->
             <div id="tab-suachua" class="tab-content hidden">
                 <div id="repairCardsContainer"></div>
             </div>
@@ -263,10 +269,11 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby-tKGAaOU8Y4JbzYEiUMF422CHcq2ySE6P8SWY9sbxZNIDK5O4l8Pl6ZBSxOmErnX85g/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw053iEHeABYtbfUE4o8yoturlSQR4oX2iMbHwDjRV0ojz9hWx9qniT8H4PDLqYIW02Pg/exec";
 
         let currentUser = null;
         let allRecords = [];
+        let specsData = [];
         let pieChartObj = null;
         let barChartObj = null;
 
@@ -283,7 +290,6 @@
             if(!isLoading) setTimeout(() => toast.classList.add('hidden'), 2000);
         }
 
-        // TẢI DUY NHẤT VÀ CHÍNH XÁC TAB "danhmuc" TỪ GOOGLE SHEET VỀ ĐIỆN THOẠI
         async function loadDanhMucFromSheet() {
             try {
                 let resDM = await fetch(SCRIPT_URL, { 
@@ -292,15 +298,35 @@
                 });
                 let dmData = await resDM.json();
 
-                // Lấy ĐÚNG VÀ CHỈ ĐÚNG danh sách trong tab danhmuc
                 populateDatalist('list-systems', dmData.systems || []);
                 populateDatalist('list-devices', dmData.devices || []);
-                populateDatalist('list-locations', dmData.locations || []);
-                populateDatalist('list-layers', dmData.layers || []);
-                populateDatalist('list-diameters', dmData.diameters || []);
                 populateDatalist('list-visuals', dmData.visuals || []);
+                
+                specsData = dmData.specs || [];
             } catch(e) {
                 console.error("Lỗi tải tab danhmuc:", e);
+            }
+        }
+
+        function autoLookupSpecs() {
+            let sys = document.getElementById('m-system').value.trim();
+            let dev = document.getElementById('m-device').value.trim();
+            let loc = parseInt(document.getElementById('m-location').value) || 0;
+            let layer = document.getElementById('m-layer').value.trim();
+
+            if (!sys || !dev) return;
+
+            let match = specsData.find(item => {
+                let sysMatch = item.system.toLowerCase() === sys.toLowerCase();
+                let devMatch = item.device.toLowerCase() === dev.toLowerCase();
+                let locMatch = loc >= item.locFrom && loc <= item.locTo;
+                let layerMatch = (!item.layer || item.layer === "" || item.layer === layer);
+                return sysMatch && devMatch && locMatch && layerMatch;
+            });
+
+            if (match) {
+                document.getElementById('m-diameter').value = match.diameter || "";
+                document.getElementById('m-s-design').value = match.sDesign || "";
             }
         }
 
@@ -317,7 +343,6 @@
             });
         }
 
-        // KIỂM TRA CHẶT CHẼ: BẮT BUỘC CHỈ ĐƯỢC CHỌN TÊN TRONG TAB "danhmuc"
         function validateInputFromList(inputId, datalistId) {
             const input = document.getElementById(inputId);
             const datalist = document.getElementById(datalistId);
@@ -328,7 +353,7 @@
 
             const options = Array.from(datalist.options).map(o => o.value.toLowerCase());
             if (!options.includes(val.toLowerCase())) {
-                alert(`⚠️ Tên "${val}" CHƯA CÓ trong tab "danhmuc" trên Google Sheet!\n\nVui lòng chỉ chọn các tên chuẩn có sẵn trong danh sách gợi ý.`);
+                alert(`⚠️ Tên "${val}" CHƯA CÓ trong tab "danhmuc" trên Google Sheet!\n\nVui lòng chọn tên chuẩn có sẵn trong danh sách.`);
                 input.value = '';
                 input.focus();
             }
@@ -340,7 +365,7 @@
                 r.device ? String(r.device).trim() : "",
                 r.location ? String(r.location).trim() : ""
             ];
-            if (r.layer && String(r.layer).trim() !== "-" && String(r.layer).trim() !== "") keyParts.push(String(r.layer).trim());
+            if (r.layer && String(r.layer).trim() !== "-" && String(r.layer).trim() !== "") keyParts.push("Lớp " + String(r.layer).trim());
             return keyParts.filter(Boolean).join(" - ");
         }
 
@@ -448,7 +473,7 @@
                 });
 
                 localStorage.setItem('records', JSON.stringify(allRecords));
-                await loadDanhMucFromSheet(); // Chỉ nạp danh mục chuẩn từ tab "danhmuc"
+                await loadDanhMucFromSheet(); 
                 renderMobileCards(allRecords); 
                 renderRepairCards(allRecords); 
                 calculateDashboard(allRecords);
@@ -546,8 +571,8 @@
                         <span class="${pctClass}">${pct}%</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; color:#374151; background:#f9fafb; padding:8px; border-radius:8px;">
-                        <span>Dày TK ($S_{tk}$): <b>${sDesign} mm</b></span>
-                        <span>Dày đo ($S_{tt}$): <b style="color:#2563eb;">${sActual} mm</b></span>
+                        <span>Chiều dày thiết kế: <b>${sDesign} mm</b></span>
+                        <span>Chiều dày thực tế: <b style="color:#2563eb;">${sActual} mm</b></span>
                     </div>`;
                 container.appendChild(card);
             });
@@ -622,7 +647,7 @@
                         };
                         pipeHeader.innerHTML = `
                             <div>
-                                <div style="font-size:12px; font-weight:bold; color:#1e293b;">📍 Vị trí: ${row.location || parentKey} ${row.layer ? '('+row.layer+')' : ''}</div>
+                                <div style="font-size:12px; font-weight:bold; color:#1e293b;">📍 Vị trí: ${row.location || parentKey} ${row.layer ? '(Lớp '+row.layer+')' : ''}</div>
                                 <div style="font-size:10px; color:#64748b;">Dày đo: ${row.sActual}/${row.sDesign} mm</div>
                             </div>
                             <div style="display:flex; align-items:center; gap:6px;">
@@ -762,16 +787,31 @@
             
             validateInputFromList('m-system', 'list-systems');
             validateInputFromList('m-device', 'list-devices');
-            validateInputFromList('m-location', 'list-locations');
 
-            let sDesign = parseFloat(document.getElementById('m-s-design').value) || 0, sActual = parseFloat(document.getElementById('m-s-actual').value) || 0;
-            let pct = sDesign > 0 ? ((sActual / sDesign) * 100).toFixed(1) : "0.0";
+            let sDesign = parseFloat(document.getElementById('m-s-design').value) || 0;
+            let sActual = parseFloat(document.getElementById('m-s-actual').value) || 0;
+
+            if (sDesign <= 0) {
+                alert("⚠️ Chưa xác định được Chiều dày thiết kế! Vui lòng kiểm tra lại cấu hình thông số trong tab danhmuc.");
+                return;
+            }
+
+            let pct = ((sActual / sDesign) * 100).toFixed(1);
             let nextStt = String(allRecords.length + 1);
 
             const newRecord = {
-                id: nextStt, system: document.getElementById('m-system').value.trim(), device: document.getElementById('m-device').value.trim(), location: document.getElementById('m-location').value.trim(),
-                layer: document.getElementById('m-layer').value.trim(), diameter: document.getElementById('m-diameter').value.trim(), sDesign: sDesign, sActual: sActual, pct: pct,
-                date: document.getElementById('m-date').value || new Date().toISOString().split('T')[0], visual: document.getElementById('m-visual').value || 'Bình thường', isCut: false, isWeld: false, paut: "Chưa NDT"
+                id: nextStt, 
+                system: document.getElementById('m-system').value.trim(), 
+                device: document.getElementById('m-device').value.trim(), 
+                location: document.getElementById('m-location').value.trim(),
+                layer: document.getElementById('m-layer').value.trim(), 
+                diameter: document.getElementById('m-diameter').value.trim(), 
+                sDesign: sDesign, 
+                sActual: sActual, 
+                pct: pct,
+                date: document.getElementById('m-date').value || new Date().toISOString().split('T')[0], 
+                visual: document.getElementById('m-visual').value || 'Bình thường', 
+                isCut: false, isWeld: false, paut: "Chưa NDT"
             };
 
             allRecords.push(newRecord);
@@ -792,7 +832,11 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); 
             document.getElementById('btn-' + tabId).classList.add('active'); 
         }
-        function resetForm() { document.getElementById('measureForm').reset(); }
+        function resetForm() { 
+            document.getElementById('measureForm').reset(); 
+            document.getElementById('m-diameter').value = '';
+            document.getElementById('m-s-design').value = '';
+        }
     </script>
 </body>
 </html>
