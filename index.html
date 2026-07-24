@@ -259,7 +259,7 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw053iEHeABYtbfUE4o8yoturlSQR4oX2iMbHwDjRV0ojz9hWx9qniT8H4PDLqYIW02Pg/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqWJnj45ykptG7BwrN1EXTI96-A-WNU2RwcOQWassL7ZIJGRAyl4z0kyQjxXjzSUrocA/exec";
 
         let currentUser = null;
         let allRecords = [];
@@ -298,19 +298,21 @@
             }
         }
 
+        // TỰ ĐỘNG KHỚP THÔNG SỐ ĐƯỜNG KÍNH VÀ STK THEO DẢI VỊ TRÍ & DẢI LỚP ỐNG
         function autoLookupSpecs() {
             let sys = document.getElementById('m-system').value.trim();
             let dev = document.getElementById('m-device').value.trim();
             let loc = parseInt(document.getElementById('m-location').value) || 0;
-            let layer = document.getElementById('m-layer').value.trim();
+            let layer = parseInt(document.getElementById('m-layer').value) || 0;
 
             if (!sys || !dev) return;
 
             let match = specsData.find(item => {
                 let sysMatch = item.system.toLowerCase() === sys.toLowerCase();
                 let devMatch = item.device.toLowerCase() === dev.toLowerCase();
-                let locMatch = loc >= item.locFrom && loc <= item.locTo;
-                let layerMatch = (!item.layer || item.layer === "" || item.layer === layer);
+                let locMatch = (loc >= item.locFrom && loc <= item.locTo);
+                let layerMatch = (layer === 0) || (layer >= item.layerFrom && layer <= item.layerTo);
+                
                 return sysMatch && devMatch && locMatch && layerMatch;
             });
 
@@ -382,7 +384,6 @@
             ];
         }
 
-        // HÀM TỰ ĐỘNG CHUẨN HÓA MÃ MỐI HÀN LỖI TRONG BỘ NHỚ
         function getSanitizedWelds(recordKey, parentKey) {
             let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`));
             if (!localWelds || !Array.isArray(localWelds) || localWelds.length === 0) {
@@ -391,11 +392,10 @@
                 return localWelds;
             }
 
-            // Tự động quét và loại bỏ chuỗi mẫu lỗi "STT - 1. Hệ thống..."
             let isDirty = false;
             localWelds.forEach(w => {
                 if (w.id && (w.id.includes("STT - 1. Hệ thống") || w.id.includes("2. Thiết bị"))) {
-                    let suffix = w.id.split("-").pop().trim(); // Lấy chữ w1, w2...
+                    let suffix = w.id.split("-").pop().trim();
                     w.id = `${parentKey} - ${suffix}`;
                     isDirty = true;
                 }
@@ -652,7 +652,6 @@
                         const recordKey = getRecordKey(row);
                         let isPipeExpanded = expandedPipes[recordKey] || false;
 
-                        // Lấy danh sách mối hàn sạch (không bao giờ bị lây chuỗi STT - 1. Hệ thống)
                         let localWelds = getSanitizedWelds(recordKey, parentKey);
 
                         const pipeBox = document.createElement('div'); 
@@ -836,7 +835,6 @@
                 isCut: false, isWeld: false, paut: "Chưa NDT"
             };
 
-            // Khởi tạo mối hàn sạch tuyệt đối
             let realParentKey = getDisplayName(newRecord);
             let initialWelds = getDefaultWelds(realParentKey);
             localStorage.setItem(`welds_${getRecordKey(newRecord)}`, JSON.stringify(initialWelds));
