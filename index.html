@@ -382,6 +382,31 @@
             ];
         }
 
+        // HÀM TỰ ĐỘNG CHUẨN HÓA MÃ MỐI HÀN LỖI TRONG BỘ NHỚ
+        function getSanitizedWelds(recordKey, parentKey) {
+            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`));
+            if (!localWelds || !Array.isArray(localWelds) || localWelds.length === 0) {
+                localWelds = getDefaultWelds(parentKey);
+                localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
+                return localWelds;
+            }
+
+            // Tự động quét và loại bỏ chuỗi mẫu lỗi "STT - 1. Hệ thống..."
+            let isDirty = false;
+            localWelds.forEach(w => {
+                if (w.id && (w.id.includes("STT - 1. Hệ thống") || w.id.includes("2. Thiết bị"))) {
+                    let suffix = w.id.split("-").pop().trim(); // Lấy chữ w1, w2...
+                    w.id = `${parentKey} - ${suffix}`;
+                    isDirty = true;
+                }
+            });
+
+            if (isDirty) {
+                localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
+            }
+            return localWelds;
+        }
+
         function syncRecordDataBackground(item, localWelds) {
             showSyncToast("⚡ Đã cập nhật! Đang lưu về Sheet...", true);
             fetch(SCRIPT_URL, {
@@ -490,7 +515,7 @@
 
                     const parentKey = getDisplayName(r);
                     const recordKey = getRecordKey(r);
-                    let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+                    let localWelds = getSanitizedWelds(recordKey, parentKey);
                     
                     localWelds.forEach(w => { 
                         totalWeldsCount++; 
@@ -627,7 +652,8 @@
                         const recordKey = getRecordKey(row);
                         let isPipeExpanded = expandedPipes[recordKey] || false;
 
-                        let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+                        // Lấy danh sách mối hàn sạch (không bao giờ bị lây chuỗi STT - 1. Hệ thống)
+                        let localWelds = getSanitizedWelds(recordKey, parentKey);
 
                         const pipeBox = document.createElement('div'); 
                         pipeBox.className = "pipe-accordion";
@@ -704,13 +730,15 @@
         }
 
         function updateWeldStatus(recordKey, weldId, field, value) {
-            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || []; 
+            let item = allRecords.find(r => getRecordKey(r) === recordKey);
+            let parentKey = getDisplayName(item);
+            let localWelds = getSanitizedWelds(recordKey, parentKey);
+
             let weld = localWelds.find(w => w.id === weldId);
             if(weld) {
                 weld[field] = value; 
                 localStorage.setItem(`welds_${recordKey}`, JSON.stringify(localWelds));
                 let allWeldDone = localWelds.every(w => w.status === "Đã hàn"), allPautPassed = localWelds.every(w => w.paut === "Đạt"), hasReject = localWelds.some(w => w.paut === "Reject");
-                let item = allRecords.find(r => getRecordKey(r) === recordKey);
                 if(item) {
                     item.isWeld = allWeldDone; item.paut = hasReject ? "Reject" : (allPautPassed ? "Đạt" : "Chưa NDT");
                     renderRepairCards(allRecords);
@@ -723,11 +751,11 @@
         function deleteWeld(recordKey, weldId) {
             if(!confirm("Anh có chắc chắn muốn xóa mối hàn biện pháp này không?")) return;
             
-            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || []; 
-            localWelds = localWelds.filter(w => w.id !== weldId); 
-
             let item = allRecords.find(r => getRecordKey(r) === recordKey);
             let parentKey = getDisplayName(item || {});
+            let localWelds = getSanitizedWelds(recordKey, parentKey);
+
+            localWelds = localWelds.filter(w => w.id !== weldId); 
             
             let bpIndex = 1;
             localWelds.forEach(w => {
@@ -753,14 +781,15 @@
             let item = allRecords.find(r => String(r.id).trim() === String(id).trim());
             if(item) {
                 item[field] = !item[field];
-                let localWelds = JSON.parse(localStorage.getItem(`welds_${getRecordKey(item)}`)) || getDefaultWelds(getDisplayName(item)); 
+                let parentKey = getDisplayName(item);
+                let localWelds = getSanitizedWelds(getRecordKey(item), parentKey);
                 calculateDashboard(allRecords);
                 syncRecordDataBackground(item, localWelds);
             }
         }
 
         function addMeasureWeld(recordKey, parentKey) {
-            let localWelds = JSON.parse(localStorage.getItem(`welds_${recordKey}`)) || getDefaultWelds(parentKey);
+            let localWelds = getSanitizedWelds(recordKey, parentKey);
             let bpList = localWelds.filter(w => w.type === "Biện pháp");
             let nextIndex = bpList.length + 1;
             let newBpId = `${parentKey} - w_bp${nextIndex}`;
@@ -807,7 +836,7 @@
                 isCut: false, isWeld: false, paut: "Chưa NDT"
             };
 
-            // Tự động khởi tạo 2 mối hàn chuẩn theo tên bản ghi thực tế
+            // Khởi tạo mối hàn sạch tuyệt đối
             let realParentKey = getDisplayName(newRecord);
             let initialWelds = getDefaultWelds(realParentKey);
             localStorage.setItem(`welds_${getRecordKey(newRecord)}`, JSON.stringify(initialWelds));
@@ -824,7 +853,6 @@
                 body: JSON.stringify({ action: 'saveRecord', data: newRecord }) 
             })
             .then(() => {
-                // Tự động đẩy 2 mối hàn chuẩn về tab Moihan
                 syncRecordDataBackground(newRecord, initialWelds);
             })
             .catch(() => showSyncToast("⚠️ Đã lưu máy cục bộ", false));
