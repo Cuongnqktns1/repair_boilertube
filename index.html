@@ -243,7 +243,14 @@ async function loadAll(){
 
   state.users = await g('users', true, []);
   state.dots = await g('dots', true, []);
-  state.danhMuc = await g('danh-muc', true, []); // XÓA MẪU DỮ LIỆU ĐỂ TRÁNH XUNG ĐỘT
+  
+  // TẢI VÀ TỰ ĐỘNG DỌN DẸP DỮ LIỆU MẪU CŨ KẸT TRONG LOCALSTORAGE
+  let rawDanhMuc = await g('danh-muc', true, []);
+  state.danhMuc = rawDanhMuc.filter(r => !['DM-0001', 'DM-0002', 'DM-0003', 'DM-0004'].includes(r.id));
+  if (rawDanhMuc.length !== state.danhMuc.length) {
+    await persist('danh-muc', state.danhMuc, true);
+  }
+
   state.taiLieu = await g('tai-lieu', true, []);
   state.kiemTra = await g('kiem-tra', true, []);
   state.suaChua = await g('sua-chua', true, []);
@@ -338,7 +345,7 @@ async function doRegister(){
   const user = {name, email, passHash: simpleHash(pass), role};
   state.users.push(user);
   await persist('users', state.users, true);
-  syncToSheet('user', user); // ĐỒNG BỘ VỀ SHEET
+  syncToSheet('user', user);
   state.session = user; state.authErr='';
   await persist('session', email, false);
   render();
@@ -375,6 +382,12 @@ window.deleteDanhMuc = async function(id){
   if(!confirm('Xóa dòng danh mục này?')) return;
   state.danhMuc = state.danhMuc.filter(r=>r.id!==id);
   await persist('danh-muc', state.danhMuc, true); render();
+};
+window.clearAllDanhMuc = async function(){
+  if(!confirm('Bạn có chắc chắn muốn XÓA SẠCH toàn bộ bảng Danh mục kỹ thuật hiện tại không?')) return;
+  state.danhMuc = [];
+  await persist('danh-muc', [], true);
+  render();
 };
 window.exportDanhMuc = function(){
   const rows = state.danhMuc.map((r,i)=>({'STT':i+1,'Tổ máy (để trống = dùng chung)':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Vị trí từ':r.viTriTu,'Vị trí đến':r.viTriDen,'Lớp ống từ':r.lopOngTu,'Lớp ống đến':r.lopOngDen,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Đường kính':r.duongKinh,'Chiều dày':r.chieuDay,'Vật liệu':r.vatLieu,'Ghi chú':r.ghiChu}));
@@ -418,12 +431,7 @@ window.importDanhMuc = function(input){
     });
     let msg = 'Đã nhập '+added+' dòng từ file Excel.';
     if(conflictMsgs.length){
-      msg += '
-
-CẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác:
-- '+conflictMsgs.slice(0,10).join('
-- ')+(conflictMsgs.length>10?'
-... và '+(conflictMsgs.length-10)+' dòng khác':'');
+      msg += '\n\nCẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác:\n- '+conflictMsgs.slice(0,10).join('\n- ')+(conflictMsgs.length>10?'\n... và '+(conflictMsgs.length-10)+' dòng khác':'');
     }
     alert(msg);
     input.value=''; render();
@@ -1024,6 +1032,7 @@ function renderDanhMuc(){
   const tlRows = state.taiLieu.map(t=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(t.tenTaiLieu)}</div></div><div class="record-meta"><span>${esc(t.soHieu||'—')}</span><span>${esc(t.heThong||'—')}</span>${t.link?`<span><a href="${esc(t.link)}" target="_blank" style="color:#4aa3d6;">Mở tài liệu ↗</a></span>`:''}</div>${t.ghiChu?`<div class="record-note">${esc(t.ghiChu)}</div>`:''}<div class="record-actions"><button class="mini-btn" onclick="deleteTaiLieu('${t.id}')">Xóa</button></div></div>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Dữ liệu gốc</div><div class="page-title">Danh mục kỹ thuật ống</div></div>
     <div class="head-actions">
+      <button class="btn-danger" onclick="clearAllDanhMuc()">Xóa sạch danh mục</button>
       <label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importDanhMuc(this)"></label>
       <button class="btn-ghost" onclick="exportDanhMuc()">Xuất Excel</button>
       <button class="btn" onclick="toggleForm('danhmuc')">${state.showForm.danhmuc?'Đóng biểu mẫu':'+ Thêm dòng'}</button>
