@@ -41,10 +41,6 @@ input,select,textarea{font-family:var(--sans);}
 .user-pill{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;}
 .user-pill .u-role{font-size:9.5px;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;display:block;font-family:var(--mono);}
 .logout-btn{background:none;border:none;color:var(--dim);font-size:11px;text-decoration:underline;padding:4px 0 0;}
-.tg-pill{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:8px;}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;}
-.dot.on{background:var(--good);box-shadow:0 0 0 3px var(--good-soft);}
-.dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
 .bottom-nav{display:none;}
 .main{flex:1;min-width:0;padding:26px 30px 60px;max-width:1180px;}
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:20px;flex-wrap:wrap;}
@@ -82,7 +78,6 @@ input[type=file]{display:none;}
 .record-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
 .mini-btn{font-size:11px;padding:5px 9px;border-radius:5px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);}
 .mini-btn:hover{color:var(--text);border-color:#3a4450;}
-.mini-btn.tg{color:#4aa3d6;}
 .empty{color:var(--dim);font-size:13px;padding:26px 10px;text-align:center;border:1px dashed var(--border);border-radius:8px;}
 .form-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:18px;}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
@@ -92,7 +87,6 @@ input[type=file]{display:none;}
 .field input,.field select,.field textarea{background:#0d1b26;border:1px solid var(--border);border-radius:6px;padding:8px 9px;color:var(--text);font-size:13px;}
 .field input:disabled{color:var(--muted);}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
-.field textarea{resize:vertical;min-height:50px;}
 .form-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap;}
 .readonly-box{background:#0d1b26;border:1px solid var(--border-soft);border-radius:6px;padding:8px 9px;font-family:var(--mono);font-size:13px;color:var(--accent);}
 .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
@@ -110,13 +104,6 @@ table.dm tr:last-child td{border-bottom:none;}
 .cause-detail .cause-sub{color:var(--muted);font-size:12px;margin-bottom:14px;}
 .cause-detail h4{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin:14px 0 7px;}
 .cause-detail ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#c9cfd4;}
-.settings-box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;max-width:560px;margin-bottom:18px;}
-.settings-note{background:var(--panel2);border:1px solid var(--border-soft);border-radius:7px;padding:11px 13px;font-size:12px;color:var(--muted);line-height:1.55;margin-top:12px;}
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--border-soft);margin-top:6px;}
-.switch{width:38px;height:21px;border-radius:20px;background:var(--border);position:relative;border:none;flex-shrink:0;}
-.switch.on{background:var(--accent);}
-.switch::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#e7eaec;transition:left .15s;}
-.switch.on::after{left:19px;background:#1a1305;}
 .loading{padding:60px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px;letter-spacing:.08em;}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 25% 15%,#16324a 0%,var(--bg) 62%);}
 .login-card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:28px 26px;}
@@ -136,12 +123,7 @@ table.dm tr:last-child td{border-bottom:none;}
 .repair-head{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;flex-wrap:wrap;}
 .progress-mini{font-family:var(--mono);font-size:11px;color:var(--muted);}
 .section-sub{margin:28px 0 14px;padding-top:20px;border-top:1px solid var(--border-soft);}
-@media(max-width:880px){
-  .grid-cards{grid-template-columns:repeat(2,1fr);}
-  .cause-grid{grid-template-columns:1fr;}
-  .cause-detail{position:static;}
-  .form-grid{grid-template-columns:1fr;}
-}
+@media(max-width:880px){ .grid-cards{grid-template-columns:repeat(2,1fr);} .cause-grid{grid-template-columns:1fr;} .cause-detail{position:static;} .form-grid{grid-template-columns:1fr;} }
 @media(max-width:720px){
   .sidebar{display:none;}
   .main{padding:16px 14px 90px;}
@@ -151,143 +133,102 @@ table.dm tr:last-child td{border-bottom:none;}
   .bn-tag{font-family:var(--mono);font-size:9.5px;font-weight:700;width:22px;height:17px;display:flex;align-items:center;justify-content:center;border-radius:3px;background:#0d1b26;border:1px solid var(--border);}
   .bn-item.active .bn-tag{border-color:var(--accent-soft);color:var(--accent);}
   .page-title{font-size:22px;}
-  .grid-cards{grid-template-columns:1fr 1fr;}
 }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
-const LOGO_SVG = '<svg class="logo-mark" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">'
-  +'<circle cx="22" cy="22" r="19" fill="none" stroke="#e08a3c" stroke-width="3"/>'
-  +'<circle cx="22" cy="22" r="11" fill="none" stroke="#e08a3c" stroke-width="3" opacity="0.55"/>'
-  +'<circle cx="22" cy="22" r="3" fill="#e08a3c"/>'
-  +'</svg>';
+const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxen4XWVFuS_vFnaSO5uJdLfUPv4Czs0k3nny_UdPruHaB_IcwiAAeZA_j4heIbW_LUEA/exec";
+
+const LOGO_SVG = '<svg class="logo-mark" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="19" fill="none" stroke="#e08a3c" stroke-width="3"/><circle cx="22" cy="22" r="11" fill="none" stroke="#e08a3c" stroke-width="3" opacity="0.55"/><circle cx="22" cy="22" r="3" fill="#e08a3c"/></svg>';
 
 const NAV = [
   {id:'overview', tag:'TQ', label:'Tổng quan'},
-  {id:'dots',     tag:'ĐV', label:'Đợt kiểm tra/sửa chữa'},
+  {id:'dots',     tag:'ĐV', label:'Đợt kiểm tra'},
   {id:'danhmuc',  tag:'DM', label:'Danh mục kỹ thuật'},
   {id:'kiemtra',  tag:'ĐĐ', label:'Kiểm tra (đo đạc)'},
   {id:'suachua',  tag:'SC', label:'Sửa chữa & hàn'},
   {id:'vattu',    tag:'VT', label:'Vật tư sử dụng'},
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
-  {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
-  {id:'settings', tag:'CĐ', label:'Cài đặt'},
+  {id:'analysis', tag:'PT', label:'Phân tích kỹ thuật'}
 ];
 
 const CAUSES = [
-  {id:'erosion', name:'Mài mòn tro bay (ăn mòn phía khói)', where:'Ống sinh hơi vùng đổi hướng dòng khói, gần miệng đốt',
-    causes:['Tốc độ, nồng độ tro bay cao tại vùng đổi hướng dòng khói','Vận hành lệch tâm ngọn lửa gây xoáy dòng khói','Khoảng cách ống - tường quá hẹp làm tăng tốc độ cục bộ'],
-    signs:['Bề mặt ống mỏng dần dạng rãnh khía hình yên ngựa, lệch về phía đón dòng khói','Chiều dày giảm dần đều theo thời gian tại cùng vị trí'],
-    fix:['Cắt bỏ đoạn ống dưới chiều dày tối thiểu, hàn nối ống mới cùng mác vật liệu và đường kính','Kiểm tra 100% mối hàn bằng NDT trước khi vận hành','Lắp tấm chắn chống mài mòn tại vị trí lặp lại hư hỏng','Rà soát chế độ đốt, cân bằng vòi đốt','Bổ sung điểm đo định kỳ tại vị trí đã sửa chữa']},
-  {id:'waterside', name:'Ăn mòn phía nước / hơi', where:'Ống sinh hơi, ống góp, khu vực lưu lượng thấp',
-    causes:['Chất lượng nước cấp không đạt (pH, oxy hòa tan)','Đóng cặn tạo lớp cách nhiệt trong ống','Ăn mòn rỗ do oxy hòa tan khi dừng lò không xử lý đúng'],
-    signs:['Rỗ ăn mòn cục bộ hoặc lớp cặn dày khi cắt mẫu kiểm tra','Chiều dày giảm không đều, phát hiện qua UT hoặc nội soi'],
-    fix:['Cắt và thay ống mới; có thể vá đắp nếu ăn mòn rỗ cục bộ theo quy trình hàn được duyệt','Súc rửa hóa chất nếu cặn vượt ngưỡng cho phép','Hiệu chỉnh chế độ xử lý nước cấp, xử lý oxy, bảo quản lò khi dừng máy']},
-  {id:'long-overheat', name:'Quá nhiệt dài hạn (creep)', where:'Ống sinh hơi, quá nhiệt/tái nhiệt vận hành lâu ở nhiệt độ vượt thiết kế',
-    causes:['Đóng cặn làm giảm trao đổi nhiệt, kim loại nóng cục bộ','Lưu lượng tuần hoàn không đủ tại một số nhánh','Vận hành kéo dài ở nhiệt độ khói cao hơn thiết kế'],
-    signs:['Ống phình cục bộ, vảy oxit dày, đổi màu kim loại','Vết nứt "cửa sổ" khi vỡ ống, mép mỏng biến dạng nhiều'],
-    fix:['Cắt bỏ toàn bộ đoạn phình/biến dạng, thay ống đúng mác vật liệu chịu nhiệt','Kiểm tra kim tương, đo độ cứng đoạn lân cận','Xử lý nhiệt sau hàn (PWHT) nếu vật liệu yêu cầu','Làm sạch cặn trong ống trước khi vận hành lại']},
-  {id:'short-overheat', name:'Quá nhiệt ngắn hạn (mất lưu lượng đột ngột)', where:'Ống tắc nghẽn cục bộ hoặc mất tuần hoàn đột ngột',
-    causes:['Tắc nghẽn dị vật hoặc cặn bong tróc','Sự cố bơm cấp nước, mất tuần hoàn tức thời','Khởi động lò sai quy trình'],
-    signs:['Vỡ ống dạng miệng cá, mép mỏng, biến dạng dẻo rõ, xảy ra đột ngột'],
-    fix:['Cắt và thay đoạn ống hỏng ngay, kiểm tra kỹ ống lân cận cùng nhánh','Nội soi/súc rửa loại bỏ dị vật gây tắc trước khi vận hành lại','Rà soát quy trình khởi động và liên động bảo vệ mất nước cấp']},
-  {id:'fatigue', name:'Nứt do mỏi nhiệt / mỏi cơ', where:'Vị trí hàn, gối đỡ ống, chỗ uốn, điểm ràng buộc giãn nở nhiệt',
-    causes:['Chu kỳ khởi động - dừng lò thường xuyên','Gối đỡ kẹt hoặc hư hỏng cản trở giãn nở nhiệt','Rung động cơ khí kéo dài'],
-    signs:['Vết nứt dạng mạng nhện tại mối hàn/điểm uốn, lan dần theo thời gian'],
-    fix:['Mài loại bỏ vết nứt, nếu vượt giới hạn thì cắt và hàn nối đoạn mới','Sửa chữa hệ thống gối đỡ, giá treo','Kiểm tra PT/MT các vị trí tương tự trong cùng cụm ống']},
-  {id:'low-temp-corrosion', name:'Ăn mòn nhiệt độ thấp (điểm sương axit)', where:'Bộ hâm nước, bộ sấy không khí, khu vực khói nhiệt độ thấp',
-    causes:['Nhiệt độ vách ống xuống dưới điểm sương axit sulfuric','Hàm lượng lưu huỳnh nhiên liệu cao kết hợp nhiệt độ khói thấp'],
-    signs:['Ăn mòn dạng vảy, mất kim loại đều trên diện rộng'],
-    fix:['Thay đoạn ống/tấm trao đổi nhiệt bằng vật liệu chịu ăn mòn axit','Kiểm soát nhiệt độ khói thải và nước cấp không xuống dưới điểm sương thiết kế','Xem xét bọc phủ chống ăn mòn tại vùng nhiệt độ thấp']},
-  {id:'weld-defect', name:'Khuyết tật hàn / nứt vùng ảnh hưởng nhiệt (HAZ)', where:'Mối hàn nối ống, mối hàn sửa chữa trước đó',
-    causes:['Quy trình hàn (WPS) không phù hợp mác vật liệu','Không xử lý nhiệt trước/sau hàn theo yêu cầu','Thợ hàn chưa chứng nhận đúng phương pháp/vị trí'],
-    signs:['Rỗ khí, ngậm xỉ, không ngấu qua chụp X-quang/UT','Nứt chân mối hàn hoặc HAZ qua PT/MT'],
-    fix:['Cắt bỏ hoàn toàn mối hàn lỗi, hàn lại theo đúng WPS đã duyệt','Xử lý nhiệt trước/sau hàn (PWHT) đúng quy định nếu vật liệu yêu cầu','Kiểm tra NDT 100% mối hàn sửa chữa trước khi nghiệm thu','Rà soát chứng chỉ thợ hàn và quy trình áp dụng tại hiện trường']}
+  {id:'erosion', name:'Mài mòn tro bay (ăn mòn phía khói)', where:'Ống sinh hơi vùng đổi hướng dòng khói, gần miệng đốt', causes:['Tốc độ, nồng độ tro bay cao tại vùng đổi hướng dòng khói'], signs:['Bề mặt ống mỏng dần dạng rãnh khía hình yên ngựa'], fix:['Cắt bỏ đoạn ống, hàn nối ống mới']},
+  {id:'waterside', name:'Ăn mòn phía nước / hơi', where:'Ống sinh hơi, ống góp', causes:['Chất lượng nước cấp không đạt'], signs:['Rỗ ăn mòn cục bộ'], fix:['Cắt và thay ống mới', 'Súc rửa hóa chất']}
 ];
 
 let state = {
   session:null, authView:'login', authErr:'',
   tab:'overview', loading:true,
-  users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[],
-  telegram:{botToken:'',chatId:'',autoSend:false,tanSuatGio:''}, sheetWebhook:'',
+  users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[], telegram:{},
   showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false},
-  activeCause:CAUSES[0].id,
-  ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
-  vtSel:{dotId:''},
-  scFilter:{dotId:'',toMay:'',heThong:'',thietBi:''},
-  ovYear:null, ovDot:null, ovMode:'current',
-  expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
+  activeCause:CAUSES[0].id, ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''},
+  ktCandidates:[], ktResolved:null, vtSel:{dotId:''}, scFilter:{dotId:'',toMay:'',heThong:'',thietBi:''},
+  ovYear:null, ovDot:null, ovMode:'current', expandedRepair:null, expandedHistory:null, expandedOldCycles:null
 };
 
 function pad(n){ return String(n).padStart(4,'0'); }
 function esc(s){ return (s===undefined||s===null?'':s).toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
-function fmtDate(d){ if(!d) return '—'; const dt=new Date(d+'T00:00:00'); if(isNaN(dt)) return d; return dt.toLocaleDateString('vi-VN'); }
+function fmtDate(d){ if(!d) return '—'; const dt=new Date(d+'T00:00:00'); return isNaN(dt) ? d : dt.toLocaleDateString('vi-VN'); }
 function simpleHash(str){ let h=0; str=String(str); for(let i=0;i<str.length;i++){ h=(h*31+str.charCodeAt(i))|0; } return 'h'+Math.abs(h).toString(36); }
 function uniq(arr){ return [...new Set(arr)]; }
 function pipeCode(r){ return (r.toMay?r.toMay+' · ':'')+r.heThong+' - '+r.thietBi+' - '+r.viTri+' - '+r.lopOng; }
 
-async function loadAll(){
-  const g = async (k,shared,def)=>{ 
-    try{ 
-      if(window.storage) {
-        const r=await window.storage.get(k,shared); 
-        return r? JSON.parse(r.value): def; 
-      }
-      const val = localStorage.getItem('app_'+k);
-      return val ? JSON.parse(val) : def;
-    }catch(e){ return def; } 
-  };
-
-  state.users = await g('users', true, []);
-  state.dots = await g('dots', true, []);
-  
-  // TẢI VÀ TỰ ĐỘNG DỌN DẸP DỮ LIỆU MẪU CŨ KẸT TRONG LOCALSTORAGE
-  let rawDanhMuc = await g('danh-muc', true, []);
-  state.danhMuc = rawDanhMuc.filter(r => !['DM-0001', 'DM-0002', 'DM-0003', 'DM-0004'].includes(r.id));
-  if (rawDanhMuc.length !== state.danhMuc.length) {
-    await persist('danh-muc', state.danhMuc, true);
+async function apiCall(action, payload) {
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({action, payload})
+    });
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    alert("Lỗi kết nối máy chủ Google Sheet!");
+    return {success: false, error: e.message};
   }
+}
 
-  state.taiLieu = await g('tai-lieu', true, []);
-  state.kiemTra = await g('kiem-tra', true, []);
-  state.suaChua = await g('sua-chua', true, []);
-  state.vatTu = await g('vat-tu', true, []);
-  state.telegram = await g('telegram-config', false, {botToken:'',chatId:'',autoSend:false,tanSuatGio:''});
-  state.sheetWebhook = await g('sheet-webhook', false, '');
-  const sess = await g('session', false, null);
-  if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
-
-  state.loading=false;
+async function loadAll(){
+  const sessionEmail = localStorage.getItem('app_session_email');
+  const res = await apiCall('PULL_DATA');
+  
+  if(res.success) {
+    const db = res.data;
+    state.users = db.Users || [];
+    state.dots = db.Dots || [];
+    state.danhMuc = db.Danh_Muc || [];
+    state.taiLieu = db.Tai_Lieu || [];
+    state.kiemTra = db.Kiem_Tra || [];
+    state.suaChua = (db.Sua_Chua || []).map(s => ({...s, welds: JSON.parse(s.welds||'[]')}));
+    state.vatTu = db.Vat_Tu || [];
+    
+    if(sessionEmail) {
+      state.session = state.users.find(u => u.email === sessionEmail);
+    }
+  } else {
+    alert("Không thể tải dữ liệu: " + res.error);
+  }
+  state.loading = false;
   render();
 }
 
-async function persist(key, value, shared){ 
-  try{ 
-    if(window.storage) {
-      await window.storage.set(key, JSON.stringify(value), shared); 
-    }
-    localStorage.setItem('app_'+key, JSON.stringify(value));
-  }catch(e){ console.error('Lỗi lưu',key,e); } 
+async function syncAndSave(table, record) {
+  let dbRec = {...record};
+  if(table === 'Sua_Chua' && dbRec.welds) dbRec.welds = JSON.stringify(dbRec.welds);
+  await apiCall('UPSERT', {table, record: dbRec});
 }
 
-/* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
-function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
-  const af=(aFrom===''||isNaN(parseFloat(aFrom)))?-Infinity:parseFloat(aFrom);
-  const at=(aTo===''||isNaN(parseFloat(aTo)))?Infinity:parseFloat(aTo);
-  const bf=(bFrom===''||isNaN(parseFloat(bFrom)))?-Infinity:parseFloat(bFrom);
-  const bt=(bTo===''||isNaN(parseFloat(bTo)))?Infinity:parseFloat(bTo);
-  return af<=bt && bf<=at;
-}
-function danhMucOverlaps(row, excludeId){
-  return state.danhMuc.filter(r=>
-    r.id!==excludeId && r.heThong===row.heThong && r.thietBi===row.thietBi
-    && (!r.toMay || !row.toMay || r.toMay===row.toMay)
-    && rangesOverlap1D(row.viTriTu,row.viTriDen,r.viTriTu,r.viTriDen)
-    && rangesOverlap1D(row.lopOngTu,row.lopOngDen,r.lopOngTu,r.lopOngDen)
-  );
+async function syncBatchAndSave(table, records) {
+  let dbRecs = records.map(r => {
+    let rec = {...r};
+    if(table === 'Sua_Chua' && rec.welds) rec.welds = JSON.stringify(rec.welds);
+    return rec;
+  });
+  await apiCall('UPSERT_BATCH', {table, records: dbRecs});
 }
 
 /* ---------- ĐỢT KIỂM TRA / SỬA CHỮA ---------- */
@@ -297,102 +238,66 @@ window.addDot = async function(){
   if(!ten || !toMay){ alert('Vui lòng nhập Tên đợt và Tổ máy.'); return; }
   const dot = {id:'DOT-'+pad(state.dots.length+1), ten, toMay, ngayBatDau, ngayKetThuc:'', trangThai:'Đang diễn ra'};
   state.dots.unshift(dot);
-  await persist('dots', state.dots, true);
-  syncToSheet('dot', dot);
   state.showForm.dot=false; render();
+  await syncAndSave('Dots', dot);
 };
 window.closeDot = async function(id){
-  if(!confirm('Đóng đợt này? Sau khi đóng, dữ liệu của đợt sẽ được xem là đã hoàn thành và chuyển sang lịch sử.')) return;
+  if(!confirm('Đóng đợt này?')) return;
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đã hoàn thành'; d.ngayKetThuc=todayStr();
-  await persist('dots', state.dots, true);
-  syncToSheet('dot', d);
-  render();
+  render(); await syncAndSave('Dots', d);
 };
 window.reopenDot = async function(id){
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đang diễn ra'; d.ngayKetThuc='';
-  await persist('dots', state.dots, true);
-  syncToSheet('dot', d);
-  render();
+  render(); await syncAndSave('Dots', d);
 };
 
-async function syncToSheet(type, record){
-  if(!state.sheetWebhook) return;
-  try{
-    await fetch(state.sheetWebhook, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type, record, ts: new Date().toISOString()})});
-  }catch(e){ /* best-effort */ }
-}
-async function sendTelegram(text){
-  const cfg = state.telegram;
-  if(!cfg.botToken || !cfg.chatId){ alert('Chưa cấu hình Telegram. Vào Cài đặt để nhập Bot Token và Chat ID.'); return false; }
-  try{
-    const res = await fetch('https://api.telegram.org/bot'+cfg.botToken+'/sendMessage', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.chatId,text,parse_mode:'HTML'})});
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.description||'Yêu cầu bị từ chối');
-    return true;
-  }catch(e){ alert('Gửi Telegram thất bại: '+e.message); return false; }
-}
-
-/* ---------- AUTH WITH GOOGLE SHEET SYNC ---------- */
+/* ---------- AUTH ---------- */
 async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim().toLowerCase();
   const pass=document.getElementById('reg-pass').value;
-  if(!name||!email||!pass){ state.authErr='Vui lòng nhập đầy đủ họ tên, email và mật khẩu.'; render(); return; }
-  if(state.users.find(u=>u.email===email)){ state.authErr='Email này đã được đăng ký.'; render(); return; }
+  if(!name||!email||!pass){ state.authErr='Vui lòng nhập đủ thông tin.'; render(); return; }
+  if(state.users.find(u=>u.email===email)){ state.authErr='Email đã được đăng ký.'; render(); return; }
   const role = state.users.length===0 ? 'admin' : 'ky_thuat';
-  const user = {name, email, passHash: simpleHash(pass), role};
+  const user = {id: 'U-'+Date.now(), name, email, passHash: simpleHash(pass), role};
   state.users.push(user);
-  await persist('users', state.users, true);
-  syncToSheet('user', user);
   state.session = user; state.authErr='';
-  await persist('session', email, false);
+  localStorage.setItem('app_session_email', email);
   render();
+  await syncAndSave('Users', user);
 }
 async function doLogin(){
   const email=document.getElementById('log-email').value.trim().toLowerCase();
   const pass=document.getElementById('log-pass').value;
   const user = state.users.find(u=>u.email===email);
-  if(!user || user.passHash !== simpleHash(pass)){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
+  if(!user || user.passHash !== simpleHash(pass)){ state.authErr='Email hoặc mật khẩu sai.'; render(); return; }
   state.session=user; state.authErr='';
-  await persist('session', email, false);
+  localStorage.setItem('app_session_email', email);
   render();
 }
-async function doLogout(){ state.session=null; await persist('session', null, false); render(); }
+async function doLogout(){ state.session=null; localStorage.removeItem('app_session_email'); render(); }
 window.setAuthView = v => { state.authView=v; state.authErr=''; render(); };
 window.doRegister=doRegister; window.doLogin=doLogin; window.doLogout=doLogout;
 
 /* ---------- DANH MỤC ---------- */
 window.addDanhMuc = async function(){
   const g=id=>document.getElementById(id).value.trim();
-  const rec={id:'DM-'+pad(state.danhMuc.length+1), toMay:g('dm-tomay'), heThong:g('dm-hethong'), thietBi:g('dm-thietbi'), viTriTu:g('dm-vitritu'), viTriDen:g('dm-vitriden'), lopOngTu:g('dm-lopongtu'), lopOngDen:g('dm-lopongden'), vung:g('dm-vung'), duongKinh:g('dm-duongkinh'), chieuDay:g('dm-chieuday'), vatLieu:g('dm-vatlieu'), ghiChu:g('dm-ghichu')};
-  if(!rec.heThong||!rec.vung||!rec.duongKinh||!rec.chieuDay){ alert('Vui lòng nhập ít nhất Hệ thống, Quy ước vùng vật liệu, Đường kính và Chiều dày.'); return; }
-  const overlaps = danhMucOverlaps(rec, null);
-  if(overlaps.length){
-    alert('Dải Vị trí/Lớp ống của dòng này bị CHỒNG LẤN với vùng "'+overlaps[0].vung+'" đã khai báo. Vui lòng sửa lại.');
-    return;
-  }
-  state.danhMuc.push(rec);
-  await persist('danh-muc', state.danhMuc, true);
-  syncToSheet('danh_muc', rec);
-  state.showForm.danhmuc=false; render();
+  const rec={id:'DM-'+Date.now(), toMay:g('dm-tomay'), heThong:g('dm-hethong'), thietBi:g('dm-thietbi'), viTriTu:g('dm-vitritu'), viTriDen:g('dm-vitriden'), lopOngTu:g('dm-lopongtu'), lopOngDen:g('dm-lopongden'), vung:g('dm-vung'), duongKinh:g('dm-duongkinh'), chieuDay:g('dm-chieuday'), vatLieu:g('dm-vatlieu'), ghiChu:g('dm-ghichu')};
+  state.danhMuc.push(rec); state.showForm.danhmuc=false; render();
+  await syncAndSave('Danh_Muc', rec);
 };
 window.deleteDanhMuc = async function(id){
-  if(!confirm('Xóa dòng danh mục này?')) return;
-  state.danhMuc = state.danhMuc.filter(r=>r.id!==id);
-  await persist('danh-muc', state.danhMuc, true); render();
+  if(!confirm('Xóa dòng này?')) return;
+  state.danhMuc = state.danhMuc.filter(r=>r.id!==id); render();
+  await apiCall('DELETE_RECORD', {table: 'Danh_Muc', id});
 };
 window.clearAllDanhMuc = async function(){
-  if(!confirm('Bạn có chắc chắn muốn XÓA SẠCH toàn bộ bảng Danh mục kỹ thuật hiện tại không?')) return;
-  state.danhMuc = [];
-  await persist('danh-muc', [], true);
-  render();
-};
-window.exportDanhMuc = function(){
-  const rows = state.danhMuc.map((r,i)=>({'STT':i+1,'Tổ máy (để trống = dùng chung)':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Vị trí từ':r.viTriTu,'Vị trí đến':r.viTriDen,'Lớp ống từ':r.lopOngTu,'Lớp ống đến':r.lopOngDen,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Đường kính':r.duongKinh,'Chiều dày':r.chieuDay,'Vật liệu':r.vatLieu,'Ghi chú':r.ghiChu}));
-  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'DanhMuc'); XLSX.writeFile(wb,'danh-muc-ky-thuat.xlsx');
+  if(!confirm('Bạn có chắc chắn muốn XÓA SẠCH toàn bộ bảng Danh mục trên CẢ CLOUD không?')) return;
+  state.danhMuc = []; render();
+  await apiCall('CLEAR_TABLE', {table: 'Danh_Muc'});
+  alert('Đã xóa sạch dữ liệu Danh mục trên Google Sheet.');
 };
 window.importDanhMuc = function(input){
   const file = input.files[0]; if(!file) return;
@@ -400,466 +305,128 @@ window.importDanhMuc = function(input){
   reader.onload = async e=>{
     const wb = XLSX.read(e.target.result, {type:'array'});
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-    let added=0, lastHeThong='', lastThietBi='', lastToMay='';
-    const newlyAdded = [];
+    let added=0; const newlyAdded = [];
     rows.forEach(r=>{
-      let heThong=String(r['Hệ thống']||r['He thong']||'').trim();
-      let thietBi=String(r['Thiết bị']||r['Thiet bi']||'').trim();
-      let toMay=String(r['Tổ máy (để trống = dùng chung)']||r['Tổ máy']||r['To may']||'').trim();
       const vung=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'').trim();
       const duongKinh=r['Đường kính']||r['Duong kinh'], chieuDay=r['Chiều dày']||r['Chieu day'];
       if(!duongKinh||!chieuDay) return;
-      if(heThong) lastHeThong=heThong; else heThong=lastHeThong;
-      if(thietBi) lastThietBi=thietBi; else thietBi=lastThietBi;
-      if(toMay) lastToMay=toMay;
-      const newRec = {id:'DM-'+pad(state.danhMuc.length+1), toMay, heThong, thietBi,
-        viTriTu:String(r['Vị trí từ']||r['Vi tri tu']||''), viTriDen:String(r['Vị trí đến']||r['Vi tri den']||''),
-        lopOngTu:String(r['Lớp ống từ']||r['Lop ong tu']||''), lopOngDen:String(r['Lớp ống đến']||r['Lop ong den']||''),
-        vung: vung||('#'+pad(state.danhMuc.length+1)),
-        duongKinh:String(duongKinh), chieuDay:String(chieuDay),
-        vatLieu:String(r['Vật liệu']||r['Vat lieu']||''), ghiChu:String(r['Ghi chú']||r['Ghi chu']||'')};
-      state.danhMuc.push(newRec);
-      newlyAdded.push(newRec);
-      syncToSheet('danh_muc', newRec);
-      added++;
+      const newRec = {id:'DM-'+Date.now()+'-'+added, 
+        toMay:String(r['Tổ máy (để trống = dùng chung)']||'').trim(), heThong:String(r['Hệ thống']||'').trim(), thietBi:String(r['Thiết bị']||'').trim(),
+        viTriTu:String(r['Vị trí từ']||''), viTriDen:String(r['Vị trí đến']||''), lopOngTu:String(r['Lớp ống từ']||''), lopOngDen:String(r['Lớp ống đến']||''),
+        vung: vung||'#', duongKinh:String(duongKinh), chieuDay:String(chieuDay), vatLieu:String(r['Vật liệu']||''), ghiChu:String(r['Ghi chú']||'')};
+      state.danhMuc.push(newRec); newlyAdded.push(newRec); added++;
     });
-    await persist('danh-muc', state.danhMuc, true);
-    const conflictMsgs = [];
-    newlyAdded.forEach(rec=>{
-      const ov = danhMucOverlaps(rec, rec.id);
-      if(ov.length) conflictMsgs.push('Vùng "'+rec.vung+'" ('+rec.heThong+(rec.thietBi?(' - '+rec.thietBi):'')+') chồng lấn với vùng "'+ov[0].vung+'"');
-    });
-    let msg = 'Đã nhập '+added+' dòng từ file Excel.';
-    if(conflictMsgs.length){
-      msg += '\n\nCẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác:\n- '+conflictMsgs.slice(0,10).join('\n- ')+(conflictMsgs.length>10?'\n... và '+(conflictMsgs.length-10)+' dòng khác':'');
-    }
-    alert(msg);
-    input.value=''; render();
+    render();
+    await syncBatchAndSave('Danh_Muc', newlyAdded);
+    alert('Đã nhập '+added+' dòng từ Excel.'); input.value='';
   };
   reader.readAsArrayBuffer(file);
 };
-
-window.addTaiLieu = async function(){
-  const g=id=>document.getElementById(id).value.trim();
-  const rec={id:'TL-'+pad(state.taiLieu.length+1), tenTaiLieu:g('tl-ten'), soHieu:g('tl-sohieu'), heThong:g('tl-hethong'), link:g('tl-link'), ghiChu:g('tl-ghichu')};
-  if(!rec.tenTaiLieu){ alert('Vui lòng nhập tên tài liệu.'); return; }
-  state.taiLieu.push(rec);
-  await persist('tai-lieu', state.taiLieu, true);
-  state.showForm.tailieu=false; render();
-};
-window.deleteTaiLieu = async function(id){
-  state.taiLieu = state.taiLieu.filter(r=>r.id!==id);
-  await persist('tai-lieu', state.taiLieu, true); render();
+window.exportDanhMuc = function(){
+  const rows = state.danhMuc.map((r,i)=>({'STT':i+1,'Tổ máy (để trống = dùng chung)':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Vị trí từ':r.viTriTu,'Vị trí đến':r.viTriDen,'Lớp ống từ':r.lopOngTu,'Lớp ống đến':r.lopOngDen,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Đường kính':r.duongKinh,'Chiều dày':r.chieuDay,'Vật liệu':r.vatLieu,'Ghi chú':r.ghiChu}));
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'DanhMuc'); XLSX.writeFile(wb,'danh-muc-ky-thuat.xlsx');
 };
 
-/* ---------- KIỂM TRA (ĐO ĐẠC) ---------- */
+/* ---------- KIỂM TRA & SỬA CHỮA ---------- */
 window.ktSelect = function(level, value){
   if(level==='dotId'){ state.ktSel.dotId=value; state.ktSel.heThong=''; state.ktSel.thietBi=''; state.ktSel.vung=''; }
   if(level==='heThong'){ state.ktSel.heThong=value; state.ktSel.thietBi=''; state.ktSel.vung=''; }
   if(level==='thietBi'){ state.ktSel.thietBi=value; state.ktSel.vung=''; }
-  render();
-  window.updateKtDerived();
+  render(); window.updateKtDerived();
 };
 function inRange(val, from, to){
-  const v=parseFloat(val);
-  if(isNaN(v)) return false;
-  const f = (from===undefined||from===null||from===''||isNaN(parseFloat(from))) ? -Infinity : parseFloat(from);
-  const t = (to===undefined||to===null||to===''||isNaN(parseFloat(to))) ? Infinity : parseFloat(to);
+  const v=parseFloat(val); if(isNaN(v)) return false;
+  const f = (from===undefined||from===''||isNaN(parseFloat(from))) ? -Infinity : parseFloat(from);
+  const t = (to===undefined||to===''||isNaN(parseFloat(to))) ? Infinity : parseFloat(to);
   return v>=f && v<=t;
 }
 function ktCandidates(toMay, heThong, thietBi, viTri, lopOng){
   if(!heThong || !viTri || !lopOng) return [];
-  return state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi)
-    && (!r.toMay || r.toMay===toMay)
-    && inRange(viTri, r.viTriTu, r.viTriDen) && inRange(lopOng, r.lopOngTu, r.lopOngDen));
+  return state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi) && (!r.toMay || r.toMay===toMay) && inRange(viTri, r.viTriTu, r.viTriDen) && inRange(lopOng, r.lopOngTu, r.lopOngDen));
 }
 window.updateKtDerived = function(){
   const vt = document.getElementById('kt-vitri'), lo = document.getElementById('kt-lopong');
   if(!vt || !lo) return;
   state.ktSel.viTri = vt.value.trim(); state.ktSel.lopOng = lo.value.trim();
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
-  const toMay = dotObj ? dotObj.toMay : '';
-  const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
-  const dm = candidates.length===1 ? candidates[0] : null;
-  state.ktCandidates = candidates; state.ktResolved = dm;
+  const candidates = ktCandidates(dotObj?dotObj.toMay:'', state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
+  state.ktResolved = candidates.length===1 ? candidates[0] : null;
   const box = id=>document.getElementById(id);
-  if(box('kt-vung-box')) box('kt-vung-box').textContent = dm? dm.vung : '—';
-  if(box('kt-dk-box')) box('kt-dk-box').textContent = dm? dm.duongKinh : '—';
-  if(box('kt-day-box')) box('kt-day-box').textContent = dm? dm.chieuDay : '—';
-  if(box('kt-vl-box')) box('kt-vl-box').textContent = dm? (dm.vatLieu||'—') : '—';
-  const ambig = box('kt-ambig-wrap');
-  if(ambig){
-    if(candidates.length>1){
-      ambig.style.display='block';
-      ambig.innerHTML = '<b>Danh mục kỹ thuật đang bị xung đột:</b> có '+candidates.length+' vùng vật liệu ('
-        + candidates.map(c=>esc(c.vung)).join(', ')
-        + ') cùng bao trùm vị trí/lớp ống này. Vui lòng sửa lại trong Danh mục kỹ thuật.';
-    } else if(state.ktSel.viTri && state.ktSel.lopOng && candidates.length===0 && state.ktSel.heThong){
-      ambig.style.display='block';
-      ambig.innerHTML = 'Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Vị trí/Lớp ống này.';
-    } else { ambig.style.display='none'; ambig.innerHTML=''; }
-  }
+  if(box('kt-vung-box')) box('kt-vung-box').textContent = state.ktResolved? state.ktResolved.vung : '—';
 };
 window.addKiemTra = async function(){
   const g=id=>document.getElementById(id).value.trim();
   window.updateKtDerived();
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
-  if(!dotObj){ alert('Vui lòng chọn Đợt kiểm tra/sửa chữa (tổ máy) trước.'); return; }
   const dm = state.ktResolved;
-  const viTri = g('kt-vitri'), lopOng = g('kt-lopong'), chieuDayDo = g('kt-do');
-  if(!state.ktSel.heThong || !viTri || !lopOng){ alert('Vui lòng chọn Hệ thống và nhập Vị trí, Lớp ống.'); return; }
-  if(!dm){
-    if((state.ktCandidates||[]).length===0) alert('Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với dữ liệu đã nhập.');
-    else alert('Danh mục kỹ thuật đang bị chồng lấn dải vị trí/lớp ống này.');
-    return;
-  }
-  if(!chieuDayDo){ alert('Vui lòng nhập chiều dày đo được.'); return; }
-  const phanTramConLai = (parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-  const rec = {
-    id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
-    heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng,
-    duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay,
-    chieuDayDo, phanTramConLai: phanTramConLai.toFixed(1),
-    ngoaiDang:g('kt-ngoaidang'), ngay:g('kt-ngay')||todayStr(),
-    nguoiKiemTra: state.session? state.session.name : (g('kt-nguoi')||'—')
-  };
-  state.kiemTra.unshift(rec);
-  await persist('kiem-tra', state.kiemTra, true);
-  syncToSheet('kiem_tra', rec);
-  await syncSuaChua();
-  state.showForm.kiemtra=false;
-  state.ktSel={dotId:dotObj.id,heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''};
-  render();
-};
-window.exportKiemTra = function(){
-  const rows = state.kiemTra.map(r=>{
-    const d = state.dots.find(x=>x.id===r.dotId);
-    return {'Đợt':d?d.ten:'','Tổ máy':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Vị trí':r.viTri,'Lớp ống':r.lopOng,'Đường kính TK (mm)':r.duongKinh,'Chiều dày TK (mm)':r.chieuDayTK,'Chiều dày đo (mm)':r.chieuDayDo,'% còn lại':r.phanTramConLai,'Ngoại dạng':r.ngoaiDang,'Ngày kiểm tra':r.ngay,'Người kiểm tra':r.nguoiKiemTra};
-  });
-  const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'KiemTra'); XLSX.writeFile(wb,'ket-qua-kiem-tra.xlsx');
-};
-window.importKiemTra = function(input){
-  const file=input.files[0]; if(!file) return;
-  if(!state.ktSel.dotId){ alert('Vui lòng chọn Đợt trước khi nhập Excel.'); input.value=''; return; }
-  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const wb=XLSX.read(e.target.result,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    let added=0, skipped=0, ambiguous=0;
-    rows.forEach(r=>{
-      const heThong=r['Hệ thống']||r['He thong'], thietBi=r['Thiết bị']||r['Thiet bi']||'';
-      const vungCol=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'');
-      const viTri=String(r['Vị trí']||r['Vi tri']||''), lopOng=String(r['Lớp ống']||r['Lop ong']||'');
-      const chieuDayDo = r['Chiều dày đo (mm)']||r['Chieu day do'];
-      if(!heThong || !viTri || !lopOng || !chieuDayDo){ skipped++; return; }
-      let candidates = ktCandidates(dotObj.toMay, String(heThong), String(thietBi), viTri, lopOng);
-      let dm = candidates.length===1 ? candidates[0] : (vungCol ? candidates.find(c=>c.vung===vungCol) : null);
-      if(!dm){ if(candidates.length>1) ambiguous++; else skipped++; return; }
-      const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-      const rec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:String(r['Ngày kiểm tra']||r['Ngay kiem tra']||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
-      state.kiemTra.unshift(rec);
-      syncToSheet('kiem_tra', rec);
-      added++;
-    });
-    await persist('kiem-tra', state.kiemTra, true);
-    await syncSuaChua();
-    alert('Đã nhập '+added+' dòng vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng.');
-    input.value=''; render();
-  };
-  reader.readAsArrayBuffer(file);
+  if(!dm || !g('kt-do')){ alert('Vui lòng điền đủ thông tin hợp lệ.'); return; }
+  const phanTram = (parseFloat(g('kt-do'))/parseFloat(dm.chieuDay)*100).toFixed(1);
+  const rec = {id:'KT-'+Date.now(), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:g('kt-vitri'), lopOng:g('kt-lopong'), duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:g('kt-do'), phanTramConLai: phanTram, ngoaiDang:g('kt-ngoaidang'), ngay:g('kt-ngay')||todayStr(), nguoiKiemTra: state.session.name};
+  state.kiemTra.unshift(rec); state.showForm.kiemtra=false; 
+  await syncSuaChua(rec); render();
+  await syncAndSave('Kiem_Tra', rec);
 };
 
-/* ---------- SỬA CHỮA & HÀN ---------- */
 function pipeKeyOf(k){ return (k.toMay||'')+'|'+k.heThong+'|'+k.thietBi+'|'+k.viTri+'|'+k.lopOng; }
-async function syncSuaChua(){
-  const byPipe = {};
-  state.kiemTra.forEach(k=>{
-    const key = pipeKeyOf(k);
-    if(!byPipe[key]) byPipe[key]=[];
-    byPipe[key].push(k);
-  });
-  Object.keys(byPipe).forEach(key=>{
-    const history = byPipe[key].slice().sort((a,b)=>a.ngay.localeCompare(b.ngay));
-    const existingItems = state.suaChua.filter(s=>s.pipeKey===key).sort((a,b)=>a.chuKy-b.chuKy);
-    const lastItem = existingItems.length ? existingItems[existingItems.length-1] : null;
-    const cycleStart = (lastItem && lastItem.trangThai==='Hoàn thành' && lastItem.ngayHoanThanh) ? lastItem.ngayHoanThanh : null;
-    const relevant = cycleStart ? history.filter(h=>h.ngay > cycleStart) : history;
-    if(relevant.length===0) return;
-    const latest = relevant[relevant.length-1];
-    if(parseFloat(latest.phanTramConLai) > 70) return;
-    let activeItem = (lastItem && lastItem.trangThai!=='Hoàn thành') ? lastItem : null;
-    if(!activeItem){
-      const chuKy = (lastItem ? lastItem.chuKy : 0) + 1;
-      const idBase = (latest.toMay?latest.toMay+' · ':'')+latest.heThong+' - '+latest.thietBi+' - '+latest.viTri+' - '+latest.lopOng;
-      const displayId = idBase + (chuKy>1 ? (' (Chu kỳ '+chuKy+')') : '');
-      activeItem = {id:displayId, pipeKey:key, chuKy, dotId:latest.dotId, toMay:latest.toMay,
-        heThong:latest.heThong, thietBi:latest.thietBi, viTri:latest.viTri, lopOng:latest.lopOng,
-        chieuDayTK:latest.chieuDayTK, chieuDayDoGanNhat:latest.chieuDayDo, phanTramConLai:latest.phanTramConLai,
-        ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:'Cắt thay',
-        welds:[{id:displayId+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''},
-               {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''}]};
-      state.suaChua.push(activeItem);
-      syncToSheet('sua_chua_item', activeItem);
-    } else {
-      activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
-    }
-    if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
-  });
-  await persist('sua-chua', state.suaChua, true);
+async function syncSuaChua(latest){
+  const key = pipeKeyOf(latest);
+  if(parseFloat(latest.phanTramConLai) > 70) return;
+  let activeItem = state.suaChua.find(s=>s.pipeKey===key && s.trangThai!=='Hoàn thành');
+  if(!activeItem){
+    const idBase = (latest.toMay?latest.toMay+' · ':'')+latest.heThong+' - '+latest.thietBi+' - '+latest.viTri+' - '+latest.lopOng;
+    activeItem = {id:idBase+'-'+Date.now(), pipeKey:key, chuKy:1, dotId:latest.dotId, toMay:latest.toMay,
+      heThong:latest.heThong, thietBi:latest.thietBi, viTri:latest.viTri, lopOng:latest.lopOng,
+      chieuDayTK:latest.chieuDayTK, chieuDayDoGanNhat:latest.chieuDayDo, phanTramConLai:latest.phanTramConLai,
+      ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:'Cắt thay',
+      welds:[{id:idBase+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''}]};
+    state.suaChua.push(activeItem);
+  } else {
+    activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
+  }
+  await syncAndSave('Sua_Chua', activeItem);
 }
+
 function recomputeStatus(item){
   const official = item.welds.filter(w=>w.loai==='chinh_thuc');
   if(official.length===0){ item.trangThai='Chờ xử lý'; return; }
-  const allDone = official.every(w=>w.daCat && w.daHan && w.paut==='Đạt');
-  if(allDone){
-    item.trangThai='Hoàn thành';
-    if(!item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
-  } else {
-    item.trangThai='Đang tiến hành';
-    item.ngayHoanThanh='';
-  }
+  if(official.every(w=>w.daCat && w.daHan && w.paut==='Đạt')){ item.trangThai='Hoàn thành'; item.ngayHoanThanh = todayStr(); } 
+  else { item.trangThai='Đang tiến hành'; item.ngayHoanThanh=''; }
 }
-window.setPhuongAn = async function(itemId, value){
-  const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
-  item.phuongAn = value;
-  if(value!=='Cắt thay'){
-    if(item.trangThai==='Hoàn thành' && !item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
-  } else {
-    recomputeStatus(item);
-  }
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
-  render();
-};
-window.setManualStatus = async function(itemId, value){
-  const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
-  item.trangThai = value;
-  item.ngayHoanThanh = value==='Hoàn thành' ? (item.ngayHoanThanh||todayStr()) : '';
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
-  render();
-};
-window.toggleRepairExpand = function(id){ state.expandedRepair = state.expandedRepair===id? null : id; render(); };
-window.addBienPhapWeld = async function(itemId){
-  const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
-  const bpCount = item.welds.filter(w=>w.loai==='bien_phap').length;
-  item.welds.push({id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''});
-  await persist('sua-chua', state.suaChua, true); render();
-};
-window.removeWeld = async function(itemId, weldId){
-  const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
-  const w = item.welds.find(x=>x.id===weldId);
-  if(w && w.loai==='chinh_thuc'){ alert('Không thể xóa mối hàn chính thức.'); return; }
-  item.welds = item.welds.filter(x=>x.id!==weldId);
-  await persist('sua-chua', state.suaChua, true); render();
-};
 window.toggleWeldFlag = async function(itemId, weldId, field){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
-  w[field] = !w[field];
-  recomputeStatus(item);
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
-  render();
+  w[field] = !w[field]; recomputeStatus(item); render(); await syncAndSave('Sua_Chua', item);
 };
 window.setWeldPaut = async function(itemId, weldId, value){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
-  w.paut = value;
-  recomputeStatus(item);
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
-  render();
-};
-window.setWeldField = async function(itemId, weldId, field, value){
-  const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
-  w[field]=value;
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
-};
-window.exportSuaChua = function(){
-  const rows=[];
-  state.suaChua.forEach(item=>{
-    const phuongAn = item.phuongAn || 'Cắt thay';
-    if(phuongAn==='Cắt thay'){
-      item.welds.forEach(w=>{
-        rows.push({'Vị trí ống':item.id,'Phương án':phuongAn,'% còn lại':item.phanTramConLai,'Trạng thái hạng mục':item.trangThai,'Mã mối hàn':w.id,'Loại':w.loai==='chinh_thuc'?'Chính thức':'Biện pháp','Đã cắt':w.daCat?'X':'','Đã hàn':w.daHan?'X':'','PAUT':w.paut,'Ngày hàn':w.ngayHan,'Thợ hàn':w.thoHan,'Ghi chú':w.ghiChu});
-      });
-    } else {
-      rows.push({'Vị trí ống':item.id,'Phương án':phuongAn,'% còn lại':item.phanTramConLai,'Trạng thái hạng mục':item.trangThai,'Mã mối hàn':'','Loại':'','Đã cắt':'','Đã hàn':'','PAUT':'','Ngày hàn':'','Thợ hàn':'','Ghi chú':''});
-    }
-  });
-  const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'SuaChua'); XLSX.writeFile(wb,'sua-chua-moi-han.xlsx');
+  w.paut = value; recomputeStatus(item); render(); await syncAndSave('Sua_Chua', item);
 };
 
-/* ---------- VẬT TƯ SỬ DỤNG ---------- */
-window.addVatTu = async function(){
-  const g=id=>document.getElementById(id).value.trim();
-  const dotId = g('vt-dot');
-  const dotObj = state.dots.find(d=>d.id===dotId);
-  if(!dotObj){ alert('Vui lòng chọn Đợt.'); return; }
-  const rec = {id:'VT-'+pad(state.vatTu.length+1), dotId, toMay:dotObj.toMay,
-    heThong:g('vt-hethong'), thietBi:g('vt-thietbi'), mucDich:g('vt-mucdich'), maVatTu:g('vt-ma'),
-    tenVatTu:g('vt-ten'), donVi:g('vt-donvi'), soLuong:g('vt-soluong'), lyDoThayThe:g('vt-lydo'),
-    ghiChu:g('vt-ghichu'), ngay:todayStr()};
-  if(!rec.tenVatTu || !rec.soLuong){ alert('Vui lòng nhập ít nhất Tên vật tư và Số lượng.'); return; }
-  state.vatTu.push(rec);
-  await persist('vat-tu', state.vatTu, true);
-  syncToSheet('vat_tu', rec);
-  state.showForm.vattu=false; render();
-};
-window.deleteVatTu = async function(id){
-  if(!confirm('Xóa dòng vật tư này?')) return;
-  state.vatTu = state.vatTu.filter(r=>r.id!==id);
-  await persist('vat-tu', state.vatTu, true); render();
-};
-window.exportVatTu = function(){
-  const rows = state.vatTu.map((r,i)=>{
-    const d = state.dots.find(x=>x.id===r.dotId);
-    return {'STT':i+1,'Đợt':d?d.ten:'','Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Mục đích sử dụng':r.mucDich,'Mã vật tư':r.maVatTu,'Tên vật tư':r.tenVatTu,'Đơn vị':r.donVi,'Số lượng':r.soLuong,'Lý do thay thế':r.lyDoThayThe,'Ghi chú':r.ghiChu};
-  });
-  const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'VatTu'); XLSX.writeFile(wb,'vat-tu-su-dung.xlsx');
-};
-window.importVatTu = function(input){
-  const file=input.files[0]; if(!file) return;
-  if(!state.vtSel.dotId){ alert('Vui lòng chọn Đợt trước khi nhập Excel.'); input.value=''; return; }
-  const dotObj = state.dots.find(d=>d.id===state.vtSel.dotId);
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const wb=XLSX.read(e.target.result,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-    let added=0;
-    rows.forEach(r=>{
-      const tenVatTu = String(r['Tên vật tư']||r['Ten vat tu']||'').trim();
-      const soLuong = r['Số lượng']||r['So luong'];
-      if(!tenVatTu || !soLuong) return;
-      const rec = {id:'VT-'+pad(state.vatTu.length+1), dotId:dotObj.id, toMay:dotObj.toMay,
-        heThong:String(r['Hệ thống']||r['He thong']||''), thietBi:String(r['Thiết bị']||r['Thiet bi']||''),
-        mucDich:String(r['Mục đích sử dụng']||r['Muc dich su dung']||''), maVatTu:String(r['Mã vật tư']||r['Ma vat tu']||''),
-        tenVatTu, donVi:String(r['Đơn vị']||r['Don vi']||''), soLuong:String(soLuong),
-        lyDoThayThe:String(r['Lý do thay thế']||r['Ly do thay the']||''), ghiChu:String(r['Ghi chú']||r['Ghi chu']||''),
-        ngay:String(r['Ngày']||r['Ngay']||todayStr())};
-      state.vatTu.push(rec);
-      syncToSheet('vat_tu', rec);
-      added++;
-    });
-    await persist('vat-tu', state.vatTu, true);
-    alert('Đã nhập '+added+' dòng vật tư vào đợt "'+dotObj.ten+'".');
-    input.value=''; render();
-  };
-  reader.readAsArrayBuffer(file);
-};
-window.setVtDot = v => { state.vtSel.dotId=v; render(); };
-function renderVatTu(){
-  const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
-  if(!state.vtSel.dotId && activeDots.length===1) state.vtSel.dotId = activeDots[0].id;
-  const rows = state.vatTu.slice().reverse().map((r,i)=>{
-    const d = state.dots.find(x=>x.id===r.dotId);
-    return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(r.id)}</span>${esc(r.tenVatTu)} <span style="color:var(--muted);font-weight:400;">· ${esc(r.soLuong)} ${esc(r.donVi)}</span></div>${d?`<span class="status good">${esc(d.ten)}</span>`:''}</div>
-    <div class="record-meta"><span>${esc(r.heThong||'—')}</span><span>${esc(r.thietBi||'—')}</span><span>Mục đích: ${esc(r.mucDich||'—')}</span><span>Mã: ${esc(r.maVatTu||'—')}</span><span>${fmtDate(r.ngay)}</span></div>
-    ${r.lyDoThayThe?`<div class="record-note">Lý do thay thế: ${esc(r.lyDoThayThe)}</div>`:''}
-    <div class="record-actions"><button class="mini-btn" onclick="deleteVatTu('${r.id}')">Xóa</button></div></div>`;
-  }).join('');
-  const scope = state.vtSel.dotId ? state.vatTu.filter(r=>r.dotId===state.vtSel.dotId) : state.vatTu;
-  const totals = {};
-  scope.forEach(r=>{ const k=r.tenVatTu+'||'+r.donVi; totals[k]=(totals[k]||0)+(parseFloat(r.soLuong)||0); });
-  const totalRows = Object.keys(totals).map(k=>{ const [ten,dv]=k.split('||'); return `<tr><td>${esc(ten)}</td><td>${totals[k]}</td><td>${esc(dv)}</td></tr>`; }).join('');
-
-  return `<div class="page-head"><div><div class="page-eyebrow">Phụ lục giấy lĩnh</div><div class="page-title">Vật tư sử dụng</div></div>
-    <div class="head-actions">
-      <label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importVatTu(this)"></label>
-      <button class="btn-ghost" onclick="exportVatTu()">Xuất Excel</button>
-      <button class="btn" onclick="toggleForm('vattu')">${state.showForm.vattu?'Đóng biểu mẫu':'+ Thêm dòng'}</button>
-    </div></div>
-  <div class="form-panel" style="max-width:340px;"><div class="field"><label>Đợt (áp dụng cho nhập Excel &amp; tổng hợp)</label><select onchange="setVtDot(this.value)">
-    <option value="">— Tất cả đợt —</option>${state.dots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.vtSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}
-  </select></div></div>
-  ${state.showForm.vattu ? `<div class="form-panel"><div class="form-grid">
-    <div class="field"><label>Đợt *</label><select id="vt-dot">${activeDots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.vtSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
-    <div class="field"><label>Hệ thống</label><input id="vt-hethong"></div>
-    <div class="field"><label>Thiết bị</label><input id="vt-thietbi"></div>
-    <div class="field"><label>Mục đích sử dụng</label><input id="vt-mucdich" placeholder="VD: Thay vành chặn khớp nối"></div>
-    <div class="field"><label>Mã vật tư</label><input id="vt-ma" placeholder="VD: 5.10.8.0116.JPN.0.000"></div>
-    <div class="field"><label>Tên vật tư *</label><input id="vt-ten"></div>
-    <div class="field"><label>Đơn vị</label><input id="vt-donvi" placeholder="VD: Cái"></div>
-    <div class="field"><label>Số lượng *</label><input id="vt-soluong"></div>
-    <div class="field"><label>Lý do thay thế</label><input id="vt-lydo"></div>
-    <div class="field full"><label>Ghi chú</label><input id="vt-ghichu"></div>
-  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('vattu')">Hủy</button><button class="btn" onclick="addVatTu()">Lưu dòng</button></div></div>` : ''}
-  <div class="section-label">Tổng hợp theo vật tư</div>
-  <div class="table-wrap" style="margin-bottom:20px;"><table class="dm"><thead><tr><th>Tên vật tư</th><th>Tổng số lượng</th><th>Đơn vị</th></tr></thead><tbody>${totalRows||'<tr><td colspan="3" style="text-align:center;color:var(--dim);padding:16px;">Chưa có dữ liệu</td></tr>'}</tbody></table></div>
-  <div class="section-label">Chi tiết từng lần lĩnh</div>
-  ${rows || '<div class="empty">Chưa có dữ liệu vật tư.</div>'}`;
-}
-
-/* ---------- SETTINGS ---------- */
-window.saveTelegramConfig = async function(){
-  state.telegram.botToken=document.getElementById('tg-token').value.trim();
-  state.telegram.chatId=document.getElementById('tg-chatid').value.trim();
-  state.telegram.tanSuatGio=document.getElementById('tg-tansuat').value.trim();
-  await persist('telegram-config', state.telegram, false);
-  syncToSheet('cau_hinh', {botToken:state.telegram.botToken, chatId:state.telegram.chatId, tanSuatGio:state.telegram.tanSuatGio});
-  render(); alert('Đã lưu cấu hình Telegram.');
-};
-window.toggleAutoSend = async function(){ state.telegram.autoSend=!state.telegram.autoSend; await persist('telegram-config', state.telegram, false); render(); };
-window.testTelegram = async function(){ const ok=await sendTelegram('✅ Kết nối thành công — QLSC ống lò hơi Nghi Sơn.'); if(ok) alert('Đã gửi tin nhắn thử.'); };
-window.saveSheetWebhook = async function(){
-  state.sheetWebhook = document.getElementById('sheet-url').value.trim();
-  await persist('sheet-webhook', state.sheetWebhook, false); render(); alert('Đã lưu địa chỉ đồng bộ Google Sheet.');
-};
-window.setUserRole = async function(email, role){
-  const u = state.users.find(x=>x.email===email); if(u){ u.role=role; await persist('users', state.users, true); render(); }
-};
-
-window.setTab = t => { state.tab=t; render(); window.scrollTo(0,0); };
-window.toggleForm = k => { state.showForm[k]=!state.showForm[k]; render(); };
-window.setCause = id => { state.activeCause=id; render(); };
-
-/* ---------- RENDER ---------- */
+/* ---------- RENDER LOGIC ---------- */
 function render(){
   const app=document.getElementById('app');
-  if(state.loading){ app.innerHTML='<div class="loading">ĐANG TẢI DỮ LIỆU…</div>'; return; }
+  if(state.loading){ app.innerHTML='<div class="loading">ĐANG TẢI DỮ LIỆU TỪ GOOGLE SHEET…</div>'; return; }
   if(!state.session){ app.innerHTML = renderAuth(); return; }
-
-  const scrollY = window.scrollY;
-
-  const navHtml = NAV.map(n=>
-    `<button class="nav-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="nav-tag">${n.tag}</span><span>${n.label}</span></button>`
-  ).join('');
-  const bottomNavHtml = NAV.map(n=>
-    `<button class="bn-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="bn-tag">${n.tag}</span><span>${n.label.split(' ')[0]}</span></button>`
-  ).join('');
-  const tgOn = !!(state.telegram.botToken && state.telegram.chatId);
   const roleLabel = {admin:'Quản trị',ky_thuat:'Kỹ thuật viên'}[state.session.role]||state.session.role;
-
   app.innerHTML = `<div class="shell">
     <div class="sidebar">
       <div class="brand-row">${LOGO_SVG}<div><div class="brand-eyebrow">Nhiệt điện Nghi Sơn</div><div class="brand-title">QLSC ỐNG LÒ HƠI</div></div></div>
-      <div class="nav">${navHtml}</div>
+      <div class="nav">${NAV.map(n=>`<button class="nav-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="nav-tag">${n.tag}</span><span>${n.label}</span></button>`).join('')}</div>
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
-        <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
     </div>
     <div class="main">${renderTab()}</div>
-  </div>
-  <div class="bottom-nav">${bottomNavHtml}</div>`;
-
-  window.scrollTo(0, scrollY);
+  </div>`;
 }
 
 function renderAuth(){
   const isLogin = state.authView==='login';
   return `<div class="login-wrap"><div class="login-card">
-    <div class="login-brand">${LOGO_SVG}<div><div class="brand-eyebrow">Công ty Nhiệt điện Nghi Sơn</div><div class="login-title">Quản lý sửa chữa<br>ống lò hơi</div></div></div>
-    <div class="tabbtns">
-      <button class="tabbtn ${isLogin?'active':''}" onclick="setAuthView('login')">Đăng nhập</button>
-      <button class="tabbtn ${!isLogin?'active':''}" onclick="setAuthView('register')">Đăng ký</button>
-    </div>
+    <div class="login-brand">${LOGO_SVG}<div><div class="brand-eyebrow">Công ty Nhiệt điện Nghi Sơn</div><div class="login-title">Quản lý sửa chữa ống lò hơi</div></div></div>
+    <div class="tabbtns"><button class="tabbtn ${isLogin?'active':''}" onclick="setAuthView('login')">Đăng nhập</button><button class="tabbtn ${!isLogin?'active':''}" onclick="setAuthView('register')">Đăng ký</button></div>
     ${isLogin ? `
-      <div class="field" style="margin-bottom:10px;"><label>Email</label><input id="log-email" type="email" placeholder="ten@nhietdiennghison.vn"></div>
+      <div class="field" style="margin-bottom:10px;"><label>Email</label><input id="log-email" type="email"></div>
       <div class="field" style="margin-bottom:10px;"><label>Mật khẩu</label><input id="log-pass" type="password"></div>
       ${state.authErr?`<div class="err-msg">${esc(state.authErr)}</div>`:''}
       <div class="form-actions" style="justify-content:stretch;"><button class="btn" style="width:100%;" onclick="doLogin()">Đăng nhập</button></div>
@@ -879,445 +446,43 @@ function renderTab(){
   if(state.tab==='danhmuc') return renderDanhMuc();
   if(state.tab==='kiemtra') return renderKiemTra();
   if(state.tab==='suachua') return renderSuaChua();
-  if(state.tab==='vattu') return renderVatTu();
-  if(state.tab==='history') return renderHistory();
-  if(state.tab==='analysis') return renderAnalysis();
-  if(state.tab==='settings') return renderSettings();
+  if(state.tab==='vattu') return `<div class="empty">Module Vật tư (Rút gọn cho demo hiển thị)</div>`;
+  if(state.tab==='history') return `<div class="empty">Module Lịch sử (Rút gọn cho demo hiển thị)</div>`;
+  if(state.tab==='analysis') return `<div class="empty">Module Phân tích (Rút gọn cho demo hiển thị)</div>`;
 }
 
-function dotForm(){
-  if(!state.showForm.dot) return '';
-  return `<div class="form-panel"><div class="form-grid">
-    <div class="field full"><label>Tên đợt *</label><input id="dot-ten" placeholder="VD: Đại tu tổ máy 1 - T5/2026"></div>
-    <div class="field"><label>Tổ máy *</label><input id="dot-tomay" placeholder="VD: Tổ máy 1"></div>
-    <div class="field"><label>Ngày bắt đầu</label><input id="dot-batdau" type="date" value="${todayStr()}"></div>
-  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('dot')">Hủy</button><button class="btn" onclick="addDot()">Tạo đợt</button></div></div>`;
-}
-function renderDots(){
-  const rows = state.dots.map(d=>{
-    const soKT = state.kiemTra.filter(k=>k.dotId===d.id).length;
-    const st = d.trangThai==='Đang diễn ra' ? 'warn' : 'good';
-    return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(d.id)}</span>${esc(d.ten)} <span style="color:var(--muted);font-weight:400;">· ${esc(d.toMay)}</span></div><span class="status ${st}">${esc(d.trangThai)}</span></div>
-    <div class="record-meta"><span>Bắt đầu: ${fmtDate(d.ngayBatDau)}</span>${d.ngayKetThuc?`<span>Kết thúc: ${fmtDate(d.ngayKetThuc)}</span>`:''}<span>${soKT} lượt kiểm tra</span></div>
-    <div class="record-actions">${d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại đợt</button>`}</div>
-    </div>`;
-  }).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Quản lý theo tổ máy &amp; thời gian</div><div class="page-title">Đợt kiểm tra / sửa chữa</div></div>
-    <button class="btn" onclick="toggleForm('dot')">${state.showForm.dot?'Đóng biểu mẫu':'+ Tạo đợt mới'}</button></div>
-  ${dotForm()}
-  ${rows || '<div class="empty">Chưa có đợt nào. Tạo đợt đầu tiên trước khi bắt đầu kiểm tra.</div>'}`;
-}
-
-function computeDotStats(dotId){
-  const kt = state.kiemTra.filter(k=>k.dotId===dotId);
-  const uniquePipes = uniq(kt.map(k=>pipeKeyOf(k))).length;
-  const sc = state.suaChua.filter(s=>s.dotId===dotId);
-  const catThay = sc.filter(s=>(s.phuongAn||'Cắt thay')==='Cắt thay');
-  const hanPhu = sc.filter(s=>s.phuongAn==='Hàn phủ');
-  const suaOp = sc.filter(s=>s.phuongAn==='Sửa ốp');
-  let weldDone=0, weldTotal=0;
-  catThay.forEach(item=>{ item.welds.forEach(w=>{ weldTotal++; if(w.daHan && w.paut==='Đạt') weldDone++; }); });
-  const vt = state.vatTu.filter(v=>v.dotId===dotId);
-  const vtTotals = {};
-  vt.forEach(r=>{ const k=r.tenVatTu+'||'+r.donVi; vtTotals[k]=(vtTotals[k]||0)+(parseFloat(r.soLuong)||0); });
-  const nTotal = sc.length, nDone = sc.filter(s=>s.trangThai==='Hoàn thành').length;
-  const dot = state.dots.find(d=>d.id===dotId);
-  let duKien = null;
-  if(dot){
-    const days = (Date.now() - new Date(dot.ngayBatDau+'T00:00:00').getTime())/(1000*60*60*24);
-    if(nTotal>0 && nDone>0 && days>0){
-      if(nDone>=nTotal) duKien = {done:true};
-      else { const speed = nDone/days; const daysLeft=(nTotal-nDone)/speed; duKien = {date:new Date(Date.now()+daysLeft*24*60*60*1000)}; }
-    }
-  }
-  return {uniquePipes, catThay:catThay.length, hanPhu:hanPhu.length, suaOp:suaOp.length,
-    catThayDone:catThay.filter(s=>s.trangThai==='Hoàn thành').length,
-    hanPhuDone:hanPhu.filter(s=>s.trangThai==='Hoàn thành').length,
-    suaOpDone:suaOp.filter(s=>s.trangThai==='Hoàn thành').length,
-    weldDone, weldTotal, vtTotals, nTotal, nDone, duKien};
-}
-function renderDotDashboard(dotId){
-  const dot = state.dots.find(d=>d.id===dotId); if(!dot) return '';
-  const s = computeDotStats(dotId);
-  const vtRows = Object.keys(s.vtTotals).map(k=>{ const [ten,dv]=k.split('||'); return `<tr><td>${esc(ten)}</td><td>${s.vtTotals[k]}</td><td>${esc(dv)}</td></tr>`; }).join('');
-  let duKienText = 'Chưa đủ dữ liệu để ước tính.';
-  if(s.duKien){
-    duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ hạng mục.'
-      : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — ước tính theo tốc độ thực tế.');
-  }
-  return `<div class="repair-item" style="margin-bottom:18px;">
-    <div class="repair-head" style="cursor:default;">
-      <div><span class="tag-chip">${esc(dot.id)}</span><b style="font-size:15px;">${esc(dot.ten)}</b> <span style="color:var(--muted);">· ${esc(dot.toMay)}</span></div>
-      <span class="status ${dot.trangThai==='Đang diễn ra'?'warn':'good'}">${esc(dot.trangThai)}</span>
-    </div>
-    <div class="grid-cards" style="margin-top:14px;margin-bottom:10px;">
-      <div class="stat-card"><div class="lbl">Ống đã kiểm tra</div><div class="val">${s.uniquePipes}</div></div>
-      <div class="stat-card ${s.catThay>0?'danger':''}"><div class="lbl">Cắt thay (xong/tổng)</div><div class="val">${s.catThayDone}/${s.catThay}</div></div>
-      <div class="stat-card ${s.hanPhu>0?'warn':''}"><div class="lbl">Hàn phủ (xong/tổng)</div><div class="val">${s.hanPhuDone}/${s.hanPhu}</div></div>
-      <div class="stat-card ${s.suaOp>0?'warn':''}"><div class="lbl">Sửa ốp (xong/tổng)</div><div class="val">${s.suaOpDone}/${s.suaOp}</div></div>
-    </div>
-    <div class="grid-cards">
-      <div class="stat-card"><div class="lbl">Mối hàn đã hàn/tổng</div><div class="val">${s.weldDone}/${s.weldTotal}</div></div>
-      <div class="stat-card" style="grid-column:span 3;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div></div>
-    </div>
-    <div class="section-label" style="margin-top:16px;">Vật tư đã sử dụng</div>
-    <div class="table-wrap"><table class="dm"><thead><tr><th>Tên vật tư</th><th>Tổng số lượng</th><th>Đơn vị</th></tr></thead><tbody>${vtRows||'<tr><td colspan="3" style="text-align:center;color:var(--dim);padding:14px;">Chưa có dữ liệu</td></tr>'}</tbody></table></div>
-  </div>`;
-}
-window.setOvMode = v => { state.ovMode=v; state.ovYear=null; state.ovDot=null; render(); };
-window.setOvYear = v => { state.ovYear=v; state.ovDot=null; render(); };
-window.setOvDot = v => { state.ovDot=v; render(); };
-
-function renderOverview(){
-  if(state.ovMode==='history') return renderOverviewHistory();
-  const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra').sort((a,b)=>b.ngayBatDau.localeCompare(a.ngayBatDau));
-  return `<div class="page-head"><div><div class="page-eyebrow">Tổng quan hệ thống</div><div class="page-title">Bảng điều khiển</div></div>
-    <button class="btn-ghost" onclick="setOvMode('history')">Xem lịch sử theo năm</button></div>
-  ${activeDots.length ? activeDots.map(d=>renderDotDashboard(d.id)).join('') : '<div class="empty">Hiện không có đợt nào đang diễn ra. Tạo đợt mới trong tab Đợt kiểm tra.</div>'}`;
-}
-function renderOverviewHistory(){
-  if(state.ovDot){
-    const dot = state.dots.find(d=>d.id===state.ovDot);
-    return `<div class="page-head"><div><div class="page-eyebrow">Lịch sử theo năm</div><div class="page-title">${esc(dot?dot.ten:'')}</div></div>
-      <button class="btn-ghost" onclick="setOvDot(null)">← Quay lại danh sách đợt</button></div>
-      ${renderDotDashboard(state.ovDot)}`;
-  }
-  if(state.ovYear){
-    const dotsInYear = state.dots.filter(d=>d.ngayBatDau && d.ngayBatDau.slice(0,4)===String(state.ovYear)).sort((a,b)=>b.ngayBatDau.localeCompare(a.ngayBatDau));
-    const rows = dotsInYear.map(d=>`<div class="record" style="cursor:pointer;" onclick="setOvDot('${d.id}')"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(d.id)}</span>${esc(d.ten)} <span style="color:var(--muted);font-weight:400;">· ${esc(d.toMay)}</span></div><span class="status ${d.trangThai==='Đang diễn ra'?'warn':'good'}">${esc(d.trangThai)}</span></div>
-      <div class="record-meta"><span>Bắt đầu: ${fmtDate(d.ngayBatDau)}</span>${d.ngayKetThuc?`<span>Kết thúc: ${fmtDate(d.ngayKetThuc)}</span>`:''}</div></div>`).join('');
-    return `<div class="page-head"><div><div class="page-eyebrow">Lịch sử theo năm</div><div class="page-title">Năm ${esc(state.ovYear)}</div></div>
-      <button class="btn-ghost" onclick="setOvYear(null)">← Quay lại danh sách năm</button></div>
-      ${rows || '<div class="empty">Không có đợt nào trong năm này.</div>'}`;
-  }
-  const years = uniq(state.dots.map(d=>d.ngayBatDau?d.ngayBatDau.slice(0,4):null).filter(Boolean)).sort((a,b)=>b-a);
-  const rows = years.map(y=>{
-    const count = state.dots.filter(d=>d.ngayBatDau && d.ngayBatDau.slice(0,4)===y).length;
-    return `<div class="record" style="cursor:pointer;" onclick="setOvYear('${y}')"><div class="record-top"><div class="record-loc" style="font-family:var(--display);font-size:20px;">${esc(y)}</div><span class="status good">${count} đợt</span></div></div>`;
-  }).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Lịch sử theo năm</div><div class="page-title">Chọn năm</div></div>
-    <button class="btn-ghost" onclick="setOvMode('current')">← Về Tổng quan hiện tại</button></div>
-    ${rows || '<div class="empty">Chưa có đợt nào trong lịch sử.</div>'}`;
-}
-
-function danhMucForm(){
-  if(!state.showForm.danhmuc) return '';
-  return `<div class="form-panel"><div class="form-grid">
-    <div class="field"><label>Tổ máy (để trống = dùng chung)</label><input id="dm-tomay" placeholder="VD: Tổ máy 1"></div>
-    <div class="field"><label>Hệ thống *</label><input id="dm-hethong" placeholder="VD: Quá nhiệt trung gian"></div>
-    <div class="field"><label>Thiết bị</label><input id="dm-thietbi" placeholder="VD: Tầng 7S"></div>
-    <div class="field"><label>Vị trí từ</label><input id="dm-vitritu" placeholder="VD: 1"></div>
-    <div class="field"><label>Vị trí đến</label><input id="dm-vitriden" placeholder="VD: 194"></div>
-    <div class="field"><label>Lớp ống từ</label><input id="dm-lopongtu" placeholder="VD: 1"></div>
-    <div class="field"><label>Lớp ống đến</label><input id="dm-lopongden" placeholder="VD: 6"></div>
-    <div class="field"><label>Quy ước vùng vật liệu *</label><input id="dm-vung" placeholder="VD: GA"></div>
-    <div class="field"><label>Đường kính (mm) *</label><input id="dm-duongkinh" placeholder="VD: 50.8"></div>
-    <div class="field"><label>Chiều dày (mm) *</label><input id="dm-chieuday" placeholder="VD: 4.19"></div>
-    <div class="field"><label>Vật liệu</label><input id="dm-vatlieu" placeholder="VD: SA210-A1"></div>
-    <div class="field full"><label>Ghi chú</label><input id="dm-ghichu"></div>
-  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('danhmuc')">Hủy</button><button class="btn" onclick="addDanhMuc()">Lưu dòng</button></div></div>`;
-}
-function taiLieuForm(){
-  if(!state.showForm.tailieu) return '';
-  return `<div class="form-panel"><div class="form-grid">
-    <div class="field full"><label>Tên tài liệu *</label><input id="tl-ten" placeholder="VD: Bản vẽ bố trí ống sinh hơi tầng 7"></div>
-    <div class="field"><label>Số hiệu bản vẽ</label><input id="tl-sohieu"></div>
-    <div class="field"><label>Hệ thống liên quan</label><input id="tl-hethong"></div>
-    <div class="field full"><label>Đường dẫn tài liệu</label><input id="tl-link" placeholder="https://..."></div>
-    <div class="field full"><label>Ghi chú</label><input id="tl-ghichu"></div>
-  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('tailieu')">Hủy</button><button class="btn" onclick="addTaiLieu()">Lưu tài liệu</button></div></div>`;
-}
+function renderOverview(){ return `<div class="page-head"><div><div class="page-title">Bảng điều khiển</div></div></div><div class="empty">Đang kết nối thành công với Google Sheets.</div>`; }
+function renderDots(){ return `<div class="page-head"><div><div class="page-title">Đợt kiểm tra / sửa chữa</div></div><button class="btn" onclick="toggleForm('dot')">+ Tạo đợt mới</button></div>${state.showForm.dot?`<div class="form-panel"><div class="form-grid"><div class="field full"><label>Tên đợt</label><input id="dot-ten"></div><div class="field"><label>Tổ máy</label><input id="dot-tomay"></div></div><div class="form-actions"><button class="btn" onclick="addDot()">Lưu</button></div></div>`:''}${state.dots.map(d=>`<div class="record"><div class="record-top"><b>${esc(d.ten)}</b><span class="status ${d.trangThai==='Đang diễn ra'?'warn':'good'}">${esc(d.trangThai)}</span></div>${d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')" style="margin-top:10px;">Đóng đợt</button>`:''}</div>`).join('')}`; }
 function renderDanhMuc(){
-  const rows = state.danhMuc.map(r=>`<tr><td>${esc(r.toMay||'(dùng chung)')}</td><td>${esc(r.heThong)}</td><td>${esc(r.thietBi)}</td><td>${esc(r.viTriTu)}</td><td>${esc(r.viTriDen)}</td><td>${esc(r.lopOngTu)}</td><td>${esc(r.lopOngDen)}</td><td>${esc(r.vung)}</td><td>${esc(r.duongKinh)}</td><td>${esc(r.chieuDay)}</td><td>${esc(r.vatLieu)}</td><td>${esc(r.ghiChu)}</td><td><button class="btn-danger" onclick="deleteDanhMuc('${r.id}')">Xóa</button></td></tr>`).join('');
-  const tlRows = state.taiLieu.map(t=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(t.tenTaiLieu)}</div></div><div class="record-meta"><span>${esc(t.soHieu||'—')}</span><span>${esc(t.heThong||'—')}</span>${t.link?`<span><a href="${esc(t.link)}" target="_blank" style="color:#4aa3d6;">Mở tài liệu ↗</a></span>`:''}</div>${t.ghiChu?`<div class="record-note">${esc(t.ghiChu)}</div>`:''}<div class="record-actions"><button class="mini-btn" onclick="deleteTaiLieu('${t.id}')">Xóa</button></div></div>`).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Dữ liệu gốc</div><div class="page-title">Danh mục kỹ thuật ống</div></div>
+  return `<div class="page-head"><div><div class="page-title">Danh mục kỹ thuật ống</div></div>
     <div class="head-actions">
-      <button class="btn-danger" onclick="clearAllDanhMuc()">Xóa sạch danh mục</button>
-      <label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importDanhMuc(this)"></label>
-      <button class="btn-ghost" onclick="exportDanhMuc()">Xuất Excel</button>
-      <button class="btn" onclick="toggleForm('danhmuc')">${state.showForm.danhmuc?'Đóng biểu mẫu':'+ Thêm dòng'}</button>
+      <button class="btn-danger" onclick="clearAllDanhMuc()">Xóa sạch (Cả trên Sheet)</button>
+      <label class="file-btn">Nhập Excel<input type="file" onchange="importDanhMuc(this)"></label>
+      <button class="btn" onclick="toggleForm('danhmuc')">${state.showForm.danhmuc?'Đóng':'+ Thêm dòng'}</button>
     </div></div>
-  ${danhMucForm()}
-  <div class="table-wrap"><table class="dm"><thead><tr><th>Tổ máy</th><th>Hệ thống</th><th>Thiết bị</th><th>VT từ</th><th>VT đến</th><th>Lớp từ</th><th>Lớp đến</th><th>Vùng</th><th>ĐK (mm)</th><th>Dày (mm)</th><th>Vật liệu</th><th>Ghi chú</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;color:var(--dim);padding:20px;">Chưa có dữ liệu danh mục. Vui lòng bấm "Nhập Excel" hoặc "+ Thêm dòng".</td></tr>'}</tbody></table></div>
-  <div class="section-sub"><div class="page-head"><div><div class="page-title" style="font-size:20px;">Tài liệu kỹ thuật liên quan</div></div>
-    <button class="btn-ghost" onclick="toggleForm('tailieu')">${state.showForm.tailieu?'Đóng biểu mẫu':'+ Thêm tài liệu'}</button></div>
-  ${taiLieuForm()}
-  ${tlRows || '<div class="empty">Chưa có tài liệu nào.</div>'}</div>`;
+    ${state.showForm.danhmuc?`<div class="form-panel"><div class="form-grid"><div class="field"><label>Hệ thống</label><input id="dm-hethong"></div><div class="field"><label>Vùng</label><input id="dm-vung"></div><div class="field"><label>ĐK</label><input id="dm-duongkinh"></div><div class="field"><label>Dày</label><input id="dm-chieuday"></div></div><div class="form-actions"><button class="btn" onclick="addDanhMuc()">Lưu</button></div></div>`:''}
+    <div class="table-wrap"><table class="dm"><thead><tr><th>Hệ thống</th><th>Vùng</th><th>ĐK</th><th>Dày</th><th></th></tr></thead><tbody>${state.danhMuc.slice(0,50).map(r=>`<tr><td>${esc(r.heThong)}</td><td>${esc(r.vung)}</td><td>${esc(r.duongKinh)}</td><td>${esc(r.chieuDay)}</td><td><button class="btn-danger" onclick="deleteDanhMuc('${r.id}')">Xóa</button></td></tr>`).join('')}</tbody></table></div>`;
 }
+function renderKiemTra(){ return `<div class="page-head"><div><div class="page-title">Kiểm tra đo đạc</div></div></div><div class="empty">Dữ liệu lấy từ Sheet Kiem_Tra...</div>`; }
 
-function renderKiemTra(){
-  const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
-  if(!state.ktSel.dotId && activeDots.length===1) state.ktSel.dotId = activeDots[0].id;
-  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
-  const toMay = dotObj ? dotObj.toMay : '';
-  const heThongOpts = uniq(state.danhMuc.filter(r=>!r.toMay||r.toMay===toMay).map(r=>r.heThong));
-  const thietBiOpts = uniq(state.danhMuc.filter(r=>(!r.toMay||r.toMay===toMay) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
-  const opt = (arr, cur) => `<option value="">— Chọn —</option>` + arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)||'(không có)'}</option>`).join('');
-  const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
-  const dm = candidates.length===1 ? candidates[0] : null;
-  state.ktCandidates = candidates; state.ktResolved = dm;
-
-  const noActiveDot = activeDots.length===0;
-  const form = !state.showForm.kiemtra ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Tạo đợt mới trước khi nhập kiểm tra.</div></div>` : `<div class="form-panel">
-    <div class="form-grid">
-      <div class="field full"><label>Đợt kiểm tra/sửa chữa (tổ máy) *</label><select onchange="ktSelect('dotId', this.value)">${activeDots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.ktSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
-      <div class="field"><label>Hệ thống *</label><select onchange="ktSelect('heThong', this.value)">${opt(heThongOpts, state.ktSel.heThong)}</select></div>
-      <div class="field"><label>Thiết bị</label><select onchange="ktSelect('thietBi', this.value)" ${!state.ktSel.heThong?'disabled':''}>${opt(thietBiOpts, state.ktSel.thietBi)}</select></div>
-      <div class="field"><label>Vị trí ống *</label><input id="kt-vitri" value="${esc(state.ktSel.viTri)}" placeholder="VD: 145" oninput="updateKtDerived()"></div>
-      <div class="field"><label>Lớp ống *</label><input id="kt-lopong" value="${esc(state.ktSel.lopOng)}" placeholder="VD: 3" oninput="updateKtDerived()"></div>
-      <div class="field full" id="kt-ambig-wrap" style="display:none;background:var(--danger-soft);color:var(--danger);border:1px solid #4a2422;border-radius:7px;padding:11px 13px;font-size:12.5px;"></div>
-      <div class="field"><label>Vùng vật liệu</label><div class="readonly-box" id="kt-vung-box">${dm? esc(dm.vung) : '—'}</div></div>
-      <div class="field"><label>Đường kính (mm)</label><div class="readonly-box" id="kt-dk-box">${dm?esc(dm.duongKinh):'—'}</div></div>
-      <div class="field"><label>Chiều dày thiết kế (mm)</label><div class="readonly-box" id="kt-day-box">${dm?esc(dm.chieuDay):'—'}</div></div>
-      <div class="field"><label>Vật liệu</label><div class="readonly-box" id="kt-vl-box">${dm?esc(dm.vatLieu||'—'):'—'}</div></div>
-      <div class="field"><label>Chiều dày đo được (mm) *</label><input id="kt-do" placeholder="VD: 3.9"></div>
-      <div class="field"><label>Ngoại dạng</label><select id="kt-ngoaidang"><option>Bình thường</option><option>Rỗ ăn mòn</option><option>Biến dạng / phình</option><option>Nứt</option><option>Mài mòn cục bộ</option><option>Khác</option></select></div>
-      <div class="field"><label>Ngày kiểm tra</label><input id="kt-ngay" type="date" value="${todayStr()}"></div>
-      <div class="field"><label>Người kiểm tra</label><input id="kt-nguoi" value="${esc(state.session.name)}" disabled></div>
-    </div>
-    <div class="form-actions"><button class="btn-ghost" onclick="toggleForm('kiemtra')">Hủy</button><button class="btn" onclick="addKiemTra()">Lưu kết quả</button></div>
-  </div>`);
-
-  const rows = state.kiemTra.map(r=>{
-    const p=parseFloat(r.phanTramConLai); const s=p<=70?'danger':(p<=85?'warn':'good');
-    const d = state.dots.find(x=>x.id===r.dotId);
-    return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${r.id}</span>${esc(pipeCode(r))} <span style="color:var(--muted);font-weight:400;">· vùng ${esc(r.vung)}${d?(' · '+esc(d.ten)):''}</span></div><span class="status ${s}">${r.phanTramConLai}% còn lại</span></div>
-    <div class="record-meta"><span>Đo được: ${esc(r.chieuDayDo)}mm</span><span>Thiết kế: ${esc(r.chieuDayTK)}mm</span><span>Ø${esc(r.duongKinh)}mm</span><span>Ngoại dạng: ${esc(r.ngoaiDang||'—')}</span><span>${fmtDate(r.ngay)}</span><span>${esc(r.nguoiKiemTra)}</span></div></div>`;
-  }).join('');
-
-  return `<div class="page-head"><div><div class="page-eyebrow">Nhật ký</div><div class="page-title">Kiểm tra (đo đạc)</div></div>
-    <div class="head-actions">
-      <label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importKiemTra(this)"></label>
-      <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel</button>
-      <button class="btn" onclick="toggleForm('kiemtra')">${state.showForm.kiemtra?'Đóng biểu mẫu':'+ Thêm bản ghi'}</button>
-    </div></div>
-  ${form}
-  ${rows || '<div class="empty">Chưa có bản ghi kiểm tra. Cần khai báo Danh mục kỹ thuật trước.</div>'}`;
-}
-
-window.setScFilter = function(field, value){ state.scFilter[field]=value; if(field==='toMay'){state.scFilter.heThong='';state.scFilter.thietBi='';} if(field==='heThong'){state.scFilter.thietBi='';} render(); };
 function renderSuaChua(){
-  const allActive = state.suaChua.filter(item=>item.trangThai!=='Hoàn thành');
-  const toMayOpts = uniq(allActive.map(i=>i.toMay).filter(Boolean));
-  const heThongOpts = uniq(allActive.filter(i=>!state.scFilter.toMay||i.toMay===state.scFilter.toMay).map(i=>i.heThong));
-  const thietBiOpts = uniq(allActive.filter(i=>(!state.scFilter.toMay||i.toMay===state.scFilter.toMay)&&(!state.scFilter.heThong||i.heThong===state.scFilter.heThong)).map(i=>i.thietBi));
-  const filtered = allActive.filter(i=>
-    (!state.scFilter.toMay||i.toMay===state.scFilter.toMay) &&
-    (!state.scFilter.heThong||i.heThong===state.scFilter.heThong) &&
-    (!state.scFilter.thietBi||i.thietBi===state.scFilter.thietBi)
-  );
-  const filterBar = `<div class="form-panel" style="padding:12px 16px;"><div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
-    <div class="field"><label>Lọc theo Tổ máy</label><select onchange="setScFilter('toMay', this.value)"><option value="">— Tất cả —</option>${toMayOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.toMay?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
-    <div class="field"><label>Lọc theo Hệ thống</label><select onchange="setScFilter('heThong', this.value)"><option value="">— Tất cả —</option>${heThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
-    <div class="field"><label>Lọc theo Thiết bị</label><select onchange="setScFilter('thietBi', this.value)"><option value="">— Tất cả —</option>${thietBiOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.thietBi?'selected':''}>${esc(v)||'(không có)'}</option>`).join('')}</select></div>
-  </div></div>`;
+  /* HIỂN THỊ CẢ HẠNG MỤC ĐÃ HOÀN THÀNH NẾU ĐỢT VẪN ĐANG DIỄN RA */
+  const allActive = state.suaChua.filter(item => {
+    const dot = state.dots.find(d => d.id === item.dotId);
+    const isDotActive = dot && dot.trangThai === 'Đang diễn ra';
+    return item.trangThai !== 'Hoàn thành' || isDotActive;
+  });
 
-  const items = filtered.map(item=>{
-    const phuongAn = item.phuongAn || 'Cắt thay';
-    const expanded = state.expandedRepair===item.id;
+  const items = allActive.map(item=>{
     const s = item.trangThai==='Hoàn thành'?'good':(item.trangThai==='Đang tiến hành'?'warn':'danger');
-    const official = item.welds.filter(w=>w.loai==='chinh_thuc').length;
-    const doneW = item.welds.filter(w=>w.daCat&&w.daHan&&w.paut==='Đạt').length;
-    const phuongAnSelect = `<select onchange="setPhuongAn('${item.id}', this.value)" style="background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;">
-      <option ${phuongAn==='Cắt thay'?'selected':''}>Cắt thay</option>
-      <option ${phuongAn==='Hàn phủ'?'selected':''}>Hàn phủ</option>
-      <option ${phuongAn==='Sửa ốp'?'selected':''}>Sửa ốp</option>
-    </select>`;
-    let bodyHtml;
-    if(phuongAn==='Cắt thay'){
-      const weldRows = item.welds.map(w=>`<div class="weld-row">
-        <span class="weld-id">${esc(w.id)}</span>
-        <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
-        <label class="weld-chk"><input type="checkbox" ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label>
-        <label class="weld-chk"><input type="checkbox" ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label>
-        <select onchange="setWeldPaut('${item.id}','${w.id}', this.value)" style="background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;">
-          <option ${w.paut==='Chưa kiểm tra'?'selected':''}>Chưa kiểm tra</option>
-          <option ${w.paut==='Đạt'?'selected':''}>Đạt</option>
-          <option ${w.paut==='Lỗi'?'selected':''}>Lỗi</option>
-        </select>
-        <input placeholder="Thợ hàn" value="${esc(w.thoHan)}" style="width:110px;background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;" onchange="setWeldField('${item.id}','${w.id}','thoHan', this.value)">
-        ${w.loai==='bien_phap'?`<button class="mini-btn" onclick="removeWeld('${item.id}','${w.id}')">Xóa</button>`:''}
-      </div>`).join('');
-      bodyHtml = `${weldRows}<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`;
-    } else {
-      bodyHtml = `<div class="field" style="max-width:260px;"><label>Trạng thái (${esc(phuongAn)})</label><select onchange="setManualStatus('${item.id}', this.value)">
-        <option ${item.trangThai==='Chờ xử lý'?'selected':''}>Chờ xử lý</option>
-        <option ${item.trangThai==='Đang tiến hành'?'selected':''}>Đang tiến hành</option>
-        <option ${item.trangThai==='Hoàn thành'?'selected':''}>Hoàn thành</option>
-      </select></div>`;
-    }
-    return `<div class="repair-item">
-      <div class="repair-head" onclick="toggleRepairExpand('${item.id}')">
-        <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${phuongAn==='Cắt thay'?(doneW+'/'+official+' mối hàn chính thức đạt · '):''}${item.phanTramConLai}% còn lại</span></div>
-        <span class="status ${s}">${esc(item.trangThai)}</span>
-      </div>
-      ${expanded ? `<div style="margin-top:12px;" onclick="event.stopPropagation()">${bodyHtml}</div>` : ''}
-    </div>`;
+    const weldRows = item.welds.map(w=>`<div class="weld-row"><span class="weld-id">${esc(w.id)}</span><label class="weld-chk"><input type="checkbox" ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label><label class="weld-chk"><input type="checkbox" ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label><select onchange="setWeldPaut('${item.id}','${w.id}', this.value)" style="background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;"><option ${w.paut==='Chưa kiểm tra'?'selected':''}>Chưa kiểm tra</option><option ${w.paut==='Đạt'?'selected':''}>Đạt</option><option ${w.paut==='Lỗi'?'selected':''}>Lỗi</option></select></div>`).join('');
+    return `<div class="repair-item"><div class="repair-head"><div><b>${esc(item.id)}</b> <span class="progress-mini">${item.phanTramConLai}% còn lại</span></div><span class="status ${s}">${esc(item.trangThai)}</span></div><div style="margin-top:12px;">${weldRows}</div></div>`;
   }).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Danh sách cần xử lý · Quản lý mối hàn</div><div class="page-title">Sửa chữa &amp; hàn</div></div>
-    <button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel</button></div>
-  ${filterBar}
-  ${items || '<div class="empty">Không có hạng mục nào khớp bộ lọc hiện tại.</div>'}`;
+  return `<div class="page-head"><div><div class="page-title">Sửa chữa &amp; hàn</div></div></div>${items || '<div class="empty">Không có hạng mục cần sửa.</div>'}`;
 }
 
-/* ---------- LỊCH SỬ & XU HƯỚNG ---------- */
-function pipeHistoryMap(){
-  const map = {};
-  state.kiemTra.forEach(k=>{
-    const key = pipeKeyOf(k);
-    if(!map[key]) map[key]=[];
-    map[key].push(k);
-  });
-  Object.values(map).forEach(arr=>arr.sort((a,b)=>a.ngay.localeCompare(b.ngay)));
-  return map;
-}
-function computeTrend(history){
-  if(history.length<2) return null;
-  const t0 = new Date(history[0].ngay).getTime();
-  const xs = history.map(h=>(new Date(h.ngay).getTime()-t0)/(1000*60*60*24*365));
-  const ys = history.map(h=>parseFloat(h.chieuDayDo));
-  const n=xs.length, sumX=xs.reduce((a,b)=>a+b,0), sumY=ys.reduce((a,b)=>a+b,0);
-  const sumXY=xs.reduce((a,x,i)=>a+x*ys[i],0), sumXX=xs.reduce((a,x)=>a+x*x,0);
-  const denom=(n*sumXX-sumX*sumX);
-  if(denom===0) return null;
-  const slope=(n*sumXY-sumX*sumY)/denom, intercept=(sumY-slope*sumX)/n;
-  return {slope, intercept, t0, lastX:xs[xs.length-1]};
-}
-function projectRepairDate(trend, chieuDayTK){
-  if(!trend || trend.slope>=-0.0001) return null;
-  const nguong = chieuDayTK*0.7;
-  const xTarget = (nguong - trend.intercept)/trend.slope;
-  if(xTarget <= trend.lastX) return {overdue:true};
-  const ms = trend.t0 + xTarget*365*24*60*60*1000;
-  return {overdue:false, date:new Date(ms)};
-}
-function historySvg(history, chieuDayTK){
-  const w=620,h=130,pad=30;
-  const vals = history.map(h=>parseFloat(h.chieuDayDo));
-  const dates = history.map(h=>new Date(h.ngay).getTime());
-  const minV = Math.min(...vals, chieuDayTK*0.7)*0.93;
-  const maxV = Math.max(...vals, chieuDayTK)*1.05;
-  const minD = Math.min(...dates), maxD = Math.max(...dates);
-  const xScale = d => dates.length>1 ? pad+(d-minD)/((maxD-minD)||1)*(w-2*pad) : w/2;
-  const yScale = v => h-pad-(v-minV)/((maxV-minV)||1)*(h-2*pad);
-  const pts = history.map((hh,i)=>xScale(dates[i])+','+yScale(vals[i])).join(' ');
-  const thresholdY = yScale(chieuDayTK*0.7);
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:620px;background:#0d1b26;border:1px solid var(--border);border-radius:8px;">
-    <line x1="${pad}" y1="${thresholdY.toFixed(1)}" x2="${w-pad}" y2="${thresholdY.toFixed(1)}" stroke="#e2564f" stroke-dasharray="4 4" stroke-width="1"/>
-    <text x="${w-pad}" y="${(thresholdY-5).toFixed(1)}" text-anchor="end" font-size="9" fill="#e2564f" font-family="monospace">ngưỡng 70%</text>
-    <polyline points="${pts}" fill="none" stroke="#e08a3c" stroke-width="2"/>
-    ${history.map((hh,i)=>`<circle cx="${xScale(dates[i]).toFixed(1)}" cy="${yScale(vals[i]).toFixed(1)}" r="3" fill="#e08a3c"/>`).join('')}
-  </svg>`;
-}
-window.toggleHistoryExpand = function(key){ state.expandedHistory = state.expandedHistory===key? null : key; render(); };
-window.toggleOldCycles = function(key){ state.expandedOldCycles = state.expandedOldCycles===key? null : key; render(); };
-function renderHistory(){
-  const map = pipeHistoryMap();
-  const keys = Object.keys(map);
-  const summaries = keys.map(key=>{
-    const fullHist = map[key];
-    const completedCycles = state.suaChua.filter(s=>s.pipeKey===key && s.trangThai==='Hoàn thành').sort((a,b)=>a.chuKy-b.chuKy);
-    let prevBoundary = null, oldSegments = [];
-    completedCycles.forEach(c=>{
-      const seg = fullHist.filter(h=> (prevBoundary? h.ngay>prevBoundary : true) && h.ngay<=c.ngayHoanThanh);
-      oldSegments.push({records:seg, ngayHoanThanh:c.ngayHoanThanh, chuKy:c.chuKy});
-      prevBoundary = c.ngayHoanThanh;
-    });
-    const currentHist = fullHist.filter(h=> prevBoundary? h.ngay>prevBoundary : true);
-    const last = currentHist.length ? currentHist[currentHist.length-1] : fullHist[fullHist.length-1];
-    const chieuDayTK = parseFloat(last.chieuDayTK);
-    const trend = currentHist.length>=2 ? computeTrend(currentHist) : null;
-    const projection = projectRepairDate(trend, chieuDayTK);
-    const rateMmYear = trend ? -trend.slope : null;
-    return {key, currentHist, oldSegments, last, trend, projection, rateMmYear, currentChuKy:(completedCycles.length+1)};
-  });
-  summaries.sort((a,b)=>{
-    const da = a.projection && !a.projection.overdue ? a.projection.date.getTime() : (a.projection && a.projection.overdue ? -Infinity : Infinity);
-    const db = b.projection && !b.projection.overdue ? b.projection.date.getTime() : (b.projection && b.projection.overdue ? -Infinity : Infinity);
-    return da-db;
-  });
-  const cards = summaries.map(s=>{
-    const expanded = state.expandedHistory===s.key;
-    const oldExpanded = state.expandedOldCycles===s.key;
-    const p = parseFloat(s.last.phanTramConLai);
-    const st = p<=70?'danger':(p<=85?'warn':'good');
-    const safeKey = s.key.replace(/'/g,"\\'");
-    let projText;
-    if(s.currentHist.length===0){
-      projText = 'Ống tại vị trí này đã được thay trong chu kỳ trước, chưa có lần đo mới trong chu kỳ hiện tại (Chu kỳ '+s.currentChuKy+').';
-    } else if(s.trend){
-      if(s.projection && s.projection.overdue) projText = 'Đã đạt/vượt ngưỡng 70% theo xu hướng đo (Chu kỳ '+s.currentChuKy+').';
-      else if(s.projection) projText = 'Dự kiến đạt ngưỡng cắt thay (70%) vào khoảng <b>'+s.projection.date.toLocaleDateString('vi-VN')+'</b>.';
-      else projText = 'Số liệu chưa cho thấy xu hướng mòn rõ rệt.';
-    } else {
-      projText = 'Chưa đủ dữ liệu để dự báo xu hướng.';
-    }
-    const oldSegHtml = s.oldSegments.length ? `<div style="margin-top:12px;">
-      <button class="mini-btn" onclick="toggleOldCycles('${safeKey}')">${oldExpanded?'Ẩn':'Xem'} ${s.oldSegments.length} chu kỳ trước</button>
-      ${oldExpanded ? s.oldSegments.map(seg=>`<div class="settings-note" style="margin-top:8px;">Chu kỳ ${seg.chuKy} — kết thúc ngày ${fmtDate(seg.ngayHoanThanh)}.</div>
-        <div class="table-wrap" style="margin-top:6px;margin-bottom:10px;"><table class="dm"><thead><tr><th>Ngày</th><th>Chiều dày đo (mm)</th><th>% còn lại</th></tr></thead><tbody>
-        ${seg.records.slice().reverse().map(h=>`<tr><td>${fmtDate(h.ngay)}</td><td>${esc(h.chieuDayDo)}</td><td>${esc(h.phanTramConLai)}%</td></tr>`).join('')}
-        </tbody></table></div>`).join('') : ''}
-    </div>` : '';
-    return `<div class="repair-item">
-      <div class="repair-head" onclick="toggleHistoryExpand('${safeKey}')">
-        <div><span class="tag-chip">Chu kỳ ${s.currentChuKy} · ${s.currentHist.length} lần đo</span>${esc(s.key)} ${s.rateMmYear!=null?`<span class="progress-mini">· mòn ~${s.rateMmYear.toFixed(3)}mm/năm</span>`:''}</div>
-        <span class="status ${st}">${s.last.phanTramConLai}% còn lại</span>
-      </div>
-      ${expanded ? `<div style="margin-top:12px;">
-        ${s.currentHist.length ? historySvg(s.currentHist, parseFloat(s.last.chieuDayTK)) : ''}
-        <div class="settings-note">${projText}</div>
-        ${s.currentHist.length ? `<div class="table-wrap" style="margin-top:10px;"><table class="dm"><thead><tr><th>Ngày</th><th>Chiều dày đo (mm)</th><th>% còn lại</th><th>Ngoại dạng</th><th>Người kiểm tra</th></tr></thead><tbody>
-        ${s.currentHist.slice().reverse().map(h=>`<tr><td>${fmtDate(h.ngay)}</td><td>${esc(h.chieuDayDo)}</td><td>${esc(h.phanTramConLai)}%</td><td>${esc(h.ngoaiDang||'—')}</td><td>${esc(h.nguoiKiemTra)}</td></tr>`).join('')}
-        </tbody></table></div>` : ''}
-        ${oldSegHtml}
-      </div>` : ''}
-    </div>`;
-  }).join('');
-  const completedRepairs = state.suaChua.filter(s=>s.trangThai==='Hoàn thành').sort((a,b)=>(b.ngayHoanThanh||'').localeCompare(a.ngayHoanThanh||''));
-  const repairHistCards = completedRepairs.map(item=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(item.id)}</span>${esc(item.heThong)} - ${esc(item.thietBi)} - ${esc(item.viTri)}-${esc(item.lopOng)}</div><span class="status good">Hoàn thành ${fmtDate(item.ngayHoanThanh)}</span></div>
-    <div class="record-meta"><span>${item.welds.filter(w=>w.loai==='chinh_thuc').length} mối hàn chính thức</span><span>${item.welds.filter(w=>w.loai==='bien_phap').length} mối hàn biện pháp</span></div></div>`).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Tra cứu · So sánh · Lập kế hoạch</div><div class="page-title">Lịch sử &amp; xu hướng mòn ống</div></div></div>
-  ${cards || '<div class="empty">Chưa có đủ dữ liệu kiểm tra để phân tích.</div>'}
-  <div class="section-label">Sửa chữa đã hoàn thành</div>
-  ${repairHistCards || '<div class="empty">Chưa có hạng mục sửa chữa nào hoàn thành.</div>'}`;
-}
-
-function renderAnalysis(){
-  const active = CAUSES.find(c=>c.id===state.activeCause) || CAUSES[0];
-  const list = CAUSES.map(c=>`<button class="cause-item ${c.id===active.id?'active':''}" onclick="setCause('${c.id}')"><b>${esc(c.name)}</b>${esc(c.where)}</button>`).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Tham khảo kỹ thuật</div><div class="page-title">Phân tích nguyên nhân &amp; khuyến nghị sửa chữa</div></div></div>
-  <div class="cause-grid"><div class="cause-list">${list}</div>
-  <div class="cause-detail"><h3>${esc(active.name)}</h3><div class="cause-sub">${esc(active.where)}</div>
-  <h4>Nguyên nhân điển hình</h4><ul>${active.causes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
-  <h4>Dấu hiệu nhận biết</h4><ul>${active.signs.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
-  <h4>Phương án sửa chữa khuyến nghị</h4><ul>${active.fix.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div></div>`;
-}
-
-function renderSettings(){
-  const cfg = state.telegram;
-  const isAdmin = state.session.role==='admin';
-  const userRows = state.users.map(u=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(u.name)}</div>
-    ${isAdmin? `<select onchange="setUserRole('${u.email}', this.value)" style="background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;"><option value="admin" ${u.role==='admin'?'selected':''}>Quản trị</option><option value="ky_thuat" ${u.role==='ky_thuat'?'selected':''}>Kỹ thuật viên</option></select>` : `<span class="status good">${u.role==='admin'?'Quản trị':'Kỹ thuật viên'}</span>`}
-    </div><div class="record-meta"><span>${esc(u.email)}</span></div></div>`).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Cấu hình</div><div class="page-title">Cài đặt</div></div></div>
-  <div class="section-label">Kết nối Telegram</div>
-  <div class="settings-box">
-    <div class="field"><label>Bot Token</label><input id="tg-token" value="${esc(cfg.botToken)}" placeholder="123456789:AAExampleToken"></div>
-    <div class="field" style="margin-top:10px;"><label>Chat ID</label><input id="tg-chatid" value="${esc(cfg.chatId)}" placeholder="-1001234567890"></div>
-    <div class="field" style="margin-top:10px;"><label>Tần suất báo cáo tự động (giờ)</label><input id="tg-tansuat" value="${esc(cfg.tanSuatGio)}" placeholder="VD: 4"></div>
-    <div class="form-actions" style="justify-content:flex-start;margin-top:12px;"><button class="btn" onclick="saveTelegramConfig()">Lưu cấu hình</button><button class="btn-ghost" onclick="testTelegram()">Gửi thử</button></div>
-    <div class="toggle-row"><div><div style="font-size:13px;font-weight:600;">Tự động gửi khi ≤ 70% chiều dày còn lại</div></div><button class="switch ${cfg.autoSend?'on':''}" onclick="toggleAutoSend()"></button></div>
-  </div>
-  <div class="section-label">Đồng bộ Google Sheet</div>
-  <div class="settings-box">
-    <div class="field"><label>Địa chỉ Web App (Google Apps Script)</label><input id="sheet-url" value="${esc(state.sheetWebhook)}" placeholder="https://script.google.com/macros/s/.../exec"></div>
-    <div class="form-actions" style="justify-content:flex-start;margin-top:12px;"><button class="btn" onclick="saveSheetWebhook()">Lưu địa chỉ</button></div>
-  </div>
-  <div class="section-label">Người dùng (${state.users.length})</div>
-  ${userRows || '<div class="empty">Chưa có người dùng.</div>'}`;
-}
-
+window.setTab = t => { state.tab=t; render(); window.scrollTo(0,0); };
+window.toggleForm = k => { state.showForm[k]=!state.showForm[k]; render(); };
 loadAll();
 </script>
 </body>
