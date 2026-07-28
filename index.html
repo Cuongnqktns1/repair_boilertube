@@ -230,10 +230,20 @@ function uniq(arr){ return [...new Set(arr)]; }
 function pipeCode(r){ return (r.toMay?r.toMay+' · ':'')+r.heThong+' - '+r.thietBi+' - '+r.viTri+' - '+r.lopOng; }
 
 async function loadAll(){
-  const g = async (k,shared,def)=>{ try{ const r=await window.storage.get(k,shared); return r? JSON.parse(r.value): def; }catch(e){ return def; } };
+  const g = async (k,shared,def)=>{ 
+    try{ 
+      if(window.storage) {
+        const r=await window.storage.get(k,shared); 
+        return r? JSON.parse(r.value): def; 
+      }
+      const val = localStorage.getItem('app_'+k);
+      return val ? JSON.parse(val) : def;
+    }catch(e){ return def; } 
+  };
+
   state.users = await g('users', true, []);
   state.dots = await g('dots', true, []);
-  state.danhMuc = await g('danh-muc', true, seedDanhMuc());
+  state.danhMuc = await g('danh-muc', true, []); // XÓA MẪU DỮ LIỆU ĐỂ TRÁNH XUNG ĐỘT
   state.taiLieu = await g('tai-lieu', true, []);
   state.kiemTra = await g('kiem-tra', true, []);
   state.suaChua = await g('sua-chua', true, []);
@@ -242,19 +252,19 @@ async function loadAll(){
   state.sheetWebhook = await g('sheet-webhook', false, '');
   const sess = await g('session', false, null);
   if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
-  if(state.danhMuc.length===0){ state.danhMuc = seedDanhMuc(); await persist('danh-muc', state.danhMuc, true); }
+
   state.loading=false;
   render();
 }
-function seedDanhMuc(){
-  return [
-    {id:'DM-0001', toMay:'', heThong:'Quá nhiệt trung gian', thietBi:'Tầng 7S', viTriTu:'1', viTriDen:'64', lopOngTu:'1', lopOngDen:'6', vung:'GA', duongKinh:'50.8', chieuDay:'4.19', vatLieu:'SA210-A1', ghiChu:'Dữ liệu mẫu — vui lòng cập nhật theo hồ sơ thiết kế thực tế, các vùng phải có dải vị trí KHÔNG chồng lấn nhau'},
-    {id:'DM-0002', toMay:'', heThong:'Quá nhiệt trung gian', thietBi:'Tầng 7S', viTriTu:'65', viTriDen:'129', lopOngTu:'1', lopOngDen:'6', vung:'GB', duongKinh:'50.8', chieuDay:'4.19', vatLieu:'SA213-T12', ghiChu:'Dữ liệu mẫu'},
-    {id:'DM-0003', toMay:'', heThong:'Quá nhiệt trung gian', thietBi:'Tầng 7S', viTriTu:'130', viTriDen:'194', lopOngTu:'1', lopOngDen:'6', vung:'GC', duongKinh:'50.8', chieuDay:'4.19', vatLieu:'SA213-T22', ghiChu:'Dữ liệu mẫu'},
-    {id:'DM-0004', toMay:'', heThong:'Bộ hâm nước', thietBi:'', viTriTu:'', viTriDen:'', lopOngTu:'', lopOngDen:'', vung:'ALL', duongKinh:'57.2', chieuDay:'5.49', vatLieu:'SA210-C', ghiChu:'Dữ liệu mẫu'},
-  ];
+
+async function persist(key, value, shared){ 
+  try{ 
+    if(window.storage) {
+      await window.storage.set(key, JSON.stringify(value), shared); 
+    }
+    localStorage.setItem('app_'+key, JSON.stringify(value));
+  }catch(e){ console.error('Lỗi lưu',key,e); } 
 }
-async function persist(key, value, shared){ try{ await window.storage.set(key, JSON.stringify(value), shared); }catch(e){ console.error('Lỗi lưu',key,e); } }
 
 /* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
 function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
@@ -285,7 +295,7 @@ window.addDot = async function(){
   state.showForm.dot=false; render();
 };
 window.closeDot = async function(id){
-  if(!confirm('Đóng đợt này? Sau khi đóng, dữ liệu của đợt sẽ được xem là đã hoàn thành và chuyển sang lịch sử — các lần đo tiếp theo tại cùng vị trí (nếu có, thuộc đợt mới) sẽ được tính là chu kỳ mới, không nối tiếp xu hướng cũ.')) return;
+  if(!confirm('Đóng đợt này? Sau khi đóng, dữ liệu của đợt sẽ được xem là đã hoàn thành và chuyển sang lịch sử.')) return;
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đã hoàn thành'; d.ngayKetThuc=todayStr();
   await persist('dots', state.dots, true);
@@ -304,7 +314,7 @@ async function syncToSheet(type, record){
   if(!state.sheetWebhook) return;
   try{
     await fetch(state.sheetWebhook, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type, record, ts: new Date().toISOString()})});
-  }catch(e){ /* best-effort, ignore */ }
+  }catch(e){ /* best-effort */ }
 }
 async function sendTelegram(text){
   const cfg = state.telegram;
@@ -317,7 +327,7 @@ async function sendTelegram(text){
   }catch(e){ alert('Gửi Telegram thất bại: '+e.message); return false; }
 }
 
-/* ---------- AUTH ---------- */
+/* ---------- AUTH WITH GOOGLE SHEET SYNC ---------- */
 async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim().toLowerCase();
@@ -328,6 +338,7 @@ async function doRegister(){
   const user = {name, email, passHash: simpleHash(pass), role};
   state.users.push(user);
   await persist('users', state.users, true);
+  syncToSheet('user', user); // ĐỒNG BỘ VỀ SHEET
   state.session = user; state.authErr='';
   await persist('session', email, false);
   render();
@@ -352,7 +363,7 @@ window.addDanhMuc = async function(){
   if(!rec.heThong||!rec.vung||!rec.duongKinh||!rec.chieuDay){ alert('Vui lòng nhập ít nhất Hệ thống, Quy ước vùng vật liệu, Đường kính và Chiều dày.'); return; }
   const overlaps = danhMucOverlaps(rec, null);
   if(overlaps.length){
-    alert('Dải Vị trí/Lớp ống của dòng này bị CHỒNG LẤN với vùng "'+overlaps[0].vung+'" đã khai báo (cùng Hệ thống/Thiết bị/Tổ máy). Mỗi vùng vật liệu phải có dải vị trí - lớp ống RIÊNG BIỆT, không trùng nhau, để hệ thống Kiểm tra tự nhận diện đúng vùng. Vui lòng sửa lại dải vị trí/lớp ống rồi lưu lại.');
+    alert('Dải Vị trí/Lớp ống của dòng này bị CHỒNG LẤN với vùng "'+overlaps[0].vung+'" đã khai báo. Vui lòng sửa lại.');
     return;
   }
   state.danhMuc.push(rec);
@@ -385,7 +396,6 @@ window.importDanhMuc = function(input){
       const vung=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'').trim();
       const duongKinh=r['Đường kính']||r['Duong kinh'], chieuDay=r['Chiều dày']||r['Chieu day'];
       if(!duongKinh||!chieuDay) return;
-      // các dòng gộp ô trong Excel thường để trống Hệ thống/Thiết bị/Tổ máy ở các hàng con — kế thừa từ dòng trước đó
       if(heThong) lastHeThong=heThong; else heThong=lastHeThong;
       if(thietBi) lastThietBi=thietBi; else thietBi=lastThietBi;
       if(toMay) lastToMay=toMay;
@@ -397,10 +407,10 @@ window.importDanhMuc = function(input){
         vatLieu:String(r['Vật liệu']||r['Vat lieu']||''), ghiChu:String(r['Ghi chú']||r['Ghi chu']||'')};
       state.danhMuc.push(newRec);
       newlyAdded.push(newRec);
+      syncToSheet('danh_muc', newRec);
       added++;
     });
     await persist('danh-muc', state.danhMuc, true);
-    // sau khi nhập xong mới rà soát chồng lấn (không chặn nhập, chỉ cảnh báo để sửa sau)
     const conflictMsgs = [];
     newlyAdded.forEach(rec=>{
       const ov = danhMucOverlaps(rec, rec.id);
@@ -408,13 +418,19 @@ window.importDanhMuc = function(input){
     });
     let msg = 'Đã nhập '+added+' dòng từ file Excel.';
     if(conflictMsgs.length){
-      msg += '\n\nCẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác — cần sửa lại để Kiểm tra tự nhận diện đúng vùng:\n- '+conflictMsgs.slice(0,10).join('\n- ')+(conflictMsgs.length>10?'\n... và '+(conflictMsgs.length-10)+' dòng khác':'');
+      msg += '
+
+CẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác:
+- '+conflictMsgs.slice(0,10).join('
+- ')+(conflictMsgs.length>10?'
+... và '+(conflictMsgs.length-10)+' dòng khác':'');
     }
     alert(msg);
     input.value=''; render();
   };
   reader.readAsArrayBuffer(file);
 };
+
 window.addTaiLieu = async function(){
   const g=id=>document.getElementById(id).value.trim();
   const rec={id:'TL-'+pad(state.taiLieu.length+1), tenTaiLieu:g('tl-ten'), soHieu:g('tl-sohieu'), heThong:g('tl-hethong'), link:g('tl-link'), ghiChu:g('tl-ghichu')};
@@ -469,10 +485,10 @@ window.updateKtDerived = function(){
       ambig.style.display='block';
       ambig.innerHTML = '<b>Danh mục kỹ thuật đang bị xung đột:</b> có '+candidates.length+' vùng vật liệu ('
         + candidates.map(c=>esc(c.vung)).join(', ')
-        + ') cùng bao trùm vị trí/lớp ống này. Không thể tự nhận diện đúng vùng. Vui lòng vào tab "Danh mục kỹ thuật" sửa lại dải Vị trí/Lớp ống của các vùng này cho KHÔNG chồng lấn nhau, rồi quay lại kiểm tra.';
+        + ') cùng bao trùm vị trí/lớp ống này. Vui lòng sửa lại trong Danh mục kỹ thuật.';
     } else if(state.ktSel.viTri && state.ktSel.lopOng && candidates.length===0 && state.ktSel.heThong){
       ambig.style.display='block';
-      ambig.innerHTML = 'Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Vị trí/Lớp ống này. Vui lòng kiểm tra lại Danh mục kỹ thuật hoặc nhập đúng số Vị trí/Lớp ống.';
+      ambig.innerHTML = 'Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Vị trí/Lớp ống này.';
     } else { ambig.style.display='none'; ambig.innerHTML=''; }
   }
 };
@@ -485,8 +501,8 @@ window.addKiemTra = async function(){
   const viTri = g('kt-vitri'), lopOng = g('kt-lopong'), chieuDayDo = g('kt-do');
   if(!state.ktSel.heThong || !viTri || !lopOng){ alert('Vui lòng chọn Hệ thống và nhập Vị trí, Lớp ống.'); return; }
   if(!dm){
-    if((state.ktCandidates||[]).length===0) alert('Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Tổ máy/Hệ thống/Thiết bị/Vị trí/Lớp ống này. Vui lòng kiểm tra lại Danh mục kỹ thuật.');
-    else alert('Danh mục kỹ thuật đang có nhiều vùng vật liệu chồng lấn dải vị trí/lớp ống này — không thể lưu cho đến khi sửa lại Danh mục kỹ thuật cho các dải không còn chồng lấn.');
+    if((state.ktCandidates||[]).length===0) alert('Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với dữ liệu đã nhập.');
+    else alert('Danh mục kỹ thuật đang bị chồng lấn dải vị trí/lớp ống này.');
     return;
   }
   if(!chieuDayDo){ alert('Vui lòng nhập chiều dày đo được.'); return; }
@@ -506,12 +522,6 @@ window.addKiemTra = async function(){
   state.showForm.kiemtra=false;
   state.ktSel={dotId:dotObj.id,heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''};
   render();
-  if(phanTramConLai<=70 && state.telegram.autoSend){
-    sendTelegram('\u26a0\ufe0f <b>C\u1ea2NH B\u00c1O CHI\u1ec0U D\u00c0Y \u2014 '+rec.id+'</b>\n'
-      +'V\u1ecb tr\u00ed: '+pipeCode(rec)+'\n'
-      +'Chi\u1ec1u d\u00e0y \u0111o: '+chieuDayDo+'mm / Thi\u1ebft k\u1ebf: '+dm.chieuDay+'mm ('+rec.phanTramConLai+'% c\u00f2n l\u1ea1i)\n'
-      +'\u0110\u00e3 \u0111\u01b0a v\u00e0o danh s\u00e1ch c\u1eaft thay.');
-  }
 };
 window.exportKiemTra = function(){
   const rows = state.kiemTra.map(r=>{
@@ -523,7 +533,7 @@ window.exportKiemTra = function(){
 };
 window.importKiemTra = function(input){
   const file=input.files[0]; if(!file) return;
-  if(!state.ktSel.dotId){ alert('Vui lòng mở biểu mẫu Kiểm tra và chọn Đợt kiểm tra/sửa chữa trước khi nhập Excel — toàn bộ dữ liệu trong file sẽ được gắn vào đợt/tổ máy đó.'); input.value=''; return; }
+  if(!state.ktSel.dotId){ alert('Vui lòng chọn Đợt trước khi nhập Excel.'); input.value=''; return; }
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const reader=new FileReader();
   reader.onload=async e=>{
@@ -540,12 +550,14 @@ window.importKiemTra = function(input){
       let dm = candidates.length===1 ? candidates[0] : (vungCol ? candidates.find(c=>c.vung===vungCol) : null);
       if(!dm){ if(candidates.length>1) ambiguous++; else skipped++; return; }
       const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-      state.kiemTra.unshift({id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:String(r['Ngày kiểm tra']||r['Ngay kiem tra']||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))});
+      const rec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:String(r['Ngày kiểm tra']||r['Ngay kiem tra']||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
+      state.kiemTra.unshift(rec);
+      syncToSheet('kiem_tra', rec);
       added++;
     });
     await persist('kiem-tra', state.kiemTra, true);
     await syncSuaChua();
-    alert('Đã nhập '+added+' dòng vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' dòng có nhiều vùng khớp — cần bổ sung cột "Quy ước vùng vật liệu trên bản vẽ" trong file để phân biệt.'):''));
+    alert('Đã nhập '+added+' dòng vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng.');
     input.value=''; render();
   };
   reader.readAsArrayBuffer(file);
@@ -564,7 +576,6 @@ async function syncSuaChua(){
     const history = byPipe[key].slice().sort((a,b)=>a.ngay.localeCompare(b.ngay));
     const existingItems = state.suaChua.filter(s=>s.pipeKey===key).sort((a,b)=>a.chuKy-b.chuKy);
     const lastItem = existingItems.length ? existingItems[existingItems.length-1] : null;
-    // nếu chu kỳ trước đã hoàn thành (đã thay ống), chỉ xét các lần đo SAU ngày hoàn thành đó — không nối tiếp xu hướng ống cũ
     const cycleStart = (lastItem && lastItem.trangThai==='Hoàn thành' && lastItem.ngayHoanThanh) ? lastItem.ngayHoanThanh : null;
     const relevant = cycleStart ? history.filter(h=>h.ngay > cycleStart) : history;
     if(relevant.length===0) return;
@@ -606,7 +617,6 @@ window.setPhuongAn = async function(itemId, value){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   item.phuongAn = value;
   if(value!=='Cắt thay'){
-    // phương án Hàn phủ/Sửa ốp theo dõi bằng trạng thái thủ công, không dùng khung mối hàn w1/w2
     if(item.trangThai==='Hoàn thành' && !item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
   } else {
     recomputeStatus(item);
@@ -633,7 +643,7 @@ window.addBienPhapWeld = async function(itemId){
 window.removeWeld = async function(itemId, weldId){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const w = item.welds.find(x=>x.id===weldId);
-  if(w && w.loai==='chinh_thuc'){ alert('Không thể xóa mối hàn chính thức (w1/w2), chỉ có thể xóa mối hàn biện pháp.'); return; }
+  if(w && w.loai==='chinh_thuc'){ alert('Không thể xóa mối hàn chính thức.'); return; }
   item.welds = item.welds.filter(x=>x.id!==weldId);
   await persist('sua-chua', state.suaChua, true); render();
 };
@@ -706,7 +716,7 @@ window.exportVatTu = function(){
 };
 window.importVatTu = function(input){
   const file=input.files[0]; if(!file) return;
-  if(!state.vtSel.dotId){ alert('Vui lòng chọn Đợt ở trên trước khi nhập Excel — toàn bộ dữ liệu trong file sẽ được gắn vào đợt đó.'); input.value=''; return; }
+  if(!state.vtSel.dotId){ alert('Vui lòng chọn Đợt trước khi nhập Excel.'); input.value=''; return; }
   const dotObj = state.dots.find(d=>d.id===state.vtSel.dotId);
   const reader=new FileReader();
   reader.onload=async e=>{
@@ -717,12 +727,14 @@ window.importVatTu = function(input){
       const tenVatTu = String(r['Tên vật tư']||r['Ten vat tu']||'').trim();
       const soLuong = r['Số lượng']||r['So luong'];
       if(!tenVatTu || !soLuong) return;
-      state.vatTu.push({id:'VT-'+pad(state.vatTu.length+1), dotId:dotObj.id, toMay:dotObj.toMay,
+      const rec = {id:'VT-'+pad(state.vatTu.length+1), dotId:dotObj.id, toMay:dotObj.toMay,
         heThong:String(r['Hệ thống']||r['He thong']||''), thietBi:String(r['Thiết bị']||r['Thiet bi']||''),
         mucDich:String(r['Mục đích sử dụng']||r['Muc dich su dung']||''), maVatTu:String(r['Mã vật tư']||r['Ma vat tu']||''),
         tenVatTu, donVi:String(r['Đơn vị']||r['Don vi']||''), soLuong:String(soLuong),
         lyDoThayThe:String(r['Lý do thay thế']||r['Ly do thay the']||''), ghiChu:String(r['Ghi chú']||r['Ghi chu']||''),
-        ngay:String(r['Ngày']||r['Ngay']||todayStr())});
+        ngay:String(r['Ngày']||r['Ngay']||todayStr())};
+      state.vatTu.push(rec);
+      syncToSheet('vat_tu', rec);
       added++;
     });
     await persist('vat-tu', state.vatTu, true);
@@ -742,7 +754,6 @@ function renderVatTu(){
     ${r.lyDoThayThe?`<div class="record-note">Lý do thay thế: ${esc(r.lyDoThayThe)}</div>`:''}
     <div class="record-actions"><button class="mini-btn" onclick="deleteVatTu('${r.id}')">Xóa</button></div></div>`;
   }).join('');
-  // tổng hợp theo tên vật tư (trong đợt đang chọn nếu có, hoặc toàn bộ)
   const scope = state.vtSel.dotId ? state.vatTu.filter(r=>r.dotId===state.vtSel.dotId) : state.vatTu;
   const totals = {};
   scope.forEach(r=>{ const k=r.tenVatTu+'||'+r.donVi; totals[k]=(totals[k]||0)+(parseFloat(r.soLuong)||0); });
@@ -754,7 +765,7 @@ function renderVatTu(){
       <button class="btn-ghost" onclick="exportVatTu()">Xuất Excel</button>
       <button class="btn" onclick="toggleForm('vattu')">${state.showForm.vattu?'Đóng biểu mẫu':'+ Thêm dòng'}</button>
     </div></div>
-  <div class="form-panel" style="max-width:340px;"><div class="field"><label>Đợt (áp dụng cho nhập Excel &amp; tổng hợp bên dưới)</label><select onchange="setVtDot(this.value)">
+  <div class="form-panel" style="max-width:340px;"><div class="field"><label>Đợt (áp dụng cho nhập Excel &amp; tổng hợp)</label><select onchange="setVtDot(this.value)">
     <option value="">— Tất cả đợt —</option>${state.dots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.vtSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}
   </select></div></div>
   ${state.showForm.vattu ? `<div class="form-panel"><div class="form-grid">
@@ -769,7 +780,7 @@ function renderVatTu(){
     <div class="field"><label>Lý do thay thế</label><input id="vt-lydo"></div>
     <div class="field full"><label>Ghi chú</label><input id="vt-ghichu"></div>
   </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('vattu')">Hủy</button><button class="btn" onclick="addVatTu()">Lưu dòng</button></div></div>` : ''}
-  <div class="section-label">Tổng hợp theo vật tư ${state.vtSel.dotId?('— '+esc((state.dots.find(d=>d.id===state.vtSel.dotId)||{}).ten||'')):'(tất cả đợt)'}</div>
+  <div class="section-label">Tổng hợp theo vật tư</div>
   <div class="table-wrap" style="margin-bottom:20px;"><table class="dm"><thead><tr><th>Tên vật tư</th><th>Tổng số lượng</th><th>Đơn vị</th></tr></thead><tbody>${totalRows||'<tr><td colspan="3" style="text-align:center;color:var(--dim);padding:16px;">Chưa có dữ liệu</td></tr>'}</tbody></table></div>
   <div class="section-label">Chi tiết từng lần lĩnh</div>
   ${rows || '<div class="empty">Chưa có dữ liệu vật tư.</div>'}`;
@@ -804,6 +815,8 @@ function render(){
   if(state.loading){ app.innerHTML='<div class="loading">ĐANG TẢI DỮ LIỆU…</div>'; return; }
   if(!state.session){ app.innerHTML = renderAuth(); return; }
 
+  const scrollY = window.scrollY;
+
   const navHtml = NAV.map(n=>
     `<button class="nav-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="nav-tag">${n.tag}</span><span>${n.label}</span></button>`
   ).join('');
@@ -825,6 +838,8 @@ function render(){
     <div class="main">${renderTab()}</div>
   </div>
   <div class="bottom-nav">${bottomNavHtml}</div>`;
+
+  window.scrollTo(0, scrollY);
 }
 
 function renderAuth(){
@@ -847,7 +862,6 @@ function renderAuth(){
       ${state.authErr?`<div class="err-msg">${esc(state.authErr)}</div>`:''}
       <div class="form-actions" style="justify-content:stretch;"><button class="btn" style="width:100%;" onclick="doRegister()">Tạo tài khoản</button></div>
     `}
-    <div class="settings-note">Đây là cơ chế đăng nhập nội bộ đơn giản để gắn tên người thực hiện vào từng bản ghi, dữ liệu tài khoản lưu trong bộ nhớ dùng chung của ứng dụng — <b>không phải hệ thống bảo mật cấp doanh nghiệp</b>. Không dùng chung mật khẩu với hệ thống email/nội bộ khác của công ty.</div>
   </div></div>`;
 }
 
@@ -877,12 +891,11 @@ function renderDots(){
     const st = d.trangThai==='Đang diễn ra' ? 'warn' : 'good';
     return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(d.id)}</span>${esc(d.ten)} <span style="color:var(--muted);font-weight:400;">· ${esc(d.toMay)}</span></div><span class="status ${st}">${esc(d.trangThai)}</span></div>
     <div class="record-meta"><span>Bắt đầu: ${fmtDate(d.ngayBatDau)}</span>${d.ngayKetThuc?`<span>Kết thúc: ${fmtDate(d.ngayKetThuc)}</span>`:''}<span>${soKT} lượt kiểm tra</span></div>
-    <div class="record-actions">${d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt (chuyển vào lịch sử)</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại đợt</button>`}</div>
+    <div class="record-actions">${d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại đợt</button>`}</div>
     </div>`;
   }).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Quản lý theo tổ máy &amp; thời gian</div><div class="page-title">Đợt kiểm tra / sửa chữa</div></div>
     <button class="btn" onclick="toggleForm('dot')">${state.showForm.dot?'Đóng biểu mẫu':'+ Tạo đợt mới'}</button></div>
-  <div class="settings-note" style="margin-bottom:16px;">Mỗi đợt gắn với 1 tổ máy và 1 khoảng thời gian cụ thể (VD: đại tu tổ máy 1 tháng 5/2026, kiểm tra định kỳ tổ máy 2 tháng 7/2026...). Khi nhập Kiểm tra/Sửa chữa, luôn chọn đúng đợt đang thực hiện — nhờ đó dữ liệu các tổ máy và các đợt khác nhau không bị lẫn vào nhau. Khi đợt kết thúc, bấm "Đóng đợt": các hạng mục sửa chữa đã hoàn thành sẽ chuyển sang tra cứu tại tab Lịch sử, và nếu vị trí đó được kiểm tra lại ở đợt sau, hệ thống sẽ tính là <b>chu kỳ mới</b> (ống mới thay), không cộng dồn xu hướng mòn với ống cũ.</div>
   ${dotForm()}
   ${rows || '<div class="empty">Chưa có đợt nào. Tạo đợt đầu tiên trước khi bắt đầu kiểm tra.</div>'}`;
 }
@@ -919,10 +932,10 @@ function renderDotDashboard(dotId){
   const dot = state.dots.find(d=>d.id===dotId); if(!dot) return '';
   const s = computeDotStats(dotId);
   const vtRows = Object.keys(s.vtTotals).map(k=>{ const [ten,dv]=k.split('||'); return `<tr><td>${esc(ten)}</td><td>${s.vtTotals[k]}</td><td>${esc(dv)}</td></tr>`; }).join('');
-  let duKienText = 'Chưa đủ dữ liệu để ước tính (cần ít nhất 1 hạng mục sửa chữa đã hoàn thành).';
+  let duKienText = 'Chưa đủ dữ liệu để ước tính.';
   if(s.duKien){
-    duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ hạng mục đã phát hiện tính đến hiện tại.'
-      : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — ước tính theo tốc độ hoàn thành thực tế, tự cập nhật liên tục, có thể thay đổi nếu phát hiện thêm hư hỏng mới trong quá trình kiểm tra.');
+    duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ hạng mục.'
+      : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — ước tính theo tốc độ thực tế.');
   }
   return `<div class="repair-item" style="margin-bottom:18px;">
     <div class="repair-head" style="cursor:default;">
@@ -936,7 +949,7 @@ function renderDotDashboard(dotId){
       <div class="stat-card ${s.suaOp>0?'warn':''}"><div class="lbl">Sửa ốp (xong/tổng)</div><div class="val">${s.suaOpDone}/${s.suaOp}</div></div>
     </div>
     <div class="grid-cards">
-      <div class="stat-card"><div class="lbl">Mối hàn đã hàn/tổng (Cắt thay)</div><div class="val">${s.weldDone}/${s.weldTotal}</div></div>
+      <div class="stat-card"><div class="lbl">Mối hàn đã hàn/tổng</div><div class="val">${s.weldDone}/${s.weldTotal}</div></div>
       <div class="stat-card" style="grid-column:span 3;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div></div>
     </div>
     <div class="section-label" style="margin-top:16px;">Vật tư đã sử dụng</div>
@@ -952,7 +965,7 @@ function renderOverview(){
   const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra').sort((a,b)=>b.ngayBatDau.localeCompare(a.ngayBatDau));
   return `<div class="page-head"><div><div class="page-eyebrow">Tổng quan hệ thống</div><div class="page-title">Bảng điều khiển</div></div>
     <button class="btn-ghost" onclick="setOvMode('history')">Xem lịch sử theo năm</button></div>
-  ${activeDots.length ? activeDots.map(d=>renderDotDashboard(d.id)).join('') : '<div class="empty">Hiện không có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới.</div>'}`;
+  ${activeDots.length ? activeDots.map(d=>renderDotDashboard(d.id)).join('') : '<div class="empty">Hiện không có đợt nào đang diễn ra. Tạo đợt mới trong tab Đợt kiểm tra.</div>'}`;
 }
 function renderOverviewHistory(){
   if(state.ovDot){
@@ -982,14 +995,14 @@ function renderOverviewHistory(){
 function danhMucForm(){
   if(!state.showForm.danhmuc) return '';
   return `<div class="form-panel"><div class="form-grid">
-    <div class="field"><label>Tổ máy (để trống = dùng chung mọi tổ máy)</label><input id="dm-tomay" placeholder="VD: Tổ máy 1"></div>
+    <div class="field"><label>Tổ máy (để trống = dùng chung)</label><input id="dm-tomay" placeholder="VD: Tổ máy 1"></div>
     <div class="field"><label>Hệ thống *</label><input id="dm-hethong" placeholder="VD: Quá nhiệt trung gian"></div>
     <div class="field"><label>Thiết bị</label><input id="dm-thietbi" placeholder="VD: Tầng 7S"></div>
     <div class="field"><label>Vị trí từ</label><input id="dm-vitritu" placeholder="VD: 1"></div>
     <div class="field"><label>Vị trí đến</label><input id="dm-vitriden" placeholder="VD: 194"></div>
     <div class="field"><label>Lớp ống từ</label><input id="dm-lopongtu" placeholder="VD: 1"></div>
     <div class="field"><label>Lớp ống đến</label><input id="dm-lopongden" placeholder="VD: 6"></div>
-    <div class="field"><label>Quy ước vùng vật liệu trên bản vẽ *</label><input id="dm-vung" placeholder="VD: GA"></div>
+    <div class="field"><label>Quy ước vùng vật liệu *</label><input id="dm-vung" placeholder="VD: GA"></div>
     <div class="field"><label>Đường kính (mm) *</label><input id="dm-duongkinh" placeholder="VD: 50.8"></div>
     <div class="field"><label>Chiều dày (mm) *</label><input id="dm-chieuday" placeholder="VD: 4.19"></div>
     <div class="field"><label>Vật liệu</label><input id="dm-vatlieu" placeholder="VD: SA210-A1"></div>
@@ -1002,7 +1015,7 @@ function taiLieuForm(){
     <div class="field full"><label>Tên tài liệu *</label><input id="tl-ten" placeholder="VD: Bản vẽ bố trí ống sinh hơi tầng 7"></div>
     <div class="field"><label>Số hiệu bản vẽ</label><input id="tl-sohieu"></div>
     <div class="field"><label>Hệ thống liên quan</label><input id="tl-hethong"></div>
-    <div class="field full"><label>Đường dẫn (Google Drive/SharePoint...)</label><input id="tl-link" placeholder="https://..."></div>
+    <div class="field full"><label>Đường dẫn tài liệu</label><input id="tl-link" placeholder="https://..."></div>
     <div class="field full"><label>Ghi chú</label><input id="tl-ghichu"></div>
   </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('tailieu')">Hủy</button><button class="btn" onclick="addTaiLieu()">Lưu tài liệu</button></div></div>`;
 }
@@ -1016,12 +1029,10 @@ function renderDanhMuc(){
       <button class="btn" onclick="toggleForm('danhmuc')">${state.showForm.danhmuc?'Đóng biểu mẫu':'+ Thêm dòng'}</button>
     </div></div>
   ${danhMucForm()}
-  <div class="settings-note" style="margin-bottom:14px;">Bảng thông số này là dữ liệu gốc cho toàn hệ thống, theo đúng cấu trúc file kỹ thuật của nhà máy: mỗi Hệ thống/Thiết bị có nhiều <b>vùng vật liệu</b> (quy ước theo bản vẽ, VD: GA, GB, GC…), mỗi vùng ứng với một dải Vị trí/Lớp ống và có Đường kính, Chiều dày, Vật liệu riêng. Khi kiểm tra, người dùng chọn Hệ thống → Thiết bị → Vùng vật liệu (tra theo bản vẽ), sau đó nhập số Vị trí/Lớp ống cụ thể của ống đang đo. File Excel nhập vào nên dùng đúng tiêu đề cột: Hệ thống, Thiết bị, Vị trí từ, Vị trí đến, Lớp ống từ, Lớp ống đến, Quy ước vùng vật liệu trên bản vẽ, Đường kính, Chiều dày, Vật liệu, Ghi chú — có thể tải file mẫu bằng nút "Xuất Excel" rồi điền tiếp vào đó.</div>
-  <div class="table-wrap"><table class="dm"><thead><tr><th>Tổ máy</th><th>Hệ thống</th><th>Thiết bị</th><th>VT từ</th><th>VT đến</th><th>Lớp từ</th><th>Lớp đến</th><th>Vùng</th><th>ĐK (mm)</th><th>Dày (mm)</th><th>Vật liệu</th><th>Ghi chú</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;color:var(--dim);padding:20px;">Chưa có dữ liệu</td></tr>'}</tbody></table></div>
+  <div class="table-wrap"><table class="dm"><thead><tr><th>Tổ máy</th><th>Hệ thống</th><th>Thiết bị</th><th>VT từ</th><th>VT đến</th><th>Lớp từ</th><th>Lớp đến</th><th>Vùng</th><th>ĐK (mm)</th><th>Dày (mm)</th><th>Vật liệu</th><th>Ghi chú</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;color:var(--dim);padding:20px;">Chưa có dữ liệu danh mục. Vui lòng bấm "Nhập Excel" hoặc "+ Thêm dòng".</td></tr>'}</tbody></table></div>
   <div class="section-sub"><div class="page-head"><div><div class="page-title" style="font-size:20px;">Tài liệu kỹ thuật liên quan</div></div>
     <button class="btn-ghost" onclick="toggleForm('tailieu')">${state.showForm.tailieu?'Đóng biểu mẫu':'+ Thêm tài liệu'}</button></div>
   ${taiLieuForm()}
-  <div class="settings-note" style="margin-bottom:14px;">Do artifact chỉ lưu được dữ liệu dạng văn bản, mục này lưu <b>thông tin và đường dẫn</b> tới bản vẽ/tài liệu (khuyến nghị lưu file gốc trên Google Drive rồi dán link vào đây), không lưu trực tiếp file PDF/ảnh dung lượng lớn.</div>
   ${tlRows || '<div class="empty">Chưa có tài liệu nào.</div>'}</div>`;
 }
 
@@ -1038,22 +1049,20 @@ function renderKiemTra(){
   state.ktCandidates = candidates; state.ktResolved = dm;
 
   const noActiveDot = activeDots.length===0;
-  const form = !state.showForm.kiemtra ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới (gắn với 1 tổ máy) trước khi nhập kết quả kiểm tra.</div></div>` : `<div class="form-panel">
+  const form = !state.showForm.kiemtra ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Tạo đợt mới trước khi nhập kiểm tra.</div></div>` : `<div class="form-panel">
     <div class="form-grid">
       <div class="field full"><label>Đợt kiểm tra/sửa chữa (tổ máy) *</label><select onchange="ktSelect('dotId', this.value)">${activeDots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.ktSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
       <div class="field"><label>Hệ thống *</label><select onchange="ktSelect('heThong', this.value)">${opt(heThongOpts, state.ktSel.heThong)}</select></div>
       <div class="field"><label>Thiết bị</label><select onchange="ktSelect('thietBi', this.value)" ${!state.ktSel.heThong?'disabled':''}>${opt(thietBiOpts, state.ktSel.thietBi)}</select></div>
-      <div class="field"><label>Vị trí ống (số cụ thể) *</label><input id="kt-vitri" value="${esc(state.ktSel.viTri)}" placeholder="VD: 145" oninput="updateKtDerived()"></div>
-      <div class="field"><label>Lớp ống (số cụ thể) *</label><input id="kt-lopong" value="${esc(state.ktSel.lopOng)}" placeholder="VD: 3" oninput="updateKtDerived()"></div>
-      <div class="field full" id="kt-ambig-wrap" style="display:${candidates.length!==1 && state.ktSel.viTri && state.ktSel.lopOng?'block':'none'};background:var(--danger-soft);color:var(--danger);border:1px solid #4a2422;border-radius:7px;padding:11px 13px;font-size:12.5px;line-height:1.5;">
-        ${candidates.length>1?('<b>Danh mục kỹ thuật đang bị xung đột:</b> có '+candidates.length+' vùng vật liệu ('+candidates.map(c=>esc(c.vung)).join(', ')+') cùng bao trùm vị trí/lớp ống này. Vui lòng vào tab "Danh mục kỹ thuật" sửa lại dải Vị trí/Lớp ống cho KHÔNG chồng lấn, rồi quay lại kiểm tra.') : (candidates.length===0?'Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Vị trí/Lớp ống này.':'')}
-      </div>
-      <div class="field"><label>Vùng vật liệu (tự động, theo bản vẽ)</label><div class="readonly-box" id="kt-vung-box">${dm? esc(dm.vung) : '—'}</div></div>
+      <div class="field"><label>Vị trí ống *</label><input id="kt-vitri" value="${esc(state.ktSel.viTri)}" placeholder="VD: 145" oninput="updateKtDerived()"></div>
+      <div class="field"><label>Lớp ống *</label><input id="kt-lopong" value="${esc(state.ktSel.lopOng)}" placeholder="VD: 3" oninput="updateKtDerived()"></div>
+      <div class="field full" id="kt-ambig-wrap" style="display:none;background:var(--danger-soft);color:var(--danger);border:1px solid #4a2422;border-radius:7px;padding:11px 13px;font-size:12.5px;"></div>
+      <div class="field"><label>Vùng vật liệu</label><div class="readonly-box" id="kt-vung-box">${dm? esc(dm.vung) : '—'}</div></div>
       <div class="field"><label>Đường kính (mm)</label><div class="readonly-box" id="kt-dk-box">${dm?esc(dm.duongKinh):'—'}</div></div>
       <div class="field"><label>Chiều dày thiết kế (mm)</label><div class="readonly-box" id="kt-day-box">${dm?esc(dm.chieuDay):'—'}</div></div>
       <div class="field"><label>Vật liệu</label><div class="readonly-box" id="kt-vl-box">${dm?esc(dm.vatLieu||'—'):'—'}</div></div>
       <div class="field"><label>Chiều dày đo được (mm) *</label><input id="kt-do" placeholder="VD: 3.9"></div>
-      <div class="field"><label>Ngoại dạng quan sát</label><select id="kt-ngoaidang"><option>Bình thường</option><option>Rỗ ăn mòn</option><option>Biến dạng / phình</option><option>Nứt</option><option>Mài mòn cục bộ</option><option>Khác</option></select></div>
+      <div class="field"><label>Ngoại dạng</label><select id="kt-ngoaidang"><option>Bình thường</option><option>Rỗ ăn mòn</option><option>Biến dạng / phình</option><option>Nứt</option><option>Mài mòn cục bộ</option><option>Khác</option></select></div>
       <div class="field"><label>Ngày kiểm tra</label><input id="kt-ngay" type="date" value="${todayStr()}"></div>
       <div class="field"><label>Người kiểm tra</label><input id="kt-nguoi" value="${esc(state.session.name)}" disabled></div>
     </div>
@@ -1074,7 +1083,7 @@ function renderKiemTra(){
       <button class="btn" onclick="toggleForm('kiemtra')">${state.showForm.kiemtra?'Đóng biểu mẫu':'+ Thêm bản ghi'}</button>
     </div></div>
   ${form}
-  ${rows || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`;
+  ${rows || '<div class="empty">Chưa có bản ghi kiểm tra. Cần khai báo Danh mục kỹ thuật trước.</div>'}`;
 }
 
 window.setScFilter = function(field, value){ state.scFilter[field]=value; if(field==='toMay'){state.scFilter.heThong='';state.scFilter.thietBi='';} if(field==='heThong'){state.scFilter.thietBi='';} render(); };
@@ -1139,7 +1148,6 @@ function renderSuaChua(){
   return `<div class="page-head"><div><div class="page-eyebrow">Danh sách cần xử lý · Quản lý mối hàn</div><div class="page-title">Sửa chữa &amp; hàn</div></div>
     <button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel</button></div>
   ${filterBar}
-  <div class="settings-note" style="margin:14px 0 16px;">Danh sách tự động tạo từ kết quả kiểm tra ≤ 70% (trong chu kỳ hiện tại). Phương án mặc định "Cắt thay" (2 mối hàn chính thức w1/w2 + có thể thêm mối hàn biện pháp); có thể đổi sang "Hàn phủ"/"Sửa ốp" — khi đó theo dõi bằng 1 trạng thái đơn giản, không có mối hàn. Khi hạng mục "Hoàn thành", nó tự <b>chuyển sang tab Lịch sử &amp; xu hướng</b>, không còn hiện ở đây.</div>
   ${items || '<div class="empty">Không có hạng mục nào khớp bộ lọc hiện tại.</div>'}`;
 }
 
@@ -1200,7 +1208,6 @@ function renderHistory(){
   const summaries = keys.map(key=>{
     const fullHist = map[key];
     const completedCycles = state.suaChua.filter(s=>s.pipeKey===key && s.trangThai==='Hoàn thành').sort((a,b)=>a.chuKy-b.chuKy);
-    // chia lịch sử đo thành các chu kỳ, ranh giới là ngày hoàn thành thay ống của từng đợt sửa chữa trước đó
     let prevBoundary = null, oldSegments = [];
     completedCycles.forEach(c=>{
       const seg = fullHist.filter(h=> (prevBoundary? h.ngay>prevBoundary : true) && h.ngay<=c.ngayHoanThanh);
@@ -1230,15 +1237,15 @@ function renderHistory(){
     if(s.currentHist.length===0){
       projText = 'Ống tại vị trí này đã được thay trong chu kỳ trước, chưa có lần đo mới trong chu kỳ hiện tại (Chu kỳ '+s.currentChuKy+').';
     } else if(s.trend){
-      if(s.projection && s.projection.overdue) projText = 'Đã đạt/vượt ngưỡng 70% theo xu hướng đo (Chu kỳ '+s.currentChuKy+') — cần ưu tiên xử lý ngay.';
-      else if(s.projection) projText = 'Dự kiến đạt ngưỡng cắt thay (70%) vào khoảng <b>'+s.projection.date.toLocaleDateString('vi-VN')+'</b> (ước tính tuyến tính từ '+s.currentHist.length+' lần đo trong Chu kỳ '+s.currentChuKy+', chỉ mang tính tham khảo).';
-      else projText = 'Số liệu chu kỳ hiện tại chưa cho thấy xu hướng mòn giảm rõ rệt — chưa thể dự báo đáng tin cậy.';
+      if(s.projection && s.projection.overdue) projText = 'Đã đạt/vượt ngưỡng 70% theo xu hướng đo (Chu kỳ '+s.currentChuKy+').';
+      else if(s.projection) projText = 'Dự kiến đạt ngưỡng cắt thay (70%) vào khoảng <b>'+s.projection.date.toLocaleDateString('vi-VN')+'</b>.';
+      else projText = 'Số liệu chưa cho thấy xu hướng mòn rõ rệt.';
     } else {
-      projText = 'Chưa đủ dữ liệu (cần ≥ 2 lần đo trong chu kỳ hiện tại) để dự báo xu hướng.';
+      projText = 'Chưa đủ dữ liệu để dự báo xu hướng.';
     }
     const oldSegHtml = s.oldSegments.length ? `<div style="margin-top:12px;">
-      <button class="mini-btn" onclick="toggleOldCycles('${safeKey}')">${oldExpanded?'Ẩn':'Xem'} ${s.oldSegments.length} chu kỳ trước (đã thay ống)</button>
-      ${oldExpanded ? s.oldSegments.map(seg=>`<div class="settings-note" style="margin-top:8px;">Chu kỳ ${seg.chuKy} — kết thúc (thay ống) ngày ${fmtDate(seg.ngayHoanThanh)}, ${seg.records.length} lần đo trong chu kỳ.</div>
+      <button class="mini-btn" onclick="toggleOldCycles('${safeKey}')">${oldExpanded?'Ẩn':'Xem'} ${s.oldSegments.length} chu kỳ trước</button>
+      ${oldExpanded ? s.oldSegments.map(seg=>`<div class="settings-note" style="margin-top:8px;">Chu kỳ ${seg.chuKy} — kết thúc ngày ${fmtDate(seg.ngayHoanThanh)}.</div>
         <div class="table-wrap" style="margin-top:6px;margin-bottom:10px;"><table class="dm"><thead><tr><th>Ngày</th><th>Chiều dày đo (mm)</th><th>% còn lại</th></tr></thead><tbody>
         ${seg.records.slice().reverse().map(h=>`<tr><td>${fmtDate(h.ngay)}</td><td>${esc(h.chieuDayDo)}</td><td>${esc(h.phanTramConLai)}%</td></tr>`).join('')}
         </tbody></table></div>`).join('') : ''}
@@ -1262,9 +1269,8 @@ function renderHistory(){
   const repairHistCards = completedRepairs.map(item=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(item.id)}</span>${esc(item.heThong)} - ${esc(item.thietBi)} - ${esc(item.viTri)}-${esc(item.lopOng)}</div><span class="status good">Hoàn thành ${fmtDate(item.ngayHoanThanh)}</span></div>
     <div class="record-meta"><span>${item.welds.filter(w=>w.loai==='chinh_thuc').length} mối hàn chính thức</span><span>${item.welds.filter(w=>w.loai==='bien_phap').length} mối hàn biện pháp</span></div></div>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Tra cứu · So sánh · Lập kế hoạch</div><div class="page-title">Lịch sử &amp; xu hướng mòn ống</div></div></div>
-  <div class="settings-note" style="margin-bottom:16px;">Mỗi vị trí ống (theo tổ máy) được tính <b>tốc độ mòn (mm/năm)</b> chỉ dựa trên các lần đo trong <b>chu kỳ hiện tại</b> — tức là kể từ lần thay ống gần nhất (nếu có). Dữ liệu các chu kỳ trước vẫn được lưu đầy đủ để tra cứu/so sánh nhưng không được cộng dồn vào xu hướng hiện tại, tránh nhầm ống mới với ống cũ. Danh sách ưu tiên vị trí cần xử lý sớm nhất lên đầu.</div>
-  ${cards || '<div class="empty">Chưa có đủ dữ liệu kiểm tra để phân tích lịch sử/xu hướng.</div>'}
-  <div class="section-label">Sửa chữa đã hoàn thành (đã chuyển vào lịch sử)</div>
+  ${cards || '<div class="empty">Chưa có đủ dữ liệu kiểm tra để phân tích.</div>'}
+  <div class="section-label">Sửa chữa đã hoàn thành</div>
   ${repairHistCards || '<div class="empty">Chưa có hạng mục sửa chữa nào hoàn thành.</div>'}`;
 }
 
@@ -1272,7 +1278,6 @@ function renderAnalysis(){
   const active = CAUSES.find(c=>c.id===state.activeCause) || CAUSES[0];
   const list = CAUSES.map(c=>`<button class="cause-item ${c.id===active.id?'active':''}" onclick="setCause('${c.id}')"><b>${esc(c.name)}</b>${esc(c.where)}</button>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Tham khảo kỹ thuật</div><div class="page-title">Phân tích nguyên nhân &amp; khuyến nghị sửa chữa</div></div></div>
-  <div class="settings-note" style="margin-bottom:18px;">Nội dung tham khảo chung dựa trên các cơ chế hư hỏng ống lò hơi phổ biến. Quyết định sửa chữa thực tế cần dựa trên kiểm tra hiện trường, kết quả kim tương/NDT cụ thể và tiêu chuẩn thiết kế áp dụng (ASME, TCVN…), có phê duyệt của kỹ sư phụ trách.</div>
   <div class="cause-grid"><div class="cause-list">${list}</div>
   <div class="cause-detail"><h3>${esc(active.name)}</h3><div class="cause-sub">${esc(active.where)}</div>
   <h4>Nguyên nhân điển hình</h4><ul>${active.causes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
@@ -1291,16 +1296,14 @@ function renderSettings(){
   <div class="settings-box">
     <div class="field"><label>Bot Token</label><input id="tg-token" value="${esc(cfg.botToken)}" placeholder="123456789:AAExampleToken"></div>
     <div class="field" style="margin-top:10px;"><label>Chat ID</label><input id="tg-chatid" value="${esc(cfg.chatId)}" placeholder="-1001234567890"></div>
-    <div class="field" style="margin-top:10px;"><label>Tần suất báo cáo tự động (giờ)</label><input id="tg-tansuat" value="${esc(cfg.tanSuatGio)}" placeholder="VD: 4 (gửi mỗi 4 giờ)"></div>
+    <div class="field" style="margin-top:10px;"><label>Tần suất báo cáo tự động (giờ)</label><input id="tg-tansuat" value="${esc(cfg.tanSuatGio)}" placeholder="VD: 4"></div>
     <div class="form-actions" style="justify-content:flex-start;margin-top:12px;"><button class="btn" onclick="saveTelegramConfig()">Lưu cấu hình</button><button class="btn-ghost" onclick="testTelegram()">Gửi thử</button></div>
     <div class="toggle-row"><div><div style="font-size:13px;font-weight:600;">Tự động gửi khi ≤ 70% chiều dày còn lại</div></div><button class="switch ${cfg.autoSend?'on':''}" onclick="toggleAutoSend()"></button></div>
-    <div class="settings-note">Lấy Bot Token qua @BotFather trên Telegram (/newbot), thêm bot vào nhóm cần nhận tin, sau đó mở https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates để tìm Chat ID.<br><br><b>Báo cáo tổng hợp định kỳ</b> (số ống kiểm tra/sửa chữa/vật tư theo đợt) không chạy trong app này — nó chạy độc lập trên Google Apps Script (xem mục Google Sheet bên dưới) để hoạt động đúng giờ kể cả khi không ai mở app. "Tần suất" ở đây chỉ là cấu hình được đồng bộ sang Sheet để Apps Script đọc và áp dụng.</div>
   </div>
-  <div class="section-label">Đồng bộ Google Sheet (bắt buộc nếu muốn dùng báo cáo tự động)</div>
+  <div class="section-label">Đồng bộ Google Sheet</div>
   <div class="settings-box">
     <div class="field"><label>Địa chỉ Web App (Google Apps Script)</label><input id="sheet-url" value="${esc(state.sheetWebhook)}" placeholder="https://script.google.com/macros/s/.../exec"></div>
     <div class="form-actions" style="justify-content:flex-start;margin-top:12px;"><button class="btn" onclick="saveSheetWebhook()">Lưu địa chỉ</button></div>
-    <div class="settings-note">Artifact không thể tự đăng nhập Google (không hỗ trợ OAuth), nên không thể ghi trực tiếp vào Google Sheet như một tài khoản Google thật. Giải pháp: triển khai một <b>Google Apps Script Web App</b> (script.google.com) để nhận dữ liệu và tự ghi vào Sheet, dán địa chỉ Web App vào đây. Bot Token/Chat ID/Tần suất cũng được gửi sang Sheet để Apps Script tự gọi Telegram độc lập theo lịch — vì vậy Sheet này chứa thông tin nhạy cảm, cần giữ ở chế độ riêng tư nội bộ. Cách đáng tin cậy hơn để làm việc với Excel ngay trong app là dùng nút <b>Nhập/Xuất Excel</b> ở từng module.</div>
   </div>
   <div class="section-label">Người dùng (${state.users.length})</div>
   ${userRows || '<div class="empty">Chưa có người dùng.</div>'}`;
