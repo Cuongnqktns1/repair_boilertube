@@ -238,6 +238,7 @@ async function fetchSheet(type){
     return data.rows;
   }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet:', type, e); return null; }
 }
+
 function mapSheetUsers(rows){
   return rows.map(r=>({ email:String(r['Email']||'').toLowerCase(), name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:String(r['Vai trò']||'ky_thuat') })).filter(u=>u.email);
 }
@@ -254,39 +255,48 @@ function mapSheetCauHinh(rows){
   return {botToken:String(r['BotToken']||''), chatId:String(r['ChatId']||''), tanSuatGio:String(r['TanSuatGio']||'')};
 }
 
+// BẢN VÁ 1: Sử dụng localStorage chuẩn của trình duyệt thay vì window.storage để không mất dữ liệu
+const getLocal = async (k, def) => { 
+  try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : def; } 
+  catch(e) { return def; } 
+};
+const persist = async (key, value) => { 
+  try { localStorage.setItem(key, JSON.stringify(value)); } 
+  catch(e) { console.error('Lỗi lưu', key, e); } 
+};
+
 async function loadAll(){
-  const g = async (k,shared,def)=>{ try{ const r=await window.storage.get(k,shared); return r? JSON.parse(r.value): def; }catch(e){ return def; } };
-
-  // Tài khoản: Google Sheet là nguồn gốc, bộ nhớ cục bộ chỉ là bản sao dự phòng khi mất kết nối
+  // Tài khoản
   const sheetUsers = await fetchSheet('users');
-  if(sheetUsers){ state.users = mapSheetUsers(sheetUsers); await persist('users', state.users, true); state.offlineUsers=false; }
-  else { state.users = await g('users', true, []); state.offlineUsers = true; }
+  if(sheetUsers){ state.users = mapSheetUsers(sheetUsers); await persist('users', state.users); state.offlineUsers=false; }
+  else { state.users = await getLocal('users', []); state.offlineUsers = true; }
 
-  state.dots = await g('dots', true, []);
+  state.dots = await getLocal('dots', []);
 
-  // Danh mục kỹ thuật: Google Sheet là nguồn gốc
+  // Danh mục kỹ thuật
   const sheetDanhMuc = await fetchSheet('danh_muc');
-  if(sheetDanhMuc){ state.danhMuc = mapSheetDanhMuc(sheetDanhMuc); await persist('danh-muc', state.danhMuc, true); state.offlineDanhMuc=false; }
+  if(sheetDanhMuc){ state.danhMuc = mapSheetDanhMuc(sheetDanhMuc); await persist('danh-muc', state.danhMuc); state.offlineDanhMuc=false; }
   else {
-    state.danhMuc = await g('danh-muc', true, []);
+    state.danhMuc = await getLocal('danh-muc', []);
     if(state.danhMuc.length===0) state.danhMuc = seedDanhMuc();
     state.offlineDanhMuc = true;
   }
 
-  state.taiLieu = await g('tai-lieu', true, []);
-  state.kiemTra = await g('kiem-tra', true, []);
-  state.suaChua = await g('sua-chua', true, []);
-  state.vatTu = await g('vat-tu', true, []);
+  state.taiLieu = await getLocal('tai-lieu', []);
+  state.kiemTra = await getLocal('kiem-tra', []);
+  state.suaChua = await getLocal('sua-chua', []);
+  state.vatTu = await getLocal('vat-tu', []);
 
-  // Cấu hình Telegram/tần suất: chỉ đọc từ Google Sheet (sheet CauHinh), không có màn hình cài đặt trong app
+  // Cấu hình Telegram
   const sheetCauHinh = await fetchSheet('cau_hinh');
   state.telegram = sheetCauHinh ? mapSheetCauHinh(sheetCauHinh) : {botToken:'',chatId:'',tanSuatGio:''};
 
-  const sess = await g('session', false, null);
+  const sess = await getLocal('session', null);
   if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
   state.loading=false;
   render();
 }
+
 function seedDanhMuc(){
   return [
     {id:'DM-0001', toMay:'', heThong:'Quá nhiệt trung gian', thietBi:'Tầng 7S', viTriTu:'1', viTriDen:'64', lopOngTu:'1', lopOngDen:'6', vung:'GA', duongKinh:'50.8', chieuDay:'4.19', vatLieu:'SA210-A1', ghiChu:'Dữ liệu mẫu (offline) — vui lòng cập nhật theo hồ sơ thiết kế thực tế, các vùng phải có dải vị trí KHÔNG chồng lấn nhau'},
@@ -295,7 +305,7 @@ function seedDanhMuc(){
     {id:'DM-0004', toMay:'', heThong:'Bộ hâm nước', thietBi:'', viTriTu:'', viTriDen:'', lopOngTu:'', lopOngDen:'', vung:'ALL', duongKinh:'57.2', chieuDay:'5.49', vatLieu:'SA210-C', ghiChu:'Dữ liệu mẫu (offline)'},
   ];
 }
-async function persist(key, value, shared){ try{ await window.storage.set(key, JSON.stringify(value), shared); }catch(e){ console.error('Lỗi lưu',key,e); } }
+
 async function deleteFromSheet(sheetName, id){
   try{ await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'delete', record:{sheet:sheetName, id}, ts:new Date().toISOString()})}); }catch(e){ /* best-effort */ }
 }
@@ -327,7 +337,7 @@ window.addDot = async function(){
   if(!ten || !toMay){ alert('Vui lòng nhập Tên đợt và Tổ máy.'); return; }
   const dot = {id:'DOT-'+pad(state.dots.length+1), ten, toMay, ngayBatDau, ngayKetThuc:'', trangThai:'Đang diễn ra'};
   state.dots.unshift(dot);
-  await persist('dots', state.dots, true);
+  await persist('dots', state.dots);
   syncToSheet('dot', dot);
   state.showForm.dot=false; render();
 };
@@ -335,14 +345,14 @@ window.closeDot = async function(id){
   if(!confirm('Đóng đợt này? Sau khi đóng, dữ liệu của đợt sẽ được xem là đã hoàn thành và chuyển sang lịch sử — các lần đo tiếp theo tại cùng vị trí (nếu có, thuộc đợt mới) sẽ được tính là chu kỳ mới, không nối tiếp xu hướng cũ.')) return;
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đã hoàn thành'; d.ngayKetThuc=todayStr();
-  await persist('dots', state.dots, true);
+  await persist('dots', state.dots);
   syncToSheet('dot', d);
   render();
 };
 window.reopenDot = async function(id){
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đang diễn ra'; d.ngayKetThuc='';
-  await persist('dots', state.dots, true);
+  await persist('dots', state.dots);
   syncToSheet('dot', d);
   render();
 };
@@ -373,10 +383,10 @@ async function doRegister(){
   const role = state.users.length===0 ? 'admin' : 'ky_thuat';
   const user = {name, email, passHash: simpleHash(pass), role};
   state.users.push(user);
-  await persist('users', state.users, true);
+  await persist('users', state.users);
   syncToSheet('user', user);
   state.session = user; state.authErr='';
-  await persist('session', email, false);
+  await persist('session', email);
   render();
 }
 async function doLogin(){
@@ -385,10 +395,10 @@ async function doLogin(){
   const user = state.users.find(u=>u.email===email);
   if(!user || user.passHash !== simpleHash(pass)){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
   state.session=user; state.authErr='';
-  await persist('session', email, false);
+  await persist('session', email);
   render();
 }
-async function doLogout(){ state.session=null; await persist('session', null, false); render(); }
+async function doLogout(){ state.session=null; await persist('session', null); render(); }
 window.setAuthView = v => { state.authView=v; state.authErr=''; render(); };
 window.doRegister=doRegister; window.doLogin=doLogin; window.doLogout=doLogout;
 
@@ -403,14 +413,14 @@ window.addDanhMuc = async function(){
     return;
   }
   state.danhMuc.push(rec);
-  await persist('danh-muc', state.danhMuc, true);
+  await persist('danh-muc', state.danhMuc);
   syncToSheet('danh_muc', rec);
   state.showForm.danhmuc=false; render();
 };
 window.deleteDanhMuc = async function(id){
   if(!confirm('Xóa dòng danh mục này? Sẽ xóa cả trên Google Sheet.')) return;
   state.danhMuc = state.danhMuc.filter(r=>r.id!==id);
-  await persist('danh-muc', state.danhMuc, true);
+  await persist('danh-muc', state.danhMuc);
   deleteFromSheet('DanhMuc', id);
   render();
 };
@@ -418,7 +428,7 @@ window.deleteAllDanhMuc = async function(){
   if(!confirm('XÓA TOÀN BỘ Danh mục kỹ thuật? Sẽ xóa cả trên Google Sheet và không thể hoàn tác.')) return;
   if(!confirm('Xác nhận lần 2: chắc chắn xóa toàn bộ Danh mục kỹ thuật?')) return;
   state.danhMuc = [];
-  await persist('danh-muc', state.danhMuc, true);
+  await persist('danh-muc', state.danhMuc);
   deleteAllFromSheet('DanhMuc');
   render();
 };
@@ -442,7 +452,6 @@ window.importDanhMuc = function(input){
       const vung=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'').trim();
       const duongKinh=r['Đường kính']||r['Duong kinh'], chieuDay=r['Chiều dày']||r['Chieu day'];
       if(!duongKinh||!chieuDay) return;
-      // các dòng gộp ô trong Excel thường để trống Hệ thống/Thiết bị/Tổ máy ở các hàng con — kế thừa từ dòng trước đó
       if(heThong) lastHeThong=heThong; else heThong=lastHeThong;
       if(thietBi) lastThietBi=thietBi; else thietBi=lastThietBi;
       if(toMay) lastToMay=toMay;
@@ -456,8 +465,7 @@ window.importDanhMuc = function(input){
       newlyAdded.push(newRec);
       added++;
     });
-    await persist('danh-muc', state.danhMuc, true);
-    // sau khi nhập xong mới rà soát chồng lấn (không chặn nhập, chỉ cảnh báo để sửa sau)
+    await persist('danh-muc', state.danhMuc);
     const conflictMsgs = [];
     newlyAdded.forEach(rec=>{
       const ov = danhMucOverlaps(rec, rec.id);
@@ -477,12 +485,12 @@ window.addTaiLieu = async function(){
   const rec={id:'TL-'+pad(state.taiLieu.length+1), tenTaiLieu:g('tl-ten'), soHieu:g('tl-sohieu'), heThong:g('tl-hethong'), link:g('tl-link'), ghiChu:g('tl-ghichu')};
   if(!rec.tenTaiLieu){ alert('Vui lòng nhập tên tài liệu.'); return; }
   state.taiLieu.push(rec);
-  await persist('tai-lieu', state.taiLieu, true);
+  await persist('tai-lieu', state.taiLieu);
   state.showForm.tailieu=false; render();
 };
 window.deleteTaiLieu = async function(id){
   state.taiLieu = state.taiLieu.filter(r=>r.id!==id);
-  await persist('tai-lieu', state.taiLieu, true); render();
+  await persist('tai-lieu', state.taiLieu); render();
 };
 
 /* ---------- KIỂM TRA (ĐO ĐẠC) ---------- */
@@ -557,7 +565,7 @@ window.addKiemTra = async function(){
     nguoiKiemTra: state.session? state.session.name : (g('kt-nguoi')||'—')
   };
   state.kiemTra.unshift(rec);
-  await persist('kiem-tra', state.kiemTra, true);
+  await persist('kiem-tra', state.kiemTra);
   syncToSheet('kiem_tra', rec);
   await syncSuaChua();
   state.showForm.kiemtra=false;
@@ -600,7 +608,7 @@ window.importKiemTra = function(input){
       state.kiemTra.unshift({id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:String(r['Ngày kiểm tra']||r['Ngay kiem tra']||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))});
       added++;
     });
-    await persist('kiem-tra', state.kiemTra, true);
+    await persist('kiem-tra', state.kiemTra);
     await syncSuaChua();
     alert('Đã nhập '+added+' dòng vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' dòng có nhiều vùng khớp — cần bổ sung cột "Quy ước vùng vật liệu trên bản vẽ" trong file để phân biệt.'):''));
     input.value=''; render();
@@ -610,6 +618,7 @@ window.importKiemTra = function(input){
 
 /* ---------- SỬA CHỮA & HÀN ---------- */
 function pipeKeyOf(k){ return (k.toMay||'')+'|'+k.heThong+'|'+k.thietBi+'|'+k.viTri+'|'+k.lopOng; }
+
 async function syncSuaChua(){
   const byPipe = {};
   state.kiemTra.forEach(k=>{
@@ -621,7 +630,6 @@ async function syncSuaChua(){
     const history = byPipe[key].slice().sort((a,b)=>a.ngay.localeCompare(b.ngay));
     const existingItems = state.suaChua.filter(s=>s.pipeKey===key).sort((a,b)=>a.chuKy-b.chuKy);
     const lastItem = existingItems.length ? existingItems[existingItems.length-1] : null;
-    // nếu chu kỳ trước đã hoàn thành (đã thay ống), chỉ xét các lần đo SAU ngày hoàn thành đó — không nối tiếp xu hướng ống cũ
     const cycleStart = (lastItem && lastItem.trangThai==='Hoàn thành' && lastItem.ngayHoanThanh) ? lastItem.ngayHoanThanh : null;
     const relevant = cycleStart ? history.filter(h=>h.ngay > cycleStart) : history;
     if(relevant.length===0) return;
@@ -632,12 +640,14 @@ async function syncSuaChua(){
       const chuKy = (lastItem ? lastItem.chuKy : 0) + 1;
       const idBase = (latest.toMay?latest.toMay+' · ':'')+latest.heThong+' - '+latest.thietBi+' - '+latest.viTri+' - '+latest.lopOng;
       const displayId = idBase + (chuKy>1 ? (' (Chu kỳ '+chuKy+')') : '');
+      
+      // BẢN VÁ 2: Thêm tham số maMoiHan để gửi lên Sheet không bị dính chuỗi
       activeItem = {id:displayId, pipeKey:key, chuKy, dotId:latest.dotId, toMay:latest.toMay,
         heThong:latest.heThong, thietBi:latest.thietBi, viTri:latest.viTri, lopOng:latest.lopOng,
         chieuDayTK:latest.chieuDayTK, chieuDayDoGanNhat:latest.chieuDayDo, phanTramConLai:latest.phanTramConLai,
         ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:'Cắt thay',
-        welds:[{id:displayId+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''},
-               {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''}]};
+        welds:[{id:displayId+'-w1', maMoiHan:'w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''},
+               {id:displayId+'-w2', maMoiHan:'w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''}]};
       state.suaChua.push(activeItem);
       syncToSheet('sua_chua_item', activeItem);
     } else {
@@ -645,12 +655,21 @@ async function syncSuaChua(){
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
-  await persist('sua-chua', state.suaChua, true);
+  await persist('sua-chua', state.suaChua);
 }
+
+// BẢN VÁ 3: Tính toán bao gồm CẢ mối hàn biện pháp
 function recomputeStatus(item){
-  const official = item.welds.filter(w=>w.loai==='chinh_thuc');
-  if(official.length===0){ item.trangThai='Chờ xử lý'; return; }
-  const allDone = official.every(w=>w.daCat && w.daHan && w.paut==='Đạt');
+  if(item.welds.length === 0){ item.trangThai='Chờ xử lý'; return; }
+  
+  const allDone = item.welds.every(w => {
+    if(w.loai === 'chinh_thuc') {
+      return w.daCat && w.daHan && w.paut === 'Đạt';
+    } else { // Mối hàn biện pháp thì chỉ cần check Cắt và Hàn
+      return w.daCat && w.daHan; 
+    }
+  });
+
   if(allDone){
     item.trangThai='Hoàn thành';
     if(!item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
@@ -659,16 +678,16 @@ function recomputeStatus(item){
     item.ngayHoanThanh='';
   }
 }
+
 window.setPhuongAn = async function(itemId, value){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   item.phuongAn = value;
   if(value!=='Cắt thay'){
-    // phương án Hàn phủ/Sửa ốp theo dõi bằng trạng thái thủ công, không dùng khung mối hàn w1/w2
     if(item.trangThai==='Hoàn thành' && !item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
   } else {
     recomputeStatus(item);
   }
-  await persist('sua-chua', state.suaChua, true);
+  await persist('sua-chua', state.suaChua);
   syncToSheet('sua_chua_item', item);
   render();
 };
@@ -676,7 +695,7 @@ window.setManualStatus = async function(itemId, value){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   item.trangThai = value;
   item.ngayHoanThanh = value==='Hoàn thành' ? (item.ngayHoanThanh||todayStr()) : '';
-  await persist('sua-chua', state.suaChua, true);
+  await persist('sua-chua', state.suaChua);
   syncToSheet('sua_chua_item', item);
   render();
 };
@@ -684,37 +703,41 @@ window.toggleRepairExpand = function(id){ state.expandedRepair = state.expandedR
 window.addBienPhapWeld = async function(itemId){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const bpCount = item.welds.filter(w=>w.loai==='bien_phap').length;
-  item.welds.push({id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''});
-  await persist('sua-chua', state.suaChua, true); render();
+  // BẢN VÁ 2 (tt): Cấp maMoiHan cho mối hàn biện pháp
+  const wId = 'wbp'+(bpCount+1);
+  item.welds.push({id:itemId+'-'+wId, maMoiHan:wId, loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:''});
+  recomputeStatus(item); // Update ngay lập tức vì vừa nhét thêm task mới
+  await persist('sua-chua', state.suaChua); render();
 };
 window.removeWeld = async function(itemId, weldId){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const w = item.welds.find(x=>x.id===weldId);
   if(w && w.loai==='chinh_thuc'){ alert('Không thể xóa mối hàn chính thức (w1/w2), chỉ có thể xóa mối hàn biện pháp.'); return; }
   item.welds = item.welds.filter(x=>x.id!==weldId);
-  await persist('sua-chua', state.suaChua, true); render();
+  recomputeStatus(item);
+  await persist('sua-chua', state.suaChua); render();
 };
 window.toggleWeldFlag = async function(itemId, weldId, field){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
   w[field] = !w[field];
   recomputeStatus(item);
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  await persist('sua-chua', state.suaChua);
+  syncToSheet('sua_chua_weld', {itemId:item.id, maMoiHan:w.maMoiHan, trangThai:item.trangThai, weld:w});
   render();
 };
 window.setWeldPaut = async function(itemId, weldId, value){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
   w.paut = value;
   recomputeStatus(item);
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  await persist('sua-chua', state.suaChua);
+  syncToSheet('sua_chua_weld', {itemId:item.id, maMoiHan:w.maMoiHan, trangThai:item.trangThai, weld:w});
   render();
 };
 window.setWeldField = async function(itemId, weldId, field, value){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
   w[field]=value;
-  await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  await persist('sua-chua', state.suaChua);
+  syncToSheet('sua_chua_weld', {itemId:item.id, maMoiHan:w.maMoiHan, trangThai:item.trangThai, weld:w});
 };
 window.exportSuaChua = function(){
   const rows=[];
@@ -722,7 +745,7 @@ window.exportSuaChua = function(){
     const phuongAn = item.phuongAn || 'Cắt thay';
     if(phuongAn==='Cắt thay'){
       item.welds.forEach(w=>{
-        rows.push({'Vị trí ống':item.id,'Phương án':phuongAn,'% còn lại':item.phanTramConLai,'Trạng thái hạng mục':item.trangThai,'Mã mối hàn':w.id,'Loại':w.loai==='chinh_thuc'?'Chính thức':'Biện pháp','Đã cắt':w.daCat?'X':'','Đã hàn':w.daHan?'X':'','PAUT':w.paut,'Ngày hàn':w.ngayHan,'Thợ hàn':w.thoHan,'Ghi chú':w.ghiChu});
+        rows.push({'Vị trí ống':item.id,'Phương án':phuongAn,'% còn lại':item.phanTramConLai,'Trạng thái hạng mục':item.trangThai,'Mã mối hàn':w.maMoiHan,'Loại':w.loai==='chinh_thuc'?'Chính thức':'Biện pháp','Đã cắt':w.daCat?'X':'','Đã hàn':w.daHan?'X':'','PAUT':w.paut,'Ngày hàn':w.ngayHan,'Thợ hàn':w.thoHan,'Ghi chú':w.ghiChu});
       });
     } else {
       rows.push({'Vị trí ống':item.id,'Phương án':phuongAn,'% còn lại':item.phanTramConLai,'Trạng thái hạng mục':item.trangThai,'Mã mối hàn':'','Loại':'','Đã cắt':'','Đã hàn':'','PAUT':'','Ngày hàn':'','Thợ hàn':'','Ghi chú':''});
@@ -744,14 +767,14 @@ window.addVatTu = async function(){
     ghiChu:g('vt-ghichu'), ngay:todayStr()};
   if(!rec.tenVatTu || !rec.soLuong){ alert('Vui lòng nhập ít nhất Tên vật tư và Số lượng.'); return; }
   state.vatTu.push(rec);
-  await persist('vat-tu', state.vatTu, true);
+  await persist('vat-tu', state.vatTu);
   syncToSheet('vat_tu', rec);
   state.showForm.vattu=false; render();
 };
 window.deleteVatTu = async function(id){
   if(!confirm('Xóa dòng vật tư này?')) return;
   state.vatTu = state.vatTu.filter(r=>r.id!==id);
-  await persist('vat-tu', state.vatTu, true); render();
+  await persist('vat-tu', state.vatTu); render();
 };
 window.exportVatTu = function(){
   const rows = state.vatTu.map((r,i)=>{
@@ -782,7 +805,7 @@ window.importVatTu = function(input){
         ngay:String(r['Ngày']||r['Ngay']||todayStr())});
       added++;
     });
-    await persist('vat-tu', state.vatTu, true);
+    await persist('vat-tu', state.vatTu);
     alert('Đã nhập '+added+' dòng vật tư vào đợt "'+dotObj.ten+'".');
     input.value=''; render();
   };
@@ -799,7 +822,7 @@ function renderVatTu(){
     ${r.lyDoThayThe?`<div class="record-note">Lý do thay thế: ${esc(r.lyDoThayThe)}</div>`:''}
     <div class="record-actions"><button class="mini-btn" onclick="deleteVatTu('${r.id}')">Xóa</button></div></div>`;
   }).join('');
-  // tổng hợp theo tên vật tư (trong đợt đang chọn nếu có, hoặc toàn bộ)
+  
   const scope = state.vtSel.dotId ? state.vatTu.filter(r=>r.dotId===state.vtSel.dotId) : state.vatTu;
   const totals = {};
   scope.forEach(r=>{ const k=r.tenVatTu+'||'+r.donVi; totals[k]=(totals[k]||0)+(parseFloat(r.soLuong)||0); });
@@ -1146,7 +1169,7 @@ function renderSuaChua(){
     let bodyHtml;
     if(phuongAn==='Cắt thay'){
       const weldRows = item.welds.map(w=>`<div class="weld-row">
-        <span class="weld-id">${esc(w.id)}</span>
+        <span class="weld-id">${esc(w.maMoiHan)}</span>
         <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
         <label class="weld-chk"><input type="checkbox" ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label>
         <label class="weld-chk"><input type="checkbox" ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label>
@@ -1238,7 +1261,6 @@ function renderHistory(){
   const summaries = keys.map(key=>{
     const fullHist = map[key];
     const completedCycles = state.suaChua.filter(s=>s.pipeKey===key && s.trangThai==='Hoàn thành').sort((a,b)=>a.chuKy-b.chuKy);
-    // chia lịch sử đo thành các chu kỳ, ranh giới là ngày hoàn thành thay ống của từng đợt sửa chữa trước đó
     let prevBoundary = null, oldSegments = [];
     completedCycles.forEach(c=>{
       const seg = fullHist.filter(h=> (prevBoundary? h.ngay>prevBoundary : true) && h.ngay<=c.ngayHoanThanh);
