@@ -112,11 +112,6 @@ table.dm tr:last-child td{border-bottom:none;}
 .cause-detail ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#c9cfd4;}
 .settings-box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;max-width:560px;margin-bottom:18px;}
 .settings-note{background:var(--panel2);border:1px solid var(--border-soft);border-radius:7px;padding:11px 13px;font-size:12px;color:var(--muted);line-height:1.55;margin-top:12px;}
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--border-soft);margin-top:6px;}
-.switch{width:38px;height:21px;border-radius:20px;background:var(--border);position:relative;border:none;flex-shrink:0;}
-.switch.on{background:var(--accent);}
-.switch::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#e7eaec;transition:left .15s;}
-.switch.on::after{left:19px;background:#1a1305;}
 .loading{padding:60px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px;letter-spacing:.08em;}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 25% 15%,#16324a 0%,var(--bg) 62%);}
 .login-card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:28px 26px;}
@@ -158,7 +153,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwvkiNUDnaei3JMXSpfRSEwpzZOKK3GWHy76VXEyBeXnSJWuyPBKNV2o6TA0GFSuHNkxg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUbWgquKmDq54n2RGwlPHyy5_4awJsqmhnmlbfzbf0VUJkjIIgqz_AHJs1pjN1Mx1RWA/exec';
 const LOGO_SVG = '<svg class="logo-mark" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">'
   +'<circle cx="22" cy="22" r="19" fill="none" stroke="#e08a3c" stroke-width="3"/>'
   +'<circle cx="22" cy="22" r="11" fill="none" stroke="#e08a3c" stroke-width="3" opacity="0.55"/>'
@@ -265,7 +260,6 @@ const persist = async (key, value) => {
 };
 
 async function loadAll(){
-  // Khắc phục lỗi mất dữ liệu khi Sheet trả về mảng rỗng nhưng local đang có dữ liệu
   const localUsers = await getLocal('users', []);
   const sheetUsers = await fetchSheet('users');
   if(sheetUsers && sheetUsers.length > 0){ 
@@ -577,6 +571,7 @@ window.setWeldField = async function(itemId, weldId, field, value){
   w[field]=value; await persist('sua-chua', state.suaChua);
   syncToSheet('sua_chua_weld', {itemId:item.id, maMoiHan:w.maMoiHan, trangThai:item.trangThai, weld:w});
 };
+window.setScFilter = function(field, value){ state.scFilter[field]=value; render(); };
 
 window.addVatTu = async function(){
   const g=id=>document.getElementById(id).value.trim();
@@ -590,6 +585,7 @@ window.addVatTu = async function(){
 window.deleteVatTu = async function(id){
   state.vatTu = state.vatTu.filter(r=>r.id!==id); await persist('vat-tu', state.vatTu); render();
 };
+window.setVtDot = v => { state.vtSel.dotId=v; render(); };
 
 window.setTab = t => { state.tab=t; render(); window.scrollTo(0,0); };
 window.toggleForm = k => { state.showForm[k]=!state.showForm[k]; render(); };
@@ -620,49 +616,125 @@ function render(){
 function renderAuth(){
   const isLogin = state.authView==='login';
   return `<div class="login-wrap"><div class="login-card">
-    <div class="login-brand">${LOGO_SVG}<div><div class="brand-eyebrow">Nhiệt điện Nghi Sơn</div><div class="login-title">Quản lý sửa chữa<br>ống lò hơi</div></div></div>
+    <div class="login-brand">${LOGO_SVG}<div><div class="brand-eyebrow">Công ty Nhiệt điện Nghi Sơn</div><div class="login-title">Quản lý sửa chữa<br>ống lò hơi</div></div></div>
     <div class="tabbtns"><button class="tabbtn ${isLogin?'active':''}" onclick="setAuthView('login')">Đăng nhập</button><button class="tabbtn ${!isLogin?'active':''}" onclick="setAuthView('register')">Đăng ký</button></div>
     ${isLogin ? `<div class="field" style="margin-bottom:10px;"><label>Email</label><input id="log-email" type="email"></div><div class="field" style="margin-bottom:10px;"><label>Mật khẩu</label><input id="log-pass" type="password"></div>${state.authErr?`<div class="err-msg">${esc(state.authErr)}</div>`:''}<div class="form-actions" style="justify-content:stretch;"><button class="btn" style="width:100%;" onclick="doLogin()">Đăng nhập</button></div>` : `<div class="field" style="margin-bottom:10px;"><label>Họ tên</label><input id="reg-name" type="text"></div><div class="field" style="margin-bottom:10px;"><label>Email</label><input id="reg-email" type="email"></div><div class="field" style="margin-bottom:10px;"><label>Mật khẩu</label><input id="reg-pass" type="password"></div>${state.authErr?`<div class="err-msg">${esc(state.authErr)}</div>`:''}<div class="form-actions" style="justify-content:stretch;"><button class="btn" style="width:100%;" onclick="doRegister()">Tạo tài khoản</button></div>`}
   </div></div>`;
 }
 
 function renderTab(){
-  if(state.tab==='overview') return '<div class="page-head"><div class="page-title">Tổng quan</div></div><div class="empty">Bảng điều khiển hệ thống quản lý lò hơi.</div>';
+  if(state.tab==='overview') return '<div class="page-head"><div class="page-title">Tổng quan</div></div><div class="empty">Bảng điều khiển hệ thống quản lý ống lò hơi.</div>';
   if(state.tab==='dots') return renderDots();
   if(state.tab==='danhmuc') return renderDanhMuc();
   if(state.tab==='kiemtra') return renderKiemTra();
   if(state.tab==='suachua') return renderSuaChua();
   if(state.tab==='vattu') return renderVatTu();
-  if(state.tab==='history') return '<div class="page-head"><div class="page-title">Lịch sử</div></div>';
+  if(state.tab==='history') return '<div class="page-head"><div class="page-title">Lịch sử &amp; xu hướng</div></div><div class="empty">Chức năng lịch sử mòn ống lò hơi.</div>';
   if(state.tab==='analysis') return renderAnalysis();
 }
 
 function renderDots(){
   const rows = state.dots.map(d=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(d.ten)} (${esc(d.toMay)})</div><span class="status ${d.trangThai==='Đang diễn ra'?'warn':'good'}">${d.trangThai}</span></div><div class="record-actions">${d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại</button>`}</div></div>`).join('');
-  return `<div class="page-head"><div><div class="page-title">Đợt kiểm tra / sửa chữa</div></div><button class="btn" onclick="toggleForm('dot')">+ Tạo đợt mới</button></div>${state.showForm.dot?`<div class="form-panel"><div class="form-grid"><div class="field full"><label>Tên đợt *</label><input id="dot-ten"></div><div class="field"><label>Tổ máy *</label><input id="dot-tomay"></div></div><div class="form-actions"><button class="btn" onclick="addDot()">Lưu</button></div></div>`:''}${rows||'<div class="empty">Chưa có đợt nào.</div>'}`;
+  return `<div class="page-head"><div><div class="page-title">Đợt kiểm tra / sửa chữa</div></div><button class="btn" onclick="toggleForm('dot')">+ Tạo đợt mới</button></div>
+  ${state.showForm.dot?`<div class="form-panel"><div class="form-grid"><div class="field full"><label>Tên đợt *</label><input id="dot-ten" placeholder="VD: Đại tu tổ máy 1"></div><div class="field"><label>Tổ máy *</label><input id="dot-tomay" placeholder="VD: Tổ máy 1"></div><div class="field"><label>Ngày bắt đầu</label><input id="dot-batdau" type="date" value="${todayStr()}"></div></div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('dot')">Hủy</button><button class="btn" onclick="addDot()">Tạo đợt</button></div></div>`:''}
+  ${rows||'<div class="empty">Chưa có đợt kiểm tra nào.</div>'}`;
 }
 
 function renderDanhMuc(){
   const rows = state.danhMuc.map(r=>`<tr><td>${esc(r.toMay)}</td><td>${esc(r.heThong)}</td><td>${esc(r.thietBi)}</td><td>${esc(r.viTriTu)} - ${esc(r.viTriDen)}</td><td>${esc(r.vung)}</td><td>${esc(r.chieuDay)}</td><td><button class="btn-danger" onclick="deleteDanhMuc('${r.id}')">Xóa</button></td></tr>`).join('');
-  return `<div class="page-head"><div><div class="page-title">Danh mục kỹ thuật</div></div><div class="head-actions"><label class="file-btn">Nhập Excel<input type="file" onchange="importDanhMuc(this)"></label><button class="btn-ghost" onclick="exportDanhMuc()">Xuất Excel</button><button class="btn-danger" onclick="deleteAllDanhMuc()">Xóa tất cả</button><button class="btn" onclick="toggleForm('danhmuc')">+ Thêm dòng</button></div></div>${state.showForm.danhmuc?`<div class="form-panel"><div class="form-grid"><div class="field"><label>Hệ thống *</label><input id="dm-hethong"></div><div class="field"><label>Vùng *</label><input id="dm-vung"></div><div class="field"><label>Đường kính *</label><input id="dm-duongkinh"></div><div class="field"><label>Chiều dày *</label><input id="dm-chieuday"></div></div><div class="form-actions"><button class="btn" onclick="addDanhMuc()">Lưu</button></div></div>`:''}<div class="table-wrap"><table class="dm"><thead><tr><th>Tổ máy</th><th>Hệ thống</th><th>Thiết bị</th><th>Vị trí</th><th>Vùng</th><th>Dày (mm)</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7" style="text-align:center;">Trống</td></tr>'}</tbody></table></div>`;
+  return `<div class="page-head"><div><div class="page-title">Danh mục kỹ thuật ống</div></div>
+  <div class="head-actions">
+    <label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importDanhMuc(this)"></label>
+    <button class="btn-ghost" onclick="exportDanhMuc()">Xuất Excel</button>
+    <button class="btn-danger" onclick="deleteAllDanhMuc()">Xóa tất cả</button>
+    <button class="btn" onclick="toggleForm('danhmuc')">+ Thêm dòng</button>
+  </div></div>
+  ${state.showForm.danhmuc?`<div class="form-panel"><div class="form-grid">
+    <div class="field"><label>Tổ máy</label><input id="dm-tomay"></div>
+    <div class="field"><label>Hệ thống *</label><input id="dm-hethong"></div>
+    <div class="field"><label>Thiết bị</label><input id="dm-thietbi"></div>
+    <div class="field"><label>Vị trí từ</label><input id="dm-vitritu"></div>
+    <div class="field"><label>Vị trí đến</label><input id="dm-vitriden"></div>
+    <div class="field"><label>Lớp ống từ</label><input id="dm-lopongtu"></div>
+    <div class="field"><label>Lớp ống đến</label><input id="dm-lopongden"></div>
+    <div class="field"><label>Quy ước vùng vật liệu *</label><input id="dm-vung"></div>
+    <div class="field"><label>Đường kính (mm) *</label><input id="dm-duongkinh"></div>
+    <div class="field"><label>Chiều dày (mm) *</label><input id="dm-chieuday"></div>
+    <div class="field"><label>Vật liệu</label><input id="dm-vatlieu"></div>
+    <div class="field full"><label>Ghi chú</label><input id="dm-ghichu"></div>
+  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('danhmuc')">Hủy</button><button class="btn" onclick="addDanhMuc()">Lưu dòng</button></div></div>`:''}
+  <div class="table-wrap"><table class="dm"><thead><tr><th>Tổ máy</th><th>Hệ thống</th><th>Thiết bị</th><th>Vị trí</th><th>Vùng</th><th>Dày (mm)</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7" style="text-align:center;">Trống</td></tr>'}</tbody></table></div>`;
 }
 
 function renderKiemTra(){
   const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
-  return `<div class="page-head"><div><div class="page-title">Kiểm tra đo đạc</div></div><button class="btn" onclick="toggleForm('kiemtra')">+ Thêm bản ghi</button></div>${state.showForm.kiemtra?`<div class="form-panel"><div class="form-grid"><div class="field full"><label>Đợt</label><select id="kt-dot">${activeDots.map(d=>`<option value="${d.id}">${d.ten}</option>`).join('')}</select></div><div class="field"><label>Hệ thống</label><input id="kt-hethong" oninput="updateKtDerived()"></div><div class="field"><label>Vị trí</label><input id="kt-vitri" oninput="updateKtDerived()"></div><div class="field"><label>Lớp ống</label><input id="kt-lopong" oninput="updateKtDerived()"></div><div class="field"><label>Chiều dày đo</label><input id="kt-do"></div></div><div class="form-actions"><button class="btn" onclick="addKiemTra()">Lưu</button></div></div>`:''}`;
+  const rows = state.kiemTra.map(r=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(pipeCode(r))} — Vùng ${esc(r.vung)}</div><span class="status ${parseFloat(r.phanTramConLai)<=70?'danger':'good'}">${r.phanTramConLai}% còn lại</span></div><div class="record-meta"><span>Đo: ${r.chieuDayDo}mm</span><span>Thiết kế: ${r.chieuDayTK}mm</span><span>Ngoại dạng: ${r.ngoaiDang}</span><span>Ngày: ${fmtDate(r.ngay)}</span></div></div>`).join('');
+  return `<div class="page-head"><div><div class="page-title">Kiểm tra (đo đạc)</div></div>
+  <div class="head-actions"><button class="btn" onclick="toggleForm('kiemtra')">+ Thêm bản ghi</button></div></div>
+  ${state.showForm.kiemtra?`<div class="form-panel"><div class="form-grid">
+    <div class="field full"><label>Đợt kiểm tra *</label><select id="kt-dot">${activeDots.map(d=>`<option value="${d.id}">${d.ten} (${d.toMay})</option>`).join('')}</select></div>
+    <div class="field"><label>Hệ thống *</label><input id="kt-hethong" oninput="updateKtDerived()" placeholder="VD: Quá nhiệt"></div>
+    <div class="field"><label>Vị trí ống *</label><input id="kt-vitri" oninput="updateKtDerived()" placeholder="VD: 145"></div>
+    <div class="field"><label>Lớp ống *</label><input id="kt-lopong" oninput="updateKtDerived()" placeholder="VD: 1"></div>
+    <div class="field"><label>Vùng vật liệu (Tự động)</label><div class="readonly-box" id="kt-vung-box">—</div></div>
+    <div class="field"><label>Chiều dày thiết kế (mm)</label><div class="readonly-box" id="kt-day-box">—</div></div>
+    <div class="field"><label>Chiều dày đo được (mm) *</label><input id="kt-do" placeholder="VD: 3.8"></div>
+    <div class="field"><label>Ngoại dạng</label><select id="kt-ngoaidang"><option>Bình thường</option><option>Rỗ ăn mòn</option><option>Biến dạng / phình</option><option>Nứt</option></select></div>
+    <div class="field"><label>Ngày đo</label><input id="kt-ngay" type="date" value="${todayStr()}"></div>
+  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('kiemtra')">Hủy</button><button class="btn" onclick="addKiemTra()">Lưu kết quả</button></div></div>`:''}
+  ${rows||'<div class="empty">Chưa có bản ghi đo đạc.</div>'}`;
 }
 
 function renderSuaChua(){
-  const items = state.suaChua.map(item=>`<div class="repair-item"><div class="repair-head" onclick="toggleRepairExpand('${item.id}')"><div><b>${esc(item.id)}</b> — Còn ${item.phanTramConLai}%</div><span class="status ${item.trangThai==='Hoàn thành'?'good':'danger'}">${item.trangThai}</span></div>${state.expandedRepair===item.id?`<div style="margin-top:10px;">${item.welds.map(w=>`<div class="weld-row"><span class="weld-id">${w.maMoiHan}</span><label><input type="checkbox" ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label><label><input type="checkbox" ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label><select onchange="setWeldPaut('${item.id}','${w.id}',this.value)"><option ${w.paut==='Chưa kiểm tra'?'selected':''}>Chưa kiểm tra</option><option ${w.paut==='Đạt'?'selected':''}>Đạt</option><option ${w.paut==='Lỗi'?'selected':''}>Lỗi</option></select></div>`).join('')}<button class="mini-btn" onclick="addBienPhapWeld('${item.id}')">+ Mối hàn biện pháp</button></div>`:''}</div>`).join('');
-  return `<div class="page-head"><div class="page-title">Sửa chữa &amp; hàn</div></div>${items||'<div class="empty">Không có hạng mục sửa chữa.</div>'}`;
+  const items = state.suaChua.map(item=>`<div class="repair-item">
+    <div class="repair-head" onclick="toggleRepairExpand('${item.id}')">
+      <div><b>${esc(item.id)}</b> — Còn ${item.phanTramConLai}%</div>
+      <span class="status ${item.trangThai==='Hoàn thành'?'good':'danger'}">${item.trangThai}</span>
+    </div>
+    ${state.expandedRepair===item.id?`<div style="margin-top:10px;">
+      ${item.welds.map(w=>`<div class="weld-row">
+        <span class="weld-id">${w.maMoiHan}</span>
+        <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
+        <label class="weld-chk"><input type="checkbox" ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label>
+        <label class="weld-chk"><input type="checkbox" ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label>
+        <select onchange="setWeldPaut('${item.id}','${w.id}',this.value)">
+          <option ${w.paut==='Chưa kiểm tra'?'selected':''}>Chưa kiểm tra</option>
+          <option ${w.paut==='Đạt'?'selected':''}>Đạt</option>
+          <option ${w.paut==='Lỗi'?'selected':''}>Lỗi</option>
+        </select>
+        <input placeholder="Thợ hàn" value="${esc(w.thoHan)}" onchange="setWeldField('${item.id}','${w.id}','thoHan',this.value)" style="width:100px;background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:4px;padding:3px;">
+      </div>`).join('')}
+      <button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>
+    </div>`:''}
+  </div>`).join('');
+  return `<div class="page-head"><div class="page-title">Sửa chữa &amp; hàn ống</div></div>${items||'<div class="empty">Không có hạng mục sửa chữa nào cần xử lý.</div>'}`;
 }
 
 function renderVatTu(){
   const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
-  return `<div class="page-head"><div class="page-title">Vật tư sử dụng</div><button class="btn" onclick="toggleForm('vattu')">+ Thêm dòng</button></div>${state.showForm.vattu?`<div class="form-panel"><div class="form-grid"><div class="field"><label>Đợt</label><select id="vt-dot">${activeDots.map(d=>`<option value="${d.id}">${d.ten}</option>`).join('')}</select></div><div class="field"><label>Tên vật tư</label><input id="vt-ten"></div><div class="field"><label>Số lượng</label><input id="vt-soluong"></div></div><div class="form-actions"><button class="btn" onclick="addVatTu()">Lưu</button></div></div>`:''}`;
+  const rows = state.vatTu.map(r=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(r.tenVatTu)} — ${r.soLuong} ${r.donVi}</div></div><div class="record-meta"><span>Mục đích: ${r.mucDich}</span><span>Mã VT: ${r.maVatTu}</span></div><div class="record-actions"><button class="mini-btn" onclick="deleteVatTu('${r.id}')">Xóa</button></div></div>`).join('');
+  return `<div class="page-head"><div class="page-title">Vật tư sử dụng</div><button class="btn" onclick="toggleForm('vattu')">+ Lĩnh vật tư</button></div>
+  ${state.showForm.vattu?`<div class="form-panel"><div class="form-grid">
+    <div class="field full"><label>Đợt kiểm tra *</label><select id="vt-dot">${activeDots.map(d=>`<option value="${d.id}">${d.ten}</option>`).join('')}</select></div>
+    <div class="field"><label>Tên vật tư *</label><input id="vt-ten" placeholder="VD: Ống thép SA210-A1"></div>
+    <div class="field"><label>Số lượng *</label><input id="vt-soluong" placeholder="VD: 2"></div>
+    <div class="field"><label>Đơn vị</label><input id="vt-donvi" placeholder="VD: Cây"></div>
+    <div class="field"><label>Mã vật tư</label><input id="vt-ma"></div>
+    <div class="field full"><label>Mục đích sử dụng</label><input id="vt-mucdich"></div>
+  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('vattu')">Hủy</button><button class="btn" onclick="addVatTu()">Lưu phiếu</button></div></div>`:''}
+  ${rows||'<div class="empty">Chưa có dữ liệu vật tư.</div>'}`;
 }
 
-function renderAnalysis(){ return '<div class="page-head"><div class="page-title">Phân tích nguyên nhân</div></div>'; }
+function renderAnalysis(){
+  const active = CAUSES.find(c=>c.id===state.activeCause) || CAUSES[0];
+  const list = CAUSES.map(c=>`<button class="cause-item ${c.id===active.id?'active':''}" onclick="setCause('${c.id}')"><b>${esc(c.name)}</b>${esc(c.where)}</button>`).join('');
+  return `<div class="page-head"><div class="page-title">Phân tích nguyên nhân &amp; khuyến nghị</div></div>
+  <div class="cause-grid"><div class="cause-list">${list}</div>
+  <div class="cause-detail"><h3>${esc(active.name)}</h3><div class="cause-sub">${esc(active.where)}</div>
+  <h4>Nguyên nhân điển hình</h4><ul>${active.causes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
+  <h4>Dấu hiệu nhận biết</h4><ul>${active.signs.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
+  <h4>Phương án sửa chữa khuyến nghị</h4><ul>${active.fix.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div></div>`;
+}
 
 loadAll();
 </script>
