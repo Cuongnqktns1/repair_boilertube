@@ -284,14 +284,20 @@ async function fetchSheet(type){
     return data.rows;
   }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet (hoặc quá thời gian chờ):', type, e); return null; }
 }
+let _lastSyncError = '';
 async function fetchSheetAll(){
   try{
     const res = await fetchWithTimeout(SHEET_URL+'?type=all', 30000);
-    if(!res.ok) return null;
+    if(!res.ok){ _lastSyncError = 'Máy chủ trả về lỗi HTTP '+res.status; return null; }
     const data = await res.json();
-    if(!data || !data.ok) return null;
+    if(!data || !data.ok){ _lastSyncError = (data && data.error) ? String(data.error) : 'Phản hồi không đúng định dạng mong đợi (thiếu trường "ok")'; return null; }
+    _lastSyncError = '';
     return data;
-  }catch(e){ console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet (hoặc quá thời gian chờ):', e); return null; }
+  }catch(e){
+    _lastSyncError = e.name==='AbortError' ? 'Quá thời gian chờ (30 giây) — Google Apps Script phản hồi quá chậm' : ('Lỗi mạng/CORS: '+(e.message||String(e)));
+    console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet:', e);
+    return null;
+  }
 }
 function mapSheetUsers(rows){
   return rows.map(r=>({ email:String(r['Email']||'').toLowerCase(), name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:String(r['Vai trò']||'ky_thuat') })).filter(u=>u.email);
@@ -398,9 +404,11 @@ async function syncFromSheetInBackground(){
   const all = await fetchSheetAll();
   if(!all){
     state.offlineUsers = state.offlineDanhMuc = state.offlineDots = state.offlineKiemTra = state.offlineSuaChua = state.offlineVatTu = true;
+    state.syncErrorDetail = _lastSyncError || 'Không rõ nguyên nhân';
     state.syncing = false; render();
     return;
   }
+  state.syncErrorDetail = '';
   const applyDefensive = async (key, sheetRows, mapFn, storageKey)=>{
     const mapped = mapFn(sheetRows||[]);
     const localArr = state[key];
@@ -1050,6 +1058,7 @@ function render(){
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
         <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?('Google Sheet đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
+        ${(!state.syncing && !sheetAllOnline && state.syncErrorDetail) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">${esc(state.syncErrorDetail)}</div>` : ''}
         ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
