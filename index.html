@@ -277,7 +277,7 @@ async function fetchWithTimeout(url, ms){
 }
 async function fetchSheet(type){
   try{
-    const res = await fetchWithTimeout(SHEET_URL+'?type='+type, 12000);
+    const res = await fetchWithTimeout(SHEET_URL+'?type='+type, 30000);
     if(!res.ok) return null;
     const data = await res.json();
     if(!data || !data.ok) return null;
@@ -286,7 +286,7 @@ async function fetchSheet(type){
 }
 async function fetchSheetAll(){
   try{
-    const res = await fetchWithTimeout(SHEET_URL+'?type=all', 12000);
+    const res = await fetchWithTimeout(SHEET_URL+'?type=all', 30000);
     if(!res.ok) return null;
     const data = await res.json();
     if(!data || !data.ok) return null;
@@ -389,6 +389,11 @@ async function loadAll(){
   syncFromSheetInBackground();
 }
 
+window.retrySync = function(){
+  if(state.syncing) return;
+  state.syncing = true; render();
+  syncFromSheetInBackground();
+};
 async function syncFromSheetInBackground(){
   const all = await fetchSheetAll();
   if(!all){
@@ -1045,6 +1050,7 @@ function render(){
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
         <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?('Google Sheet đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
+        ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
     </div>
