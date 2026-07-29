@@ -6,7 +6,7 @@
 <title>QLSC ỐNG LÒ HƠI — NHIỆT ĐIỆN NGHI SƠN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx.full.min.js khong tai san o day nua - chi nap dong khi bam Nhap/Xuat Excel (xem ensureXLSX) -->
 <style>
 :root{
   --bg:#0d1b26; --panel:#132635; --panel2:#1a3245; --border:#274156; --border-soft:#1e3547;
@@ -172,6 +172,32 @@ async function storageSet(key, value, shared){
   if(HAS_CLAUDE_STORAGE){ try{ return await window.storage.set(key, value, shared); }catch(e){ return null; } }
   try{ localStorage.setItem((shared?'shared__':'priv__')+key, value); return {key, value, shared}; }catch(e){ return null; }
 }
+/* ---------- Nap dong (lazy-load) thu vien xlsx.js — chi tai khi that su dung Nhap/Xuat Excel ---------- */
+let _xlsxLoadPromise = null;
+function ensureXLSX(){
+  if(typeof XLSX !== 'undefined') return Promise.resolve();
+  if(_xlsxLoadPromise) return _xlsxLoadPromise;
+  _xlsxLoadPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = ()=>resolve();
+    s.onerror = ()=>{ _xlsxLoadPromise=null; reject(new Error('xlsx-load-fail')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxLoadPromise;
+}
+async function withXLSXReady(){
+  try{ await ensureXLSX(); return true; }
+  catch(e){ alert('Không tải được thư viện xử lý Excel (cần có mạng ở lần dùng đầu tiên). Vui lòng kiểm tra kết nối mạng rồi thử lại.'); return false; }
+}
+
+/* ---------- Bam mat khau an toan (SHA-256 qua Web Crypto API) ---------- */
+async function sha256Hex(str){
+  const buf = new TextEncoder().encode(String(str));
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  return 'sha256:' + Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 const LOGO_SVG = '<svg class="logo-mark" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">'
   +'<circle cx="22" cy="22" r="19" fill="none" stroke="#e08a3c" stroke-width="3"/>'
   +'<circle cx="22" cy="22" r="11" fill="none" stroke="#e08a3c" stroke-width="3" opacity="0.55"/>'
@@ -220,6 +246,7 @@ const CAUSES = [
     fix:['Cắt bỏ hoàn toàn mối hàn lỗi, hàn lại theo đúng WPS đã duyệt','Xử lý nhiệt trước/sau hàn (PWHT) đúng quy định nếu vật liệu yêu cầu','Kiểm tra NDT 100% mối hàn sửa chữa trước khi nghiệm thu','Rà soát chứng chỉ thợ hàn và quy trình áp dụng tại hiện trường']}
 ];
 
+let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
   session:null, authView:'login', authErr:'',
   tab:'overview', loading:true,
@@ -242,23 +269,29 @@ function simpleHash(str){ let h=0; str=String(str); for(let i=0;i<str.length;i++
 function uniq(arr){ return [...new Set(arr)]; }
 function pipeCode(r){ return (r.toMay?r.toMay+' · ':'')+r.heThong+' - '+r.thietBi+' - '+r.viTri+' - '+r.lopOng; }
 
+async function fetchWithTimeout(url, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms || 12000);
+  try{ return await fetch(url, {signal: ctrl.signal}); }
+  finally{ clearTimeout(timer); }
+}
 async function fetchSheet(type){
   try{
-    const res = await fetch(SHEET_URL+'?type='+type);
+    const res = await fetchWithTimeout(SHEET_URL+'?type='+type, 12000);
     if(!res.ok) return null;
     const data = await res.json();
     if(!data || !data.ok) return null;
     return data.rows;
-  }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet:', type, e); return null; }
+  }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet (hoặc quá thời gian chờ):', type, e); return null; }
 }
 async function fetchSheetAll(){
   try{
-    const res = await fetch(SHEET_URL+'?type=all');
+    const res = await fetchWithTimeout(SHEET_URL+'?type=all', 12000);
     if(!res.ok) return null;
     const data = await res.json();
     if(!data || !data.ok) return null;
     return data;
-  }catch(e){ console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet:', e); return null; }
+  }catch(e){ console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet (hoặc quá thời gian chờ):', e); return null; }
 }
 function mapSheetUsers(rows){
   return rows.map(r=>({ email:String(r['Email']||'').toLowerCase(), name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:String(r['Vai trò']||'ky_thuat') })).filter(u=>u.email);
@@ -389,6 +422,7 @@ async function syncFromSheetInBackground(){
 
   state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
   state.syncing = false;
+  state.lastSyncAt = new Date();
   render();
 }
 
@@ -400,7 +434,7 @@ function seedDanhMuc(){
     {id:'DM-0004', toMay:'', heThong:'Bộ hâm nước', thietBi:'', viTriTu:'', viTriDen:'', lopOngTu:'', lopOngDen:'', vung:'ALL', duongKinh:'57.2', chieuDay:'5.49', vatLieu:'SA210-C', ghiChu:'Dữ liệu mẫu (offline)'},
   ];
 }
-async function persist(key, value, shared){ try{ await storageSet(key, JSON.stringify(value), shared); }catch(e){ console.error('Lỗi lưu',key,e); } }
+async function persist(key, value, shared){ try{ await storageSet(key, JSON.stringify(value), shared); _dataVersion++; }catch(e){ console.error('Lỗi lưu',key,e); } }
 async function deleteFromSheet(sheetName, id){
   try{ await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'delete', record:{sheet:sheetName, id}, ts:new Date().toISOString()})}); }catch(e){ /* best-effort */ }
 }
@@ -410,6 +444,14 @@ async function deleteAllFromSheet(sheetName){
 
 /* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
 function normTM(s){ return String(s||'').trim().toLowerCase(); }
+function removeDiacritics(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/gi, d=>d==='đ'?'d':'D');
+}
+function isSharedToMay(v){
+  // "Dùng chung" (co dau hoac khong dau, hoa/thuong, thua khoang trang) hoac de trong deu duoc coi la ap dung cho MOI to may
+  const s = removeDiacritics(v).trim().toLowerCase();
+  return s==='' || s==='dung chung' || s==='chung' || s==='tat ca' || s==='all';
+}
 function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
   const af=(aFrom===''||isNaN(parseFloat(aFrom)))?-Infinity:parseFloat(aFrom);
   const at=(aTo===''||isNaN(parseFloat(aTo)))?Infinity:parseFloat(aTo);
@@ -420,7 +462,7 @@ function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
 function danhMucOverlaps(row, excludeId){
   return state.danhMuc.filter(r=>
     r.id!==excludeId && r.heThong===row.heThong && r.thietBi===row.thietBi
-    && (!r.toMay || !row.toMay || normTM(r.toMay)===normTM(row.toMay))
+    && (isSharedToMay(r.toMay) || isSharedToMay(row.toMay) || normTM(r.toMay)===normTM(row.toMay))
     && rangesOverlap1D(row.viTriTu,row.viTriDen,r.viTriTu,r.viTriDen)
     && rangesOverlap1D(row.lopOngTu,row.lopOngDen,r.lopOngTu,r.lopOngDen)
   );
@@ -486,7 +528,7 @@ async function doRegister(){
   if(!name||!email||!pass){ state.authErr='Vui lòng nhập đầy đủ họ tên, email và mật khẩu.'; render(); return; }
   if(state.users.find(u=>u.email===email)){ state.authErr='Email này đã được đăng ký.'; render(); return; }
   const role = state.users.length===0 ? 'admin' : 'ky_thuat';
-  const user = {name, email, passHash: simpleHash(pass), role};
+  const user = {name, email, passHash: await sha256Hex(pass), role};
   state.users.push(user);
   await persist('users', state.users, true);
   syncToSheet('user', user);
@@ -498,7 +540,17 @@ async function doLogin(){
   const email=document.getElementById('log-email').value.trim().toLowerCase();
   const pass=document.getElementById('log-pass').value;
   const user = state.users.find(u=>u.email===email);
-  if(!user || user.passHash !== simpleHash(pass)){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
+  if(!user){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
+  const newHash = await sha256Hex(pass);
+  let ok = user.passHash === newHash;
+  if(!ok && user.passHash === simpleHash(pass)){
+    // tai khoan cu con dung ham bam yeu (simpleHash) - nang cap am tham len SHA-256 ngay khi dang nhap thanh cong
+    ok = true;
+    user.passHash = newHash;
+    await persist('users', state.users, true);
+    syncToSheet('user', user);
+  }
+  if(!ok){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
   state.session=user; state.authErr='';
   await persist('session', email, false);
   render();
@@ -537,7 +589,8 @@ window.deleteAllDanhMuc = async function(){
   deleteAllFromSheet('DanhMuc');
   render();
 };
-window.exportDanhMuc = function(){
+window.exportDanhMuc = async function(){
+  if(!(await withXLSXReady())) return;
   const rows = state.danhMuc.map((r,i)=>({'STT':i+1,'Tổ máy (để trống = dùng chung)':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Vị trí từ':r.viTriTu,'Vị trí đến':r.viTriDen,'Lớp ống từ':r.lopOngTu,'Lớp ống đến':r.lopOngDen,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Đường kính':r.duongKinh,'Chiều dày':r.chieuDay,'Vật liệu':r.vatLieu,'Ghi chú':r.ghiChu}));
   const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'DanhMuc'); XLSX.writeFile(wb,'danh-muc-ky-thuat.xlsx');
@@ -546,6 +599,7 @@ window.importDanhMuc = function(input){
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = async e=>{
+    if(!(await withXLSXReady())) return;
     const wb = XLSX.read(e.target.result, {type:'array'});
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
     let added=0, lastHeThong='', lastThietBi='', lastToMay='';
@@ -619,7 +673,7 @@ function inRange(val, from, to){
 function ktCandidates(toMay, heThong, thietBi, viTri, lopOng){
   if(!heThong || !viTri || !lopOng) return [];
   return state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi)
-    && (!r.toMay || normTM(r.toMay)===normTM(toMay))
+    && (isSharedToMay(r.toMay) || normTM(r.toMay)===normTM(toMay))
     && inRange(viTri, r.viTriTu, r.viTriDen) && inRange(lopOng, r.lopOngTu, r.lopOngDen));
 }
 window.updateKtDerived = function(){
@@ -686,7 +740,8 @@ window.addKiemTra = async function(){
       +'\u0110\u00e3 \u0111\u01b0a v\u00e0o danh s\u00e1ch c\u1eaft thay.');
   }
 };
-window.exportKiemTra = function(){
+window.exportKiemTra = async function(){
+  if(!(await withXLSXReady())) return;
   const rows = state.kiemTra.map(r=>{
     const d = state.dots.find(x=>x.id===r.dotId);
     return {'Đợt':d?d.ten:'','Tổ máy':r.toMay,'Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Quy ước vùng vật liệu trên bản vẽ':r.vung,'Vị trí':r.viTri,'Lớp ống':r.lopOng,'Đường kính TK (mm)':r.duongKinh,'Chiều dày TK (mm)':r.chieuDayTK,'Chiều dày đo (mm)':r.chieuDayDo,'% còn lại':r.phanTramConLai,'Ngoại dạng':r.ngoaiDang,'Ngày kiểm tra':r.ngay,'Người kiểm tra':r.nguoiKiemTra};
@@ -700,6 +755,7 @@ window.importKiemTra = function(input){
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const reader=new FileReader();
   reader.onload=async e=>{
+    if(!(await withXLSXReady())) return;
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
     let added=0, skipped=0, ambiguous=0;
@@ -841,7 +897,8 @@ window.setWeldField = async function(itemId, weldId, field, value){
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
 };
-window.exportSuaChua = function(){
+window.exportSuaChua = async function(){
+  if(!(await withXLSXReady())) return;
   const rows=[];
   state.suaChua.forEach(item=>{
     const phuongAn = item.phuongAn || 'Cắt thay';
@@ -878,7 +935,8 @@ window.deleteVatTu = async function(id){
   state.vatTu = state.vatTu.filter(r=>r.id!==id);
   await persist('vat-tu', state.vatTu, true); render();
 };
-window.exportVatTu = function(){
+window.exportVatTu = async function(){
+  if(!(await withXLSXReady())) return;
   const rows = state.vatTu.map((r,i)=>{
     const d = state.dots.find(x=>x.id===r.dotId);
     return {'STT':i+1,'Đợt':d?d.ten:'','Hệ thống':r.heThong,'Thiết bị':r.thietBi,'Mục đích sử dụng':r.mucDich,'Mã vật tư':r.maVatTu,'Tên vật tư':r.tenVatTu,'Đơn vị':r.donVi,'Số lượng':r.soLuong,'Lý do thay thế':r.lyDoThayThe,'Ghi chú':r.ghiChu};
@@ -892,6 +950,7 @@ window.importVatTu = function(input){
   const dotObj = state.dots.find(d=>d.id===state.vtSel.dotId);
   const reader=new FileReader();
   reader.onload=async e=>{
+    if(!(await withXLSXReady())) return;
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
     let added=0;
@@ -985,7 +1044,7 @@ function render(){
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
-        <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?'Google Sheet đã kết nối':'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
+        <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?('Google Sheet đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
     </div>
@@ -1177,7 +1236,7 @@ function taiLieuForm(){
   </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('tailieu')">Hủy</button><button class="btn" onclick="addTaiLieu()">Lưu tài liệu</button></div></div>`;
 }
 function renderDanhMuc(){
-  const rows = state.danhMuc.map(r=>`<tr><td>${esc(r.toMay||'(dùng chung)')}</td><td>${esc(r.heThong)}</td><td>${esc(r.thietBi)}</td><td>${esc(r.viTriTu)}</td><td>${esc(r.viTriDen)}</td><td>${esc(r.lopOngTu)}</td><td>${esc(r.lopOngDen)}</td><td>${esc(r.vung)}</td><td>${esc(r.duongKinh)}</td><td>${esc(r.chieuDay)}</td><td>${esc(r.vatLieu)}</td><td>${esc(r.ghiChu)}</td><td><button class="btn-danger" onclick="deleteDanhMuc('${r.id}')">Xóa</button></td></tr>`).join('');
+  const rows = state.danhMuc.map(r=>`<tr><td>${esc(isSharedToMay(r.toMay)?'(dùng chung)':r.toMay)}</td><td>${esc(r.heThong)}</td><td>${esc(r.thietBi)}</td><td>${esc(r.viTriTu)}</td><td>${esc(r.viTriDen)}</td><td>${esc(r.lopOngTu)}</td><td>${esc(r.lopOngDen)}</td><td>${esc(r.vung)}</td><td>${esc(r.duongKinh)}</td><td>${esc(r.chieuDay)}</td><td>${esc(r.vatLieu)}</td><td>${esc(r.ghiChu)}</td><td><button class="btn-danger" onclick="deleteDanhMuc('${r.id}')">Xóa</button></td></tr>`).join('');
   const tlRows = state.taiLieu.map(t=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(t.tenTaiLieu)}</div></div><div class="record-meta"><span>${esc(t.soHieu||'—')}</span><span>${esc(t.heThong||'—')}</span>${t.link?`<span><a href="${esc(t.link)}" target="_blank" style="color:#4aa3d6;">Mở tài liệu ↗</a></span>`:''}</div>${t.ghiChu?`<div class="record-note">${esc(t.ghiChu)}</div>`:''}<div class="record-actions"><button class="mini-btn" onclick="deleteTaiLieu('${t.id}')">Xóa</button></div></div>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Dữ liệu gốc${state.offlineDanhMuc?' · <span style="color:var(--danger);">offline — chưa kết nối được Google Sheet</span>':''}</div><div class="page-title">Danh mục kỹ thuật ống</div></div>
     <div class="head-actions">
@@ -1201,8 +1260,8 @@ function renderKiemTra(){
   if(!state.ktSel.dotId && activeDots.length===1) state.ktSel.dotId = activeDots[0].id;
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const toMay = dotObj ? dotObj.toMay : '';
-  const heThongOpts = uniq(state.danhMuc.filter(r=>!r.toMay||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong));
-  const thietBiOpts = uniq(state.danhMuc.filter(r=>(!r.toMay||normTM(r.toMay)===normTM(toMay)) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
+  const heThongOpts = uniq(state.danhMuc.filter(r=>isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong));
+  const thietBiOpts = uniq(state.danhMuc.filter(r=>(isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
   const opt = (arr, cur) => `<option value="">— Chọn —</option>` + arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)||'(không có)'}</option>`).join('');
   const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
   const dm = candidates.length===1 ? candidates[0] : null;
@@ -1365,7 +1424,8 @@ function historySvg(history, chieuDayTK){
 }
 window.toggleHistoryExpand = function(key){ state.expandedHistory = state.expandedHistory===key? null : key; render(); };
 window.toggleOldCycles = function(key){ state.expandedOldCycles = state.expandedOldCycles===key? null : key; render(); };
-function renderHistory(){
+let _historyCache = null, _historyCacheVersion = -1;
+function computeHistorySummaries(){
   const map = pipeHistoryMap();
   const keys = Object.keys(map);
   const summaries = keys.map(key=>{
@@ -1391,6 +1451,14 @@ function renderHistory(){
     const db = b.projection && !b.projection.overdue ? b.projection.date.getTime() : (b.projection && b.projection.overdue ? -Infinity : Infinity);
     return da-db;
   });
+  return summaries;
+}
+function renderHistory(){
+  if(_historyCacheVersion !== _dataVersion){
+    _historyCache = computeHistorySummaries();
+    _historyCacheVersion = _dataVersion;
+  }
+  const summaries = _historyCache;
   const cards = summaries.map(s=>{
     const expanded = state.expandedHistory===s.key;
     const oldExpanded = state.expandedOldCycles===s.key;
