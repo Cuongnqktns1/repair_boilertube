@@ -44,6 +44,8 @@ input,select,textarea{font-family:var(--sans);}
 .tg-pill{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:8px;}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;}
 .dot.on{background:var(--good);box-shadow:0 0 0 3px var(--good-soft);}
+.dot.warn-dot{background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft);animation:pulse 1.2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
 .dot.off{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
 .bottom-nav{display:none;}
 .main{flex:1;min-width:0;padding:26px 30px 60px;max-width:1180px;}
@@ -159,6 +161,17 @@ table.dm tr:last-child td{border-bottom:none;}
 <div id="app"></div>
 <script>
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
+// Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
+// localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
+const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
+async function storageGet(key, shared){
+  if(HAS_CLAUDE_STORAGE){ try{ return await window.storage.get(key, shared); }catch(e){ return null; } }
+  try{ const raw = localStorage.getItem((shared?'shared__':'priv__')+key); return raw!==null ? {key, value:raw, shared} : null; }catch(e){ return null; }
+}
+async function storageSet(key, value, shared){
+  if(HAS_CLAUDE_STORAGE){ try{ return await window.storage.set(key, value, shared); }catch(e){ return null; } }
+  try{ localStorage.setItem((shared?'shared__':'priv__')+key, value); return {key, value, shared}; }catch(e){ return null; }
+}
 const LOGO_SVG = '<svg class="logo-mark" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">'
   +'<circle cx="22" cy="22" r="19" fill="none" stroke="#e08a3c" stroke-width="3"/>'
   +'<circle cx="22" cy="22" r="11" fill="none" stroke="#e08a3c" stroke-width="3" opacity="0.55"/>'
@@ -211,7 +224,7 @@ let state = {
   session:null, authView:'login', authErr:'',
   tab:'overview', loading:true,
   users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[],
-  telegram:{botToken:'',chatId:'',tanSuatGio:''},
+  telegram:{botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''},
   showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false},
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
@@ -238,6 +251,15 @@ async function fetchSheet(type){
     return data.rows;
   }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet:', type, e); return null; }
 }
+async function fetchSheetAll(){
+  try{
+    const res = await fetch(SHEET_URL+'?type=all');
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data || !data.ok) return null;
+    return data;
+  }catch(e){ console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet:', e); return null; }
+}
 function mapSheetUsers(rows){
   return rows.map(r=>({ email:String(r['Email']||'').toLowerCase(), name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:String(r['Vai trò']||'ky_thuat') })).filter(u=>u.email);
 }
@@ -249,9 +271,18 @@ function mapSheetDanhMuc(rows){
   })).filter(d=>d.id);
 }
 function mapSheetCauHinh(rows){
-  if(!rows || !rows.length) return {botToken:'',chatId:'',tanSuatGio:''};
+  const empty = {botToken:'', chatIdsCanhBao:[], chatIdsBaoCao:[], kieuLich:'GIO', tanSuatGio:'', gioCoDinh:''};
+  if(!rows || !rows.length) return empty;
   const r = rows[0];
-  return {botToken:String(r['BotToken']||''), chatId:String(r['ChatId']||''), tanSuatGio:String(r['TanSuatGio']||'')};
+  const parseIds = s => String(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+  return {
+    botToken: String(r['Bot Token']||''),
+    chatIdsCanhBao: parseIds(r['Chat ID cảnh báo dưới 70% (nhiều ID cách nhau bằng dấu phẩy)']),
+    chatIdsBaoCao: parseIds(r['Chat ID báo cáo tổng hợp (nhiều ID cách nhau bằng dấu phẩy)']),
+    kieuLich: String(r['Kiểu lịch báo cáo tổng hợp (GIO hoặc NGAY)']||'GIO').trim().toUpperCase(),
+    tanSuatGio: String(r['Số giờ mỗi lần gửi (nếu Kiểu lịch = GIO)']||''),
+    gioCoDinh: String(r['Giờ gửi cố định hằng ngày HH:MM (nếu Kiểu lịch = NGAY)']||'')
+  };
 }
 function mapSheetDot(rows){
   return rows.map(r=>({
@@ -302,88 +333,65 @@ function mapSheetSuaChua(itemRows, weldRows){
   return items;
 }
 
+const g = async (k,shared,def)=>{ try{ const r=await storageGet(k,shared); return r? JSON.parse(r.value): def; }catch(e){ return def; } };
+
 async function loadAll(){
-  const g = async (k,shared,def)=>{ try{ const r=await window.storage.get(k,shared); return r? JSON.parse(r.value): def; }catch(e){ return def; } };
-
-  // Tài khoản: Google Sheet là nguồn gốc, bộ nhớ cục bộ chỉ là bản sao dự phòng khi mất kết nối.
-  // QUAN TRỌNG: nếu Sheet trả về JSON hợp lệ nhưng map ra 0 dòng dùng được (ví dụ lệch tên cột tiêu đề)
-  // trong khi bản sao cục bộ đang có dữ liệu, TUYỆT ĐỐI KHÔNG ghi đè — tránh xóa oan dữ liệu thật.
-  const localUsers = await g('users', true, []);
-  const sheetUsersRaw = await fetchSheet('users');
-  if(sheetUsersRaw){
-    const mapped = mapSheetUsers(sheetUsersRaw);
-    if(mapped.length>0 || localUsers.length===0){
-      state.users = mapped; await persist('users', state.users, true); state.offlineUsers=false;
-    } else {
-      console.warn('Sheet "Users" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ để tránh mất dữ liệu.');
-      state.users = localUsers; state.offlineUsers = true;
-    }
-  } else { state.users = localUsers; state.offlineUsers = true; }
-
-  // Đợt kiểm tra/sửa chữa: Google Sheet là nguồn gốc
-  const localDots = await g('dots', true, []);
-  const sheetDotsRaw = await fetchSheet('dot');
-  if(sheetDotsRaw){
-    const mapped = mapSheetDot(sheetDotsRaw);
-    if(mapped.length>0 || localDots.length===0){ state.dots = mapped; await persist('dots', state.dots, true); state.offlineDots=false; }
-    else { console.warn('Sheet "Dot" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.dots = localDots; state.offlineDots = true; }
-  } else { state.dots = localDots; state.offlineDots = true; }
-
-  // Danh mục kỹ thuật: Google Sheet là nguồn gốc, cùng nguyên tắc phòng thủ như Users
-  const localDanhMuc = await g('danh-muc', true, []);
-  const sheetDanhMucRaw = await fetchSheet('danh_muc');
-  if(sheetDanhMucRaw){
-    const mapped = mapSheetDanhMuc(sheetDanhMucRaw);
-    if(mapped.length>0 || localDanhMuc.length===0){
-      state.danhMuc = mapped; await persist('danh-muc', state.danhMuc, true); state.offlineDanhMuc=false;
-    } else {
-      console.warn('Sheet "DanhMuc" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ để tránh mất dữ liệu.');
-      state.danhMuc = localDanhMuc; state.offlineDanhMuc = true;
-    }
-  } else {
-    state.danhMuc = localDanhMuc.length ? localDanhMuc : seedDanhMuc();
-    state.offlineDanhMuc = true;
-  }
-
+  // BƯỚC 1 — tải nhanh từ bộ nhớ cục bộ (tức thì, không chờ mạng) để hiện giao diện ngay lập tức
+  state.users = await g('users', true, []);
+  state.dots = await g('dots', true, []);
+  state.danhMuc = await g('danh-muc', true, []);
+  if(state.danhMuc.length===0) state.danhMuc = seedDanhMuc();
   state.taiLieu = await g('tai-lieu', true, []);
-
-  // Kiểm tra (đo đạc): Google Sheet là nguồn gốc
-  const localKiemTra = await g('kiem-tra', true, []);
-  const sheetKTRaw = await fetchSheet('kiem_tra');
-  if(sheetKTRaw){
-    const mapped = mapSheetKiemTra(sheetKTRaw);
-    if(mapped.length>0 || localKiemTra.length===0){ state.kiemTra = mapped; await persist('kiem-tra', state.kiemTra, true); state.offlineKiemTra=false; }
-    else { console.warn('Sheet "KiemTra" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.kiemTra = localKiemTra; state.offlineKiemTra = true; }
-  } else { state.kiemTra = localKiemTra; state.offlineKiemTra = true; }
-
-  // Sửa chữa & hàn: ghép từ 2 sheet (SuaChuaHangMuc cấp hạng mục + SuaChua cấp mối hàn)
-  const localSuaChua = await g('sua-chua', true, []);
-  const sheetSCItemRaw = await fetchSheet('sua_chua_item');
-  const sheetSCWeldRaw = await fetchSheet('sua_chua_weld');
-  if(sheetSCItemRaw){
-    const mapped = mapSheetSuaChua(sheetSCItemRaw, sheetSCWeldRaw);
-    if(mapped.length>0 || localSuaChua.length===0){ state.suaChua = mapped; await persist('sua-chua', state.suaChua, true); state.offlineSuaChua=false; }
-    else { console.warn('Sheet "SuaChuaHangMuc" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.suaChua = localSuaChua; state.offlineSuaChua = true; }
-  } else { state.suaChua = localSuaChua; state.offlineSuaChua = true; }
-
-  // Vật tư sử dụng: Google Sheet là nguồn gốc
-  const localVatTu = await g('vat-tu', true, []);
-  const sheetVTRaw = await fetchSheet('vat_tu');
-  if(sheetVTRaw){
-    const mapped = mapSheetVatTu(sheetVTRaw);
-    if(mapped.length>0 || localVatTu.length===0){ state.vatTu = mapped; await persist('vat-tu', state.vatTu, true); state.offlineVatTu=false; }
-    else { console.warn('Sheet "VatTu" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.vatTu = localVatTu; state.offlineVatTu = true; }
-  } else { state.vatTu = localVatTu; state.offlineVatTu = true; }
-
-  // Cấu hình Telegram/tần suất: chỉ đọc từ Google Sheet (sheet CauHinh), không có màn hình cài đặt trong app
-  const sheetCauHinh = await fetchSheet('cau_hinh');
-  state.telegram = sheetCauHinh ? mapSheetCauHinh(sheetCauHinh) : {botToken:'',chatId:'',tanSuatGio:''};
-
+  state.kiemTra = await g('kiem-tra', true, []);
+  state.suaChua = await g('sua-chua', true, []);
+  state.vatTu = await g('vat-tu', true, []);
+  state.telegram = {botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''};
   const sess = await g('session', false, null);
   if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
-  state.loading=false;
+  state.loading = false;
+  state.syncing = true;
+  render();
+
+  // BƯỚC 2 — đồng bộ Google Sheet ngầm phía sau, gộp thành 1 lần gọi duy nhất (thay vì 8 lần tuần tự)
+  syncFromSheetInBackground();
+}
+
+async function syncFromSheetInBackground(){
+  const all = await fetchSheetAll();
+  if(!all){
+    state.offlineUsers = state.offlineDanhMuc = state.offlineDots = state.offlineKiemTra = state.offlineSuaChua = state.offlineVatTu = true;
+    state.syncing = false; render();
+    return;
+  }
+  const applyDefensive = async (key, sheetRows, mapFn, storageKey)=>{
+    const mapped = mapFn(sheetRows||[]);
+    const localArr = state[key];
+    if(mapped.length>0 || localArr.length===0){
+      state[key] = mapped.length? mapped : (key==='danhMuc' ? seedDanhMuc() : mapped);
+      await persist(storageKey, state[key], true);
+      return false; // online
+    }
+    console.warn('Sheet cho "'+key+'" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.');
+    return true; // offline/không đáng tin
+  };
+
+  state.offlineUsers = await applyDefensive('users', all.users, mapSheetUsers, 'users');
+  if(state.session){ const u = state.users.find(x=>x.email===state.session.email); if(u) state.session = u; }
+  state.offlineDots = await applyDefensive('dots', all.dot, mapSheetDot, 'dots');
+  state.offlineDanhMuc = await applyDefensive('danhMuc', all.danh_muc, mapSheetDanhMuc, 'danh-muc');
+  state.offlineKiemTra = await applyDefensive('kiemTra', all.kiem_tra, mapSheetKiemTra, 'kiem-tra');
+
+  const mappedSC = mapSheetSuaChua(all.sua_chua_item||[], all.sua_chua_weld||[]);
+  if(mappedSC.length>0 || state.suaChua.length===0){ state.suaChua = mappedSC; await persist('sua-chua', state.suaChua, true); state.offlineSuaChua=false; }
+  else { console.warn('Sheet "SuaChuaHangMuc" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.offlineSuaChua = true; }
+
+  state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu');
+
+  state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
+  state.syncing = false;
   render();
 }
+
 function seedDanhMuc(){
   return [
     {id:'DM-0001', toMay:'', heThong:'Quá nhiệt trung gian', thietBi:'Tầng 7S', viTriTu:'1', viTriDen:'64', lopOngTu:'1', lopOngDen:'6', vung:'GA', duongKinh:'50.8', chieuDay:'4.19', vatLieu:'SA210-A1', ghiChu:'Dữ liệu mẫu (offline) — vui lòng cập nhật theo hồ sơ thiết kế thực tế, các vùng phải có dải vị trí KHÔNG chồng lấn nhau'},
@@ -392,7 +400,7 @@ function seedDanhMuc(){
     {id:'DM-0004', toMay:'', heThong:'Bộ hâm nước', thietBi:'', viTriTu:'', viTriDen:'', lopOngTu:'', lopOngDen:'', vung:'ALL', duongKinh:'57.2', chieuDay:'5.49', vatLieu:'SA210-C', ghiChu:'Dữ liệu mẫu (offline)'},
   ];
 }
-async function persist(key, value, shared){ try{ await window.storage.set(key, JSON.stringify(value), shared); }catch(e){ console.error('Lỗi lưu',key,e); } }
+async function persist(key, value, shared){ try{ await storageSet(key, JSON.stringify(value), shared); }catch(e){ console.error('Lỗi lưu',key,e); } }
 async function deleteFromSheet(sheetName, id){
   try{ await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'delete', record:{sheet:sheetName, id}, ts:new Date().toISOString()})}); }catch(e){ /* best-effort */ }
 }
@@ -401,6 +409,7 @@ async function deleteAllFromSheet(sheetName){
 }
 
 /* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
+function normTM(s){ return String(s||'').trim().toLowerCase(); }
 function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
   const af=(aFrom===''||isNaN(parseFloat(aFrom)))?-Infinity:parseFloat(aFrom);
   const at=(aTo===''||isNaN(parseFloat(aTo)))?Infinity:parseFloat(aTo);
@@ -411,7 +420,7 @@ function rangesOverlap1D(aFrom,aTo,bFrom,bTo){
 function danhMucOverlaps(row, excludeId){
   return state.danhMuc.filter(r=>
     r.id!==excludeId && r.heThong===row.heThong && r.thietBi===row.thietBi
-    && (!r.toMay || !row.toMay || r.toMay===row.toMay)
+    && (!r.toMay || !row.toMay || normTM(r.toMay)===normTM(row.toMay))
     && rangesOverlap1D(row.viTriTu,row.viTriDen,r.viTriTu,r.viTriDen)
     && rangesOverlap1D(row.lopOngTu,row.lopOngDen,r.lopOngTu,r.lopOngDen)
   );
@@ -449,15 +458,24 @@ async function syncToSheet(type, record){
     await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type, record, ts: new Date().toISOString()})});
   }catch(e){ /* best-effort, ignore */ }
 }
+async function sendTelegramToMany(chatIds, text){
+  if(!state.telegram.botToken || !chatIds || chatIds.length===0){
+    alert('Chưa cấu hình Bot Token hoặc Chat ID cảnh báo trong sheet CauHinh trên Google Sheet.');
+    return false;
+  }
+  let anyOk = false, lastErr = '';
+  for(const chatId of chatIds){
+    try{
+      const res = await fetch('https://api.telegram.org/bot'+state.telegram.botToken+'/sendMessage', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text,parse_mode:'HTML'})});
+      const data = await res.json();
+      if(data.ok) anyOk = true; else lastErr = data.description||'Yêu cầu bị từ chối';
+    }catch(e){ lastErr = e.message; }
+  }
+  if(!anyOk) alert('Gửi Telegram thất bại tới tất cả ID đã cấu hình: '+lastErr);
+  return anyOk;
+}
 async function sendTelegram(text){
-  const cfg = state.telegram;
-  if(!cfg.botToken || !cfg.chatId){ alert('Chưa cấu hình Telegram (Bot Token/Chat ID trống trong sheet CauHinh trên Google Sheet).'); return false; }
-  try{
-    const res = await fetch('https://api.telegram.org/bot'+cfg.botToken+'/sendMessage', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.chatId,text,parse_mode:'HTML'})});
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.description||'Yêu cầu bị từ chối');
-    return true;
-  }catch(e){ alert('Gửi Telegram thất bại: '+e.message); return false; }
+  return sendTelegramToMany(state.telegram.chatIdsCanhBao, text);
 }
 
 /* ---------- AUTH ---------- */
@@ -601,7 +619,7 @@ function inRange(val, from, to){
 function ktCandidates(toMay, heThong, thietBi, viTri, lopOng){
   if(!heThong || !viTri || !lopOng) return [];
   return state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi)
-    && (!r.toMay || r.toMay===toMay)
+    && (!r.toMay || normTM(r.toMay)===normTM(toMay))
     && inRange(viTri, r.viTriTu, r.viTriDen) && inRange(lopOng, r.lopOngTu, r.lopOngDen));
 }
 window.updateKtDerived = function(){
@@ -661,7 +679,7 @@ window.addKiemTra = async function(){
   state.showForm.kiemtra=false;
   state.ktSel={dotId:dotObj.id,heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''};
   render();
-  if(phanTramConLai<=70 && state.telegram.botToken && state.telegram.chatId){
+  if(phanTramConLai<=70 && state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length){
     sendTelegram('\u26a0\ufe0f <b>C\u1ea2NH B\u00c1O CHI\u1ec0U D\u00c0Y \u2014 '+rec.id+'</b>\n'
       +'V\u1ecb tr\u00ed: '+pipeCode(rec)+'\n'
       +'Chi\u1ec1u d\u00e0y \u0111o: '+chieuDayDo+'mm / Thi\u1ebft k\u1ebf: '+dm.chieuDay+'mm ('+rec.phanTramConLai+'% c\u00f2n l\u1ea1i)\n'
@@ -957,7 +975,7 @@ function render(){
   const bottomNavHtml = NAV.map(n=>
     `<button class="bn-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="bn-tag">${n.tag}</span><span>${n.label.split(' ')[0]}</span></button>`
   ).join('');
-  const tgOn = !!(state.telegram.botToken && state.telegram.chatId);
+  const tgOn = !!(state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length);
   const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu;
   const roleLabel = {admin:'Quản trị',ky_thuat:'Kỹ thuật viên'}[state.session.role]||state.session.role;
 
@@ -967,7 +985,7 @@ function render(){
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
-        <div class="tg-pill"><span class="dot ${sheetAllOnline?'on':'off'}"></span>${sheetAllOnline?'Google Sheet đã kết nối':'Google Sheet lỗi — đang dùng dữ liệu offline'}</div>
+        <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?'Google Sheet đã kết nối':'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
     </div>
@@ -1183,8 +1201,8 @@ function renderKiemTra(){
   if(!state.ktSel.dotId && activeDots.length===1) state.ktSel.dotId = activeDots[0].id;
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const toMay = dotObj ? dotObj.toMay : '';
-  const heThongOpts = uniq(state.danhMuc.filter(r=>!r.toMay||r.toMay===toMay).map(r=>r.heThong));
-  const thietBiOpts = uniq(state.danhMuc.filter(r=>(!r.toMay||r.toMay===toMay) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
+  const heThongOpts = uniq(state.danhMuc.filter(r=>!r.toMay||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong));
+  const thietBiOpts = uniq(state.danhMuc.filter(r=>(!r.toMay||normTM(r.toMay)===normTM(toMay)) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
   const opt = (arr, cur) => `<option value="">— Chọn —</option>` + arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)||'(không có)'}</option>`).join('');
   const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
   const dm = candidates.length===1 ? candidates[0] : null;
