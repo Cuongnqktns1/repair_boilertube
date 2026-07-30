@@ -160,7 +160,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyMExs5LAZ-ekuWcgidEzrWcpEGAyN0YNcUq6DSETu18Un-IzNNdkqWz0j5ixs7Pu7Abg/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -346,6 +346,12 @@ function mapSheetVatTu(rows){
     soLuong:String(r['Số lượng']||''), lyDoThayThe:String(r['Lý do thay thế']||''), ghiChu:String(r['Ghi chú']||''), ngay:String(r['Ngày']||'')
   })).filter(v=>v.id);
 }
+function mapSheetTaiLieu(rows){
+  return rows.map(r=>({
+    id:String(r['Mã']||''), tenTaiLieu:String(r['Tên tài liệu']||''), soHieu:String(r['Số hiệu']||''),
+    heThong:String(r['Hệ thống']||''), link:String(r['Link']||''), ghiChu:String(r['Ghi chú']||'')
+  })).filter(t=>t.id);
+}
 function mapSheetSuaChua(itemRows, weldRows){
   const items = itemRows.map(r=>{
     const toMay=String(r['Tổ máy']||''), heThong=String(r['Hệ thống']||''), thietBi=String(r['Thiết bị']||''), viTri=String(r['Vị trí']||''), lopOng=String(r['Lớp ống']||'');
@@ -442,6 +448,7 @@ async function syncFromSheetInBackground(){
   }
 
   state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu', 'Vật tư (VatTu)');
+  state.offlineTaiLieu = await applyDefensive('taiLieu', all.tai_lieu, mapSheetTaiLieu, 'tai-lieu', 'Tài liệu (TaiLieu)');
 
   state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
   state.offlineSheetNames = offlineSheetNames;
@@ -672,11 +679,15 @@ window.addTaiLieu = async function(){
   if(!rec.tenTaiLieu){ alert('Vui lòng nhập tên tài liệu.'); return; }
   state.taiLieu.push(rec);
   await persist('tai-lieu', state.taiLieu, true);
+  syncToSheet('tai_lieu', rec);
   state.showForm.tailieu=false; render();
 };
 window.deleteTaiLieu = async function(id){
+  if(!confirm('Xóa tài liệu này? Sẽ xóa cả trên Google Sheet.')) return;
   state.taiLieu = state.taiLieu.filter(r=>r.id!==id);
-  await persist('tai-lieu', state.taiLieu, true); render();
+  await persist('tai-lieu', state.taiLieu, true);
+  deleteFromSheet('TaiLieu', id);
+  render();
 };
 
 /* ---------- KIỂM TRA (ĐO ĐẠC) ---------- */
@@ -1068,7 +1079,7 @@ function render(){
     `<button class="bn-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="bn-tag">${n.tag}</span><span>${n.label.split(' ')[0]}</span></button>`
   ).join('');
   const tgOn = !!(state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length);
-  const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu;
+  const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu && !state.offlineTaiLieu;
   const roleLabel = {admin:'Quản trị',ky_thuat:'Kỹ thuật viên'}[state.session.role]||state.session.role;
 
   app.innerHTML = `<div class="shell">
