@@ -160,7 +160,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbx99f4BwoTMFWmTMmwgTRUWZydM7BLYEx3Z18HR_9Va6bIrW6ihCwnzdHD4nfQU3pRcqg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -409,7 +409,9 @@ async function syncFromSheetInBackground(){
     return;
   }
   state.syncErrorDetail = '';
-  const applyDefensive = async (key, sheetRows, mapFn, storageKey)=>{
+  const offlineSheetNames = [];
+  const applyDefensive = async (key, sheetRows, mapFn, storageKey, label)=>{
+    const rawCount = (sheetRows||[]).length;
     const mapped = mapFn(sheetRows||[]);
     const localArr = state[key];
     if(mapped.length>0 || localArr.length===0){
@@ -417,23 +419,32 @@ async function syncFromSheetInBackground(){
       await persist(storageKey, state[key], true);
       return false; // online
     }
-    console.warn('Sheet cho "'+key+'" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.');
+    const reason = rawCount===0 ? 'sheet trả về 0 dòng (rỗng hoặc tên tab/khoảng đọc bị sai ở Apps Script)' : (rawCount+' dòng thô nhưng không dòng nào khớp được tên cột mong đợi');
+    console.warn('Sheet "'+label+'" ('+key+'): '+reason+' — đang giữ bản sao cục bộ.');
+    offlineSheetNames.push(label+' ('+reason+')');
     return true; // offline/không đáng tin
   };
 
-  state.offlineUsers = await applyDefensive('users', all.users, mapSheetUsers, 'users');
+  state.offlineUsers = await applyDefensive('users', all.users, mapSheetUsers, 'users', 'Tài khoản (Users)');
   if(state.session){ const u = state.users.find(x=>x.email===state.session.email); if(u) state.session = u; }
-  state.offlineDots = await applyDefensive('dots', all.dot, mapSheetDot, 'dots');
-  state.offlineDanhMuc = await applyDefensive('danhMuc', all.danh_muc, mapSheetDanhMuc, 'danh-muc');
-  state.offlineKiemTra = await applyDefensive('kiemTra', all.kiem_tra, mapSheetKiemTra, 'kiem-tra');
+  state.offlineDots = await applyDefensive('dots', all.dot, mapSheetDot, 'dots', 'Đợt (Dot)');
+  state.offlineDanhMuc = await applyDefensive('danhMuc', all.danh_muc, mapSheetDanhMuc, 'danh-muc', 'Danh mục kỹ thuật (DanhMuc)');
+  state.offlineKiemTra = await applyDefensive('kiemTra', all.kiem_tra, mapSheetKiemTra, 'kiem-tra', 'Kiểm tra (KiemTra)');
 
   const mappedSC = mapSheetSuaChua(all.sua_chua_item||[], all.sua_chua_weld||[]);
   if(mappedSC.length>0 || state.suaChua.length===0){ state.suaChua = mappedSC; await persist('sua-chua', state.suaChua, true); state.offlineSuaChua=false; }
-  else { console.warn('Sheet "SuaChuaHangMuc" trả về dữ liệu nhưng không khớp được tên cột — đang giữ bản sao cục bộ.'); state.offlineSuaChua = true; }
+  else {
+    const rawCount = (all.sua_chua_item||[]).length;
+    const reason = rawCount===0 ? 'sheet trả về 0 dòng' : (rawCount+' dòng thô nhưng không khớp tên cột');
+    console.warn('Sheet "SuaChuaHangMuc": '+reason+' — đang giữ bản sao cục bộ.');
+    offlineSheetNames.push('Sửa chữa (SuaChuaHangMuc) ('+reason+')');
+    state.offlineSuaChua = true;
+  }
 
-  state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu');
+  state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu', 'Vật tư (VatTu)');
 
   state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
+  state.offlineSheetNames = offlineSheetNames;
   state.syncing = false;
   state.lastSyncAt = new Date();
   render();
@@ -1059,6 +1070,7 @@ function render(){
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
         <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?('Google Sheet đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
         ${(!state.syncing && !sheetAllOnline && state.syncErrorDetail) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">${esc(state.syncErrorDetail)}</div>` : ''}
+        ${(!state.syncing && !sheetAllOnline && !state.syncErrorDetail && state.offlineSheetNames && state.offlineSheetNames.length) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">Không khớp dữ liệu ở: ${esc(state.offlineSheetNames.join('; '))}</div>` : ''}
         ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
       </div>
