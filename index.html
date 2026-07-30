@@ -160,7 +160,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyNVR3CHW3aD374S0DH1WVOcepRZbehxPTyWVLWU-sur1ddEp2tGELEHHMoyhhCdmq54Q/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -773,6 +773,13 @@ window.exportKiemTra = async function(){
   const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'KiemTra'); XLSX.writeFile(wb,'ket-qua-kiem-tra.xlsx');
 };
+window.deleteKiemTra = async function(id){
+  if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Google Sheet (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
+  state.kiemTra = state.kiemTra.filter(r=>r.id!==id);
+  await persist('kiem-tra', state.kiemTra, true);
+  deleteFromSheet('KiemTra', id);
+  render();
+};
 window.importKiemTra = function(input){
   const file=input.files[0]; if(!file) return;
   if(!state.ktSel.dotId){ alert('Vui lòng mở biểu mẫu Kiểm tra và chọn Đợt kiểm tra/sửa chữa trước khi nhập Excel — toàn bộ dữ liệu trong file sẽ được gắn vào đợt/tổ máy đó.'); input.value=''; return; }
@@ -905,6 +912,7 @@ window.toggleWeldFlag = async function(itemId, weldId, field){
   recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  syncToSheet('sua_chua_item', item); // dam bao trang thai/ngay hoan thanh moi tinh lai duoc ghi len sheet SuaChuaHangMuc, tranh bi dong bo nguoc ve trang thai cu
   render();
 };
 window.setWeldPaut = async function(itemId, weldId, value){
@@ -913,6 +921,7 @@ window.setWeldPaut = async function(itemId, weldId, value){
   recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  syncToSheet('sua_chua_item', item);
   render();
 };
 window.setWeldField = async function(itemId, weldId, field, value){
@@ -1321,7 +1330,8 @@ function renderKiemTra(){
     const p=parseFloat(r.phanTramConLai); const s=p<=70?'danger':(p<=85?'warn':'good');
     const d = state.dots.find(x=>x.id===r.dotId);
     return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${r.id}</span>${esc(pipeCode(r))} <span style="color:var(--muted);font-weight:400;">· vùng ${esc(r.vung)}${d?(' · '+esc(d.ten)):''}</span></div><span class="status ${s}">${r.phanTramConLai}% còn lại</span></div>
-    <div class="record-meta"><span>Đo được: ${esc(r.chieuDayDo)}mm</span><span>Thiết kế: ${esc(r.chieuDayTK)}mm</span><span>Ø${esc(r.duongKinh)}mm</span><span>Ngoại dạng: ${esc(r.ngoaiDang||'—')}</span><span>${fmtDate(r.ngay)}</span><span>${esc(r.nguoiKiemTra)}</span></div></div>`;
+    <div class="record-meta"><span>Đo được: ${esc(r.chieuDayDo)}mm</span><span>Thiết kế: ${esc(r.chieuDayTK)}mm</span><span>Ø${esc(r.duongKinh)}mm</span><span>Ngoại dạng: ${esc(r.ngoaiDang||'—')}</span><span>${fmtDate(r.ngay)}</span><span>${esc(r.nguoiKiemTra)}</span></div>
+    <div class="record-actions"><button class="mini-btn" onclick="deleteKiemTra('${r.id}')">Xóa</button></div></div>`;
   }).join('');
 
   return `<div class="page-head"><div><div class="page-eyebrow">Nhật ký</div><div class="page-title">Kiểm tra (đo đạc)</div></div>
