@@ -61,6 +61,11 @@ input,select,textarea{font-family:var(--sans);}
 .file-btn{display:inline-block;background:var(--panel2);border:1px solid var(--border);padding:9px 13px;border-radius:6px;font-size:12.5px;}
 .file-btn:hover{border-color:#3a4450;}
 input[type=file]{display:none;}
+.nk-photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+.nk-photo-item{width:120px;}
+.nk-photo-item input{background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 6px;font-size:11px;width:100%;box-sizing:border-box;}
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;}
+.lightbox-overlay img{max-width:100%;max-height:100%;border-radius:6px;}
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
 .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px;}
 .stat-card .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
@@ -160,7 +165,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzrA54Do4L8gFbgoRuSxaxJ4iI_PzJEEhlEF0cQxi4OO1g5ePdewlTPwcXGKvOdRDYp/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -210,6 +215,7 @@ const NAV = [
   {id:'danhmuc',  tag:'DM', label:'Danh mục kỹ thuật'},
   {id:'kiemtra',  tag:'ĐĐ', label:'Kiểm tra (đo đạc)'},
   {id:'suachua',  tag:'SC', label:'Sửa chữa & hàn'},
+  {id:'nhatky',   tag:'NK', label:'Nhật ký thi công'},
   {id:'vattu',    tag:'VT', label:'Vật tư sử dụng'},
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
   {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
@@ -246,13 +252,17 @@ const CAUSES = [
     fix:['Cắt bỏ hoàn toàn mối hàn lỗi, hàn lại theo đúng WPS đã duyệt','Xử lý nhiệt trước/sau hàn (PWHT) đúng quy định nếu vật liệu yêu cầu','Kiểm tra NDT 100% mối hàn sửa chữa trước khi nghiệm thu','Rà soát chứng chỉ thợ hàn và quy trình áp dụng tại hiện trường']}
 ];
 
+const NK_LOAI = ['Hiện trạng hư hỏng','Tiến độ thi công','Hoàn thành nghiệm thu','Khác'];
+const NK_PHOTO_SUGGEST = ['Hiện trạng hư hỏng','Trước sửa chữa','Trong quá trình thi công','Sau khi hoàn thành','Vị trí tổng thể','Khác'];
+
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
   session:null, authView:'login', authErr:'',
   tab:'overview', loading:true,
-  users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[],
+  users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[], nhatKy:[], hinhAnh:[],
   telegram:{botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''},
-  showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false},
+  showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false,nhatky:false},
+  nkFilter:{dotId:'',heThong:'',loai:''}, nkPendingPhotos:[], lightboxImg:null,
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
   vtSel:{dotId:''},
@@ -286,7 +296,8 @@ const ROLE_PERMS = {
   kiemTra:  ['ktv_ndt','giam_sat_qc','cv_p4','admin'],
   danhMuc:  ['cv_p4','admin'],
   vatTu:    ['cv_p4','admin'],
-  dot:      ['cv_p4','admin']
+  dot:      ['cv_p4','admin'],
+  nhatKy:   ['giam_sat_qc','cv_p4','admin']
 };
 function can(action){
   const role = state.session ? state.session.role : '';
@@ -378,6 +389,20 @@ function mapSheetTaiLieu(rows){
     heThong:String(r['Hệ thống']||''), link:String(r['Link']||''), ghiChu:String(r['Ghi chú']||'')
   })).filter(t=>t.id);
 }
+function mapSheetNhatKy(rows){
+  return rows.map(r=>({
+    id:String(r['Mã nhật ký']||''), ngay:String(r['Ngày công việc']||''), dotId:String(r['Đợt']||''),
+    toMay:String(r['Tổ máy']||''), heThong:String(r['Hệ thống']||''), hangMucId:String(r['Mã hạng mục liên quan']||''),
+    loai:String(r['Loại nội dung']||''), noiDung:String(r['Nội dung công việc']||''), nhanLuc:String(r['Nhân lực']||''),
+    antoanld:String(r['An toàn lao động']||''), nguoiGhi:String(r['Người ghi']||''), ghiChu:String(r['Ghi chú']||'')
+  })).filter(n=>n.id);
+}
+function mapSheetHinhAnh(rows){
+  return rows.map(r=>({
+    id:String(r['Mã ảnh']||''), maNhatKy:String(r['Mã nhật ký liên quan']||''), tenAnh:String(r['Tên ảnh']||''),
+    link:String(r['Link Drive']||''), thoiGian:String(r['Thời gian tải lên']||''), nguoiTaiLen:String(r['Người tải lên']||'')
+  })).filter(h=>h.id);
+}
 function mapSheetSuaChua(itemRows, weldRows){
   const items = itemRows.map(r=>{
     const toMay=String(r['Tổ máy']||''), heThong=String(r['Hệ thống']||''), thietBi=String(r['Thiết bị']||''), viTri=String(r['Vị trí']||''), lopOng=String(r['Lớp ống']||'');
@@ -417,6 +442,8 @@ async function loadAll(){
   state.kiemTra = await g('kiem-tra', true, []);
   state.suaChua = await g('sua-chua', true, []);
   state.vatTu = await g('vat-tu', true, []);
+  state.nhatKy = await g('nhat-ky', true, []);
+  state.hinhAnh = await g('hinh-anh', true, []);
   state.telegram = {botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''};
   const sess = await g('session', false, null);
   if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
@@ -476,6 +503,8 @@ async function syncFromSheetInBackground(){
 
   state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu', 'Vật tư (VatTu)');
   state.offlineTaiLieu = await applyDefensive('taiLieu', all.tai_lieu, mapSheetTaiLieu, 'tai-lieu', 'Tài liệu (TaiLieu)');
+  state.offlineNhatKy = await applyDefensive('nhatKy', all.nhat_ky, mapSheetNhatKy, 'nhat-ky', 'Nhật ký thi công (NhatKyThiCong)');
+  state.offlineHinhAnh = await applyDefensive('hinhAnh', all.hinh_anh, mapSheetHinhAnh, 'hinh-anh', 'Hình ảnh (HinhAnh)');
 
   state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
   state.offlineSheetNames = offlineSheetNames;
@@ -1118,6 +1147,180 @@ function renderVatTu(){
 window.setTab = t => { state.tab=t; render(); window.scrollTo(0,0); };
 window.toggleForm = k => { state.showForm[k]=!state.showForm[k]; render(); };
 window.setCause = id => { state.activeCause=id; render(); };
+/* ---------- NHẬT KÝ THI CÔNG + ẢNH ---------- */
+window.onNkPhotoSelect = function(input){
+  if(!can('nhatKy')){ noPermAlert(); input.value=''; return; }
+  const files = Array.from(input.files||[]);
+  files.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const img = new Image();
+      img.onload = function(){
+        const maxSide = 1280;
+        let w = img.width, h = img.height;
+        if(w>=h && w>maxSide){ h = Math.round(h*maxSide/w); w = maxSide; }
+        else if(h>w && h>maxSide){ w = Math.round(w*maxSide/h); h = maxSide; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+        state.nkPendingPhotos.push({ tempId: 'tmp'+Date.now().toString(36)+Math.random().toString(36).slice(2,7), dataUrl, tenAnh:'' });
+        render();
+      };
+      img.onerror = function(){ alert('Không đọc được ảnh này, vui lòng thử lại.'); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+};
+window.setNkPendingPhotoName = function(tempId, name){
+  const p = state.nkPendingPhotos.find(x=>x.tempId===tempId);
+  if(p) p.tenAnh = name;
+};
+window.removeNkPendingPhoto = function(tempId){
+  state.nkPendingPhotos = state.nkPendingPhotos.filter(x=>x.tempId!==tempId);
+  render();
+};
+window.setNkFilter = function(field, value){ state.nkFilter[field]=value; render(); };
+
+function nhatKyForm(){
+  if(!state.showForm.nhatky) return '';
+  const heThongOpts = uniq(state.danhMuc.map(r=>r.heThong).filter(Boolean));
+  const activeItems = state.suaChua.filter(s=>{ const d = state.dots.find(x=>x.id===s.dotId); return !d || d.trangThai==='Đang diễn ra'; });
+  return `<div class="form-panel"><div class="form-grid">
+    <div class="field"><label>Ngày công việc *</label><input id="nk-ngay" type="date" value="${todayStr()}"></div>
+    <div class="field"><label>Đợt *</label><select id="nk-dot">${state.dots.map(d=>`<option value="${esc(d.id)}">${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
+    <div class="field"><label>Hệ thống (tùy chọn)</label><input id="nk-hethong" list="nk-hethong-list" placeholder="Chọn hoặc bỏ trống">
+      <datalist id="nk-hethong-list">${heThongOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
+    </div>
+    <div class="field"><label>Hạng mục liên quan (tùy chọn)</label><select id="nk-hangmuc"><option value="">— Không liên kết —</option>${activeItems.map(i=>`<option value="${esc(i.id)}">${esc(i.id)} · ${esc(i.heThong)}-${esc(i.thietBi)}-${esc(i.viTri)}/${esc(i.lopOng)}</option>`).join('')}</select></div>
+    <div class="field"><label>Loại nội dung</label><select id="nk-loai">${NK_LOAI.map(l=>`<option>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field full"><label>Nội dung công việc *</label><textarea id="nk-noidung" rows="3" placeholder="Mô tả công việc đã thực hiện trong ngày..."></textarea></div>
+    <div class="field"><label>Nhân lực</label><input id="nk-nhanluc" placeholder="VD: 4 người, tổ hàn 1"></div>
+    <div class="field"><label>An toàn lao động</label><input id="nk-atld" placeholder="Không có sự cố / mô tả nếu có"></div>
+    <div class="field full">
+      <label>Hình ảnh</label>
+      <label class="file-btn">Chụp ảnh / Chọn ảnh<input type="file" accept="image/*" capture="environment" multiple onchange="onNkPhotoSelect(this)"></label>
+      <div class="nk-photo-grid">
+        ${state.nkPendingPhotos.map(p=>`<div class="nk-photo-item">
+          <img src="${p.dataUrl}" style="width:100%;border-radius:6px;">
+          <input list="nk-photo-suggest" placeholder="Tên ảnh (VD: Hiện trạng hư hỏng)" value="${esc(p.tenAnh)}" oninput="setNkPendingPhotoName('${p.tempId}', this.value)">
+          <button class="mini-btn" style="margin-top:4px;width:100%;" onclick="removeNkPendingPhoto('${p.tempId}')">Xóa ảnh</button>
+        </div>`).join('')}
+      </div>
+      <datalist id="nk-photo-suggest">${NK_PHOTO_SUGGEST.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+    </div>
+    <div class="field full"><label>Ghi chú</label><input id="nk-ghichu"></div>
+  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('nhatky')">Hủy</button><button class="btn" onclick="addNhatKy()">Lưu nhật ký</button></div></div>`;
+}
+
+window.addNhatKy = async function(){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  const g=id=>document.getElementById(id).value.trim();
+  const ngay=g('nk-ngay')||todayStr(), dotId=g('nk-dot'), noiDung=g('nk-noidung');
+  const dotObj = state.dots.find(d=>d.id===dotId);
+  if(!dotId || !noiDung){ alert('Vui lòng chọn Đợt và nhập Nội dung công việc.'); return; }
+  const rec = {
+    id:'NK-'+pad(state.nhatKy.length+1), ngay, dotId, toMay: dotObj?dotObj.toMay:'',
+    heThong: g('nk-hethong'), hangMucId: g('nk-hangmuc'), loai: g('nk-loai')||NK_LOAI[0],
+    noiDung, nhanLuc: g('nk-nhanluc'), antoanld: g('nk-atld'),
+    nguoiGhi: state.session? state.session.name : '', ghiChu: g('nk-ghichu')
+  };
+  state.nhatKy.unshift(rec);
+  await persist('nhat-ky', state.nhatKy, true);
+  syncToSheet('nhat_ky', rec);
+
+  const photos = state.nkPendingPhotos.slice();
+  state.nkPendingPhotos = [];
+  photos.forEach((p, idx)=>{
+    const photoRec = {
+      id: 'HA-'+Date.now().toString(36)+idx, maNhatKy: rec.id, tenAnh: p.tenAnh||'(Chưa đặt tên)',
+      link: p.dataUrl, thoiGian: new Date().toISOString(), nguoiTaiLen: state.session? state.session.name : ''
+    };
+    state.hinhAnh.unshift(photoRec);
+    syncToSheet('upload_anh', {
+      id: photoRec.id, maNhatKy: photoRec.maNhatKy, tenAnh: photoRec.tenAnh,
+      base64: p.dataUrl.split(',')[1], mimeType: 'image/jpeg', nguoiTaiLen: photoRec.nguoiTaiLen
+    });
+  });
+  await persist('hinh-anh', state.hinhAnh, true);
+
+  state.showForm.nhatky = false;
+  render();
+};
+window.deleteNhatKy = async function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  if(!confirm('Xóa nhật ký này? Các ảnh đính kèm cũng sẽ bị xóa khỏi danh sách (kể cả trên Google Sheet).')) return;
+  const removedPhotos = state.hinhAnh.filter(h=>h.maNhatKy===id);
+  state.nhatKy = state.nhatKy.filter(n=>n.id!==id);
+  state.hinhAnh = state.hinhAnh.filter(h=>h.maNhatKy!==id);
+  await persist('nhat-ky', state.nhatKy, true);
+  await persist('hinh-anh', state.hinhAnh, true);
+  deleteFromSheet('NhatKyThiCong', id);
+  removedPhotos.forEach(h=> deleteFromSheet('HinhAnh', h.id));
+  render();
+};
+window.deleteAnh = async function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  if(!confirm('Xóa ảnh này?')) return;
+  state.hinhAnh = state.hinhAnh.filter(h=>h.id!==id);
+  await persist('hinh-anh', state.hinhAnh, true);
+  deleteFromSheet('HinhAnh', id);
+  render();
+};
+
+function renderNhatKy(){
+  const canNk = can('nhatKy');
+  const heThongOpts = uniq(state.nhatKy.map(n=>n.heThong).filter(Boolean));
+  const filtered = state.nhatKy.filter(n=>
+    (!state.nkFilter.dotId || n.dotId===state.nkFilter.dotId) &&
+    (!state.nkFilter.heThong || n.heThong===state.nkFilter.heThong) &&
+    (!state.nkFilter.loai || n.loai===state.nkFilter.loai)
+  ).slice().sort((a,b)=> (b.ngay||'').localeCompare(a.ngay||'') || String(b.id).localeCompare(String(a.id)));
+
+  const filterBar = `<div class="form-panel" style="padding:12px 16px;"><div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="field"><label>Lọc theo Đợt</label><select onchange="setNkFilter('dotId', this.value)"><option value="">— Tất cả —</option>${state.dots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.nkFilter.dotId?'selected':''}>${esc(d.ten)}</option>`).join('')}</select></div>
+    <div class="field"><label>Lọc theo Hệ thống</label><select onchange="setNkFilter('heThong', this.value)"><option value="">— Tất cả —</option>${heThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.nkFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
+    <div class="field"><label>Lọc theo Loại nội dung</label><select onchange="setNkFilter('loai', this.value)"><option value="">— Tất cả —</option>${NK_LOAI.map(l=>`<option ${l===state.nkFilter.loai?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+  </div></div>`;
+
+  const cards = filtered.map(n=>{
+    const dotObj = state.dots.find(d=>d.id===n.dotId);
+    const photos = state.hinhAnh.filter(h=>h.maNhatKy===n.id);
+    const hangMuc = n.hangMucId ? state.suaChua.find(s=>s.id===n.hangMucId) : null;
+    const safeLink = s => String(s).replace(/'/g,"\\'");
+    return `<div class="repair-item">
+      <div class="repair-head" style="cursor:default;">
+        <div><span class="tag-chip">${esc(n.id)}</span><b>${fmtDate(n.ngay)}</b> <span class="progress-mini">· ${esc(n.loai||'—')}${n.heThong?(' · '+esc(n.heThong)):''}${dotObj?(' · '+esc(dotObj.ten)):''}</span></div>
+        ${canNk?`<button class="mini-btn" onclick="deleteNhatKy('${n.id}')">Xóa</button>`:''}
+      </div>
+      <div style="margin-top:8px;font-size:13px;line-height:1.5;">${esc(n.noiDung).replace(/\n/g,'<br>')}</div>
+      <div class="record-meta" style="margin-top:6px;">
+        ${n.nhanLuc?`<span>Nhân lực: ${esc(n.nhanLuc)}</span>`:''}
+        ${n.antoanld?`<span>ATLĐ: ${esc(n.antoanld)}</span>`:''}
+        ${hangMuc?`<span>Hạng mục: ${esc(hangMuc.id)}</span>`:''}
+        <span>Người ghi: ${esc(n.nguoiGhi)}</span>
+      </div>
+      ${n.ghiChu?`<div class="record-note">${esc(n.ghiChu)}</div>`:''}
+      ${photos.length?`<div class="nk-photo-grid">${photos.map(p=>`<div class="nk-photo-item">
+        <img src="${esc(p.link)}" style="width:100%;border-radius:6px;cursor:pointer;" onclick="setLightbox('${safeLink(p.link)}')">
+        <div style="font-size:10.5px;color:var(--dim);margin-top:3px;text-align:center;">${esc(p.tenAnh)}</div>
+        ${canNk?`<button class="mini-btn" style="width:100%;margin-top:2px;" onclick="deleteAnh('${p.id}')">Xóa ảnh</button>`:''}
+      </div>`).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+
+  return `<div class="page-head"><div><div class="page-eyebrow">Ghi chép hiện trường</div><div class="page-title">Nhật ký thi công</div></div>
+    ${canNk?`<div class="head-actions"><button class="btn" onclick="toggleForm('nhatky')">${state.showForm.nhatky?'Đóng biểu mẫu':'+ Thêm nhật ký'}</button></div>`:''}
+  </div>
+  ${nhatKyForm()}
+  ${filterBar}
+  <div class="settings-note" style="margin:14px 0;">Ảnh được nén và lưu trên Google Drive (dùng chung tài khoản Google với ứng dụng); link chia sẻ ở chế độ "bất kỳ ai có link đều xem được" để hiển thị được trong app.</div>
+  ${cards || '<div class="empty">Chưa có nhật ký thi công nào.</div>'}`;
+}
+
+
 
 /* ---------- RENDER ---------- */
 function render(){
@@ -1132,7 +1335,7 @@ function render(){
     `<button class="bn-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="bn-tag">${n.tag}</span><span>${n.label.split(' ')[0]}</span></button>`
   ).join('');
   const tgOn = !!(state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length);
-  const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu && !state.offlineTaiLieu;
+  const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu && !state.offlineTaiLieu && !state.offlineNhatKy && !state.offlineHinhAnh;
   const roleLabel = ROLE_LABELS[state.session.role] || 'Chưa phân quyền';
 
   app.innerHTML = `<div class="shell">
@@ -1150,8 +1353,11 @@ function render(){
     </div>
     <div class="main">${renderTab()}</div>
   </div>
-  <div class="bottom-nav">${bottomNavHtml}</div>`;
+  <div class="bottom-nav">${bottomNavHtml}</div>
+  ${state.lightboxImg ? `<div class="lightbox-overlay" onclick="closeLightbox()"><img src="${state.lightboxImg}"></div>` : ''}`;
 }
+window.setLightbox = function(url){ state.lightboxImg = url; render(); };
+window.closeLightbox = function(){ state.lightboxImg = null; render(); };
 
 function renderAuth(){
   const isLogin = state.authView==='login';
@@ -1183,6 +1389,7 @@ function renderTab(){
   if(state.tab==='danhmuc') return renderDanhMuc();
   if(state.tab==='kiemtra') return renderKiemTra();
   if(state.tab==='suachua') return renderSuaChua();
+  if(state.tab==='nhatky') return renderNhatKy();
   if(state.tab==='vattu') return renderVatTu();
   if(state.tab==='history') return renderHistory();
   if(state.tab==='analysis') return renderAnalysis();
