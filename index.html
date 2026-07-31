@@ -66,6 +66,13 @@ input[type=file]{display:none;}
 .nk-photo-item input{background:#0d1b26;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 6px;font-size:11px;width:100%;box-sizing:border-box;}
 .lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;}
 .lightbox-overlay img{max-width:100%;max-height:100%;border-radius:6px;}
+.module-grid-mobile{display:none;}
+@media(max-width:720px){
+  .module-grid-mobile{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;}
+  .module-tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px 12px;text-align:left;font-size:12.5px;color:var(--text);}
+  .module-tile:active{border-color:var(--accent);}
+  .module-tile-tag{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 6px;border-radius:7px;background:var(--accent-soft);color:var(--accent);font-size:11.5px;font-weight:600;}
+}
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
 .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px;}
 .stat-card .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
@@ -165,7 +172,7 @@ table.dm tr:last-child td{border-bottom:none;}
 <body>
 <div id="app"></div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyMPu3GW7vL_RRye8F3dq4TU1FEkA92d7-JMP9tkP_WLFB14SplbsBYhTNYEzM_AZ8mrg/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -220,6 +227,9 @@ const NAV = [
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
   {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
 ];
+// Tren dien thoai, thanh dieu huong duoi cung chi hien Trang chu + 3 module hay dung nhat (tranh 9 muc phai cuon ngang).
+// Cac module con lai truy cap qua luoi module o trang Tong quan (dong vai tro trang chu).
+const MOBILE_QUICK_NAV = ['overview','kiemtra','suachua','nhatky'];
 
 const CAUSES = [
   {id:'erosion', name:'Mài mòn tro bay (ăn mòn phía khói)', where:'Ống sinh hơi vùng đổi hướng dòng khói, gần miệng đốt',
@@ -1329,7 +1339,50 @@ window.deleteAnh = async function(id){
   deleteFromSheet('HinhAnh', id);
   render();
 };
+function nkSafeSheetName(s){
+  return String(s).replace(/[:\\\/\?\*\[\]]/g,'-').slice(0,31) || 'Trang';
+}
+// Xuat theo dung bo cuc mau giay (moi nhat ky la 1 sheet rieng, giong 1 trang nhat ky thi cong that)
 window.exportNhatKy = async function(){
+  if(!(await withXLSXReady())) return;
+  if(!state.nhatKy.length){ alert('Chưa có nhật ký thi công nào để xuất.'); return; }
+  const sorted = state.nhatKy.slice().sort((a,b)=> String(a.dotId||'').localeCompare(String(b.dotId||'')) || (a.ngay||'').localeCompare(b.ngay||'') || String(a.id).localeCompare(String(b.id)));
+  const trangSoMap = computeNkTrangSoMap();
+  const wb = XLSX.utils.book_new();
+  const usedNames = {};
+  sorted.forEach(n=>{
+    const trangSo = trangSoMap[n.id]||'';
+    const aoa = [
+      ['NHẬT KÝ THI CÔNG', '', 'Trang số: '+trangSo],
+      [],
+      ['Tên hạng mục công trình:', n.tenHangMucCongTrinh||'', ''],
+      ['Tên gói thầu:', n.tenGoiThau||'', ''],
+      ['Tên đơn vị thi công:', n.donViThiCong||'', ''],
+      ['Ngày thi công:', fmtDate(n.ngay), 'Ca: '+(n.ca||'')+'   Bắt đầu: '+(n.gioBatDau||'')+'   Kết thúc: '+(n.gioKetThuc||'')],
+      [],
+      ['Nội dung', 'Thực tế hiện trường (nhà thầu ghi)', 'Ý kiến của giám sát thi công/Chủ đầu tư'],
+    ];
+    NK_SECTIONS.forEach(s=>{ aoa.push([s.label, n[s.key]||'', n[s.key+'_yk']||'']); });
+    aoa.push([]);
+    aoa.push(['Đại diện các bên xác nhận (ký và ghi rõ họ tên):', 'Kỹ thuật B: '+(n.kyThuatB||''), 'Cán bộ giám sát: '+(n.canBoGiamSat||'')]);
+    aoa.push(['Trạng thái: '+(n.trangThai||''), 'Người tạo: '+(n.nguoiTao||''), 'Người duyệt: '+(n.nguoiDuyet||'')]);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:38},{wch:48},{wch:48}];
+    ws['!merges'] = [
+      {s:{r:0,c:0}, e:{r:0,c:1}},
+      {s:{r:2,c:1}, e:{r:2,c:2}},
+      {s:{r:3,c:1}, e:{r:3,c:2}},
+      {s:{r:4,c:1}, e:{r:4,c:2}}
+    ];
+    let name = nkSafeSheetName('Trang '+(trangSo||'?')+' - '+n.ngay);
+    if(usedNames[name]){ usedNames[name]++; name = nkSafeSheetName(name+' ('+usedNames[name]+')'); } else { usedNames[name]=1; }
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb,'nhat-ky-thi-cong.xlsx');
+};
+// Xuat dang bang du lieu tho (1 dong = 1 nhat ky) — dung lam file mau de Nhap Excel lai, khac voi ban Xuat Excel o tren (dung de in/nop bao cao theo dung mau giay)
+window.exportNhatKyTemplate = async function(){
   if(!(await withXLSXReady())) return;
   const sorted = state.nhatKy.slice().sort((a,b)=> String(a.dotId||'').localeCompare(String(b.dotId||'')) || (a.ngay||'').localeCompare(b.ngay||'') || String(a.id).localeCompare(String(b.id)));
   const trangSoMap = computeNkTrangSoMap();
@@ -1355,7 +1408,7 @@ window.exportNhatKy = async function(){
     return row;
   });
   const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'NhatKyThiCong'); XLSX.writeFile(wb,'nhat-ky-thi-cong.xlsx');
+  XLSX.utils.book_append_sheet(wb,ws,'NhatKyThiCong'); XLSX.writeFile(wb,'nhat-ky-thi-cong-du-lieu-tho.xlsx');
 };
 window.importNhatKy = function(input){
   if(!can('nhatKy')){ noPermAlert(); input.value=''; return; }
@@ -1439,6 +1492,71 @@ function nkApproveFormHtml(n){
   </div>`;
 }
 
+/* ---- Sua nhat ky (chi khi con Cho duyet) + Mo lai de sua (Da duyet -> Cho duyet, phai duyet lai) ---- */
+window.startEditNhatKy = function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  state.nkEditingId = id; state.nkApprovingId = null; state.nkPendingPhotos = []; render();
+};
+window.cancelEditNhatKy = function(){ state.nkEditingId = null; render(); };
+window.saveNhatKyEdit = async function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  const n = state.nhatKy.find(x=>x.id===id);
+  if(!n){ state.nkEditingId=null; render(); return; }
+  const g=key=>{ const el=document.getElementById('nke-'+key); return el? el.value.trim() : ''; };
+  n.ca = g('ca'); n.gioBatDau = g('giobatdau'); n.gioKetThuc = g('gioketthuc');
+  n.heThong = g('hethong'); n.hangMucId = g('hangmuc'); n.kyThuatB = g('kythuatb');
+  NK_SECTIONS.forEach(s=>{ n[s.key] = g(s.key); });
+
+  const photos = state.nkPendingPhotos.slice();
+  state.nkPendingPhotos = [];
+  photos.forEach((p, idx)=>{
+    const photoRec = {
+      id: 'HA-'+Date.now().toString(36)+idx, maNhatKy: n.id, tenAnh: p.tenAnh||'(Chưa đặt tên)',
+      link: p.dataUrl, thoiGian: new Date().toISOString(), nguoiTaiLen: state.session? state.session.name : ''
+    };
+    state.hinhAnh.unshift(photoRec);
+    syncToSheet('upload_anh', {
+      id: photoRec.id, maNhatKy: photoRec.maNhatKy, tenAnh: photoRec.tenAnh,
+      base64: p.dataUrl.split(',')[1], mimeType: 'image/jpeg', nguoiTaiLen: photoRec.nguoiTaiLen
+    });
+  });
+  await persist('hinh-anh', state.hinhAnh, true);
+  await persist('nhat-ky', state.nhatKy, true);
+  syncToSheet('nhat_ky', n);
+  state.nkEditingId = null;
+  render();
+};
+window.reopenNhatKy = async function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  const n = state.nhatKy.find(x=>x.id===id);
+  if(!n) return;
+  if(!confirm('Mở lại nhật ký này để chỉnh sửa? Trạng thái sẽ chuyển về "Chờ duyệt" cho đến khi được duyệt lại (ý kiến giám sát đã ghi trước đó vẫn được giữ để tham khảo khi duyệt lại).')) return;
+  n.trangThai = 'Chờ duyệt';
+  await persist('nhat-ky', state.nhatKy, true);
+  syncToSheet('nhat_ky', n);
+  render();
+};
+function nkEditFormHtml(n){
+  const heThongOpts = uniq(state.danhMuc.map(r=>r.heThong).filter(Boolean));
+  const activeItems = state.suaChua.filter(s=>{ const d = state.dots.find(x=>x.id===s.dotId); return !d || d.trangThai==='Đang diễn ra'; });
+  return `<div class="form-panel" style="margin-top:10px;" onclick="event.stopPropagation()">
+    <div class="section-label" style="margin-top:0;">Sửa nhật ký (bổ sung/chỉnh thông tin nhà thầu, thêm ảnh còn thiếu)</div>
+    <div class="form-grid">
+      <div class="field"><label>Ca</label><input id="nke-ca" value="${esc(n.ca)}"></div>
+      <div class="field"><label>Giờ bắt đầu</label><input id="nke-giobatdau" type="time" value="${esc(n.gioBatDau)}"></div>
+      <div class="field"><label>Giờ kết thúc</label><input id="nke-gioketthuc" type="time" value="${esc(n.gioKetThuc)}"></div>
+      <div class="field"><label>Hệ thống (tùy chọn)</label><input id="nke-hethong" list="nke-hethong-list" value="${esc(n.heThong)}">
+        <datalist id="nke-hethong-list">${heThongOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
+      </div>
+      <div class="field full"><label>Hạng mục liên quan (tùy chọn)</label><select id="nke-hangmuc"><option value="">— Không liên kết —</option>${activeItems.map(i=>`<option value="${esc(i.id)}" ${i.id===n.hangMucId?'selected':''}>${esc(i.id)} · ${esc(i.heThong)}-${esc(i.thietBi)}-${esc(i.viTri)}/${esc(i.lopOng)}</option>`).join('')}</select></div>
+      ${NK_SECTIONS.map(s=>`<div class="field full"><label>${esc(s.label)}</label><textarea id="nke-${s.key}" rows="2">${esc(n[s.key])}</textarea></div>`).join('')}
+      <div class="field"><label>Kỹ thuật B (ký, ghi rõ họ tên)</label><input id="nke-kythuatb" value="${esc(n.kyThuatB)}"></div>
+    </div>
+    ${nkPhotoUploaderHtml()}
+    <div class="form-actions"><button class="btn-ghost" onclick="cancelEditNhatKy()">Hủy</button><button class="btn" onclick="saveNhatKyEdit('${n.id}')">Lưu thay đổi</button></div>
+  </div>`;
+}
+
 function computeNkTrangSoMap(){
   const sorted = state.nhatKy.slice().sort((a,b)=> String(a.dotId||'').localeCompare(String(b.dotId||'')) || (a.ngay||'').localeCompare(b.ngay||'') || String(a.id).localeCompare(String(b.id)));
   const counters = {}, map = {};
@@ -1497,22 +1615,26 @@ function renderNhatKy(){
       </div>`).join('')}</div>`:''}
       ${canNk?`<div class="form-actions" style="margin-top:10px;">
         ${!daDuyet?`<button class="mini-btn" onclick="startApproveNhatKy('${n.id}')">${state.nkApprovingId===n.id?'Đang bổ sung ý kiến…':'Duyệt / Bổ sung ý kiến'}</button>`:''}
+        ${!daDuyet?`<button class="mini-btn" onclick="startEditNhatKy('${n.id}')">${state.nkEditingId===n.id?'Đang sửa…':'Sửa'}</button>`:''}
+        ${daDuyet?`<button class="mini-btn" onclick="reopenNhatKy('${n.id}')">Mở lại để sửa</button>`:''}
         <button class="mini-btn" onclick="deleteNhatKy('${n.id}')">Xóa</button>
       </div>`:''}
       ${(state.nkApprovingId===n.id) ? nkApproveFormHtml(n) : ''}
+      ${(state.nkEditingId===n.id) ? nkEditFormHtml(n) : ''}
     </div>`;
   }).join('');
 
   return `<div class="page-head"><div><div class="page-eyebrow">Ghi chép hiện trường</div><div class="page-title">Nhật ký thi công</div></div>
     <div class="head-actions">
       ${canNk?`<label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importNhatKy(this)"></label>`:''}
-      <button class="btn-ghost" onclick="exportNhatKy()">Xuất Excel</button>
+      ${canNk?`<button class="btn-ghost" onclick="exportNhatKyTemplate()">Tải mẫu nhập liệu</button>`:''}
+      <button class="btn-ghost" onclick="exportNhatKy()">Xuất Excel (theo mẫu giấy)</button>
       ${canNk?`<button class="btn" onclick="toggleForm('nhatky')">${state.showForm.nhatky?'Đóng biểu mẫu':'+ Thêm nhật ký'}</button>`:''}
     </div>
   </div>
   ${nhatKyForm()}
   ${filterBar}
-  <div class="settings-note" style="margin:14px 0;">Ảnh được nén và lưu trên Google Drive (dùng chung tài khoản Google với ứng dụng); link chia sẻ ở chế độ "bất kỳ ai có link đều xem được" để hiển thị được trong app. Mỗi nhật ký có 2 bước: tạo mới (Chờ duyệt, ghi phần "nhà thầu") và sau đó Duyệt/bổ sung Ý kiến giám sát (chuyển Đã duyệt).</div>
+  <div class="settings-note" style="margin:14px 0;">Ảnh được nén và lưu trên Google Drive (dùng chung tài khoản Google với ứng dụng); link chia sẻ ở chế độ "bất kỳ ai có link đều xem được" để hiển thị được trong app. Mỗi nhật ký có 2 bước: tạo mới (Chờ duyệt, ghi phần "nhà thầu") và sau đó Duyệt/bổ sung Ý kiến giám sát (chuyển Đã duyệt). "Xuất Excel (theo mẫu giấy)" xuất mỗi nhật ký thành 1 trang tính riêng, đúng bố cục mẫu Nhật ký thi công giấy (để in/nộp báo cáo). "Tải mẫu nhập liệu" xuất dạng bảng dữ liệu thô (1 dòng/nhật ký) — dùng file này để chỉnh sửa rồi Nhập Excel lại, không dùng để in.</div>
   ${cards || '<div class="empty">Chưa có nhật ký thi công nào.</div>'}`;
 }
 
@@ -1525,9 +1647,12 @@ function render(){
   const navHtml = NAV.map(n=>
     `<button class="nav-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="nav-tag">${n.tag}</span><span>${n.label}</span></button>`
   ).join('');
-  const bottomNavHtml = NAV.map(n=>
-    `<button class="bn-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="bn-tag">${n.tag}</span><span>${n.label.split(' ')[0]}</span></button>`
-  ).join('');
+  const bottomNavHtml = MOBILE_QUICK_NAV.map(id=>{
+    const n = NAV.find(x=>x.id===id);
+    const tag = id==='overview' ? '🏠' : n.tag;
+    const label = id==='overview' ? 'Trang chủ' : n.label.split(' ')[0];
+    return `<button class="bn-item ${state.tab===id?'active':''}" onclick="setTab('${id}')"><span class="bn-tag">${tag}</span><span>${label}</span></button>`;
+  }).join('');
   const tgOn = !!(state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length);
   const sheetAllOnline = !state.offlineUsers && !state.offlineDanhMuc && !state.offlineDots && !state.offlineKiemTra && !state.offlineSuaChua && !state.offlineVatTu && !state.offlineTaiLieu && !state.offlineNhatKy && !state.offlineHinhAnh;
   const roleLabel = ROLE_LABELS[state.session.role] || 'Chưa phân quyền';
@@ -1681,11 +1806,18 @@ window.setOvMode = v => { state.ovMode=v; state.ovYear=null; state.ovDot=null; r
 window.setOvYear = v => { state.ovYear=v; state.ovDot=null; render(); };
 window.setOvDot = v => { state.ovDot=v; render(); };
 
+function renderModuleGridMobile(){
+  const tiles = NAV.filter(n=>n.id!=='overview');
+  return `<div class="module-grid-mobile">${tiles.map(n=>
+    `<button class="module-tile" onclick="setTab('${n.id}')"><span class="module-tile-tag">${n.tag}</span><span>${esc(n.label)}</span></button>`
+  ).join('')}</div>`;
+}
 function renderOverview(){
   if(state.ovMode==='history') return renderOverviewHistory();
   const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra').sort((a,b)=>b.ngayBatDau.localeCompare(a.ngayBatDau));
   return `<div class="page-head"><div><div class="page-eyebrow">Tổng quan hệ thống</div><div class="page-title">Bảng điều khiển</div></div>
     <button class="btn-ghost" onclick="setOvMode('history')">Xem lịch sử theo năm</button></div>
+  ${renderModuleGridMobile()}
   ${activeDots.length ? activeDots.map(d=>renderDotDashboard(d.id)).join('') : '<div class="empty">Hiện không có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới.</div>'}`;
 }
 function renderOverviewHistory(){
