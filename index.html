@@ -373,7 +373,8 @@ function mapSheetCauHinh(rows){
 function mapSheetDot(rows){
   return rows.map(r=>({
     id:String(r['Mã đợt']||''), ten:String(r['Tên đợt']||''), toMay:String(r['Tổ máy']||''),
-    ngayBatDau:String(r['Ngày bắt đầu']||''), ngayKetThuc:String(r['Ngày kết thúc']||''), trangThai:String(r['Trạng thái']||'')
+    ngayBatDau:String(r['Ngày bắt đầu']||''), ngayKetThuc:String(r['Ngày kết thúc']||''), trangThai:String(r['Trạng thái']||''),
+    tenHangMucCongTrinh:String(r['Tên hạng mục công trình']||''), tenGoiThau:String(r['Tên gói thầu']||''), donViThiCong:String(r['Tên đơn vị thi công']||'')
   })).filter(d=>d.id);
 }
 function mapSheetKiemTra(rows){
@@ -415,6 +416,7 @@ function mapSheetNhatKy(rows){
     const rec = {
       id:String(r['Mã nhật ký']||''), ngay:String(r['Ngày thi công']||''), ca:String(r['Ca']||''),
       gioBatDau:String(r['Giờ bắt đầu']||''), gioKetThuc:String(r['Giờ kết thúc']||''), donViThiCong:String(r['Đơn vị thi công']||''),
+      tenHangMucCongTrinh:String(r['Tên hạng mục công trình']||''), tenGoiThau:String(r['Tên gói thầu']||''),
       dotId:String(r['Đợt']||''), toMay:String(r['Tổ máy']||''), heThong:String(r['Hệ thống']||''), hangMucId:String(r['Mã hạng mục liên quan']||''),
       kyThuatB:String(r['Kỹ thuật B']||''), canBoGiamSat:String(r['Cán bộ giám sát']||''), trangThai:String(r['Trạng thái']||'Chờ duyệt'),
       nguoiTao:String(r['Người tạo']||''), nguoiDuyet:String(r['Người duyệt']||''), thoiGianDuyet:String(r['Thời gian duyệt']||'')
@@ -591,7 +593,8 @@ window.addDot = async function(){
   const g=id=>document.getElementById(id).value.trim();
   const ten=g('dot-ten'), toMay=g('dot-tomay'), ngayBatDau=g('dot-batdau')||todayStr();
   if(!ten || !toMay){ alert('Vui lòng nhập Tên đợt và Tổ máy.'); return; }
-  const dot = {id:'DOT-'+pad(state.dots.length+1), ten, toMay, ngayBatDau, ngayKetThuc:'', trangThai:'Đang diễn ra'};
+  const dot = {id:'DOT-'+pad(state.dots.length+1), ten, toMay, ngayBatDau, ngayKetThuc:'', trangThai:'Đang diễn ra',
+    tenHangMucCongTrinh:g('dot-hangmuc'), tenGoiThau:g('dot-goithau'), donViThiCong:g('dot-donvi')};
   state.dots.unshift(dot);
   await persist('dots', state.dots, true);
   syncToSheet('dot', dot);
@@ -1229,18 +1232,32 @@ function nkPhotoUploaderHtml(){
   </div>`;
 }
 
+window.updateNkDotInfo = function(){
+  const sel = document.getElementById('nk-dot');
+  const box = document.getElementById('nk-dot-info');
+  if(!sel || !box) return;
+  const d = state.dots.find(x=>x.id===sel.value);
+  box.innerHTML = d ? (
+    'Hạng mục công trình: <b>'+esc(d.tenHangMucCongTrinh||'—')+'</b><br>'+
+    'Gói thầu: <b>'+esc(d.tenGoiThau||'—')+'</b><br>'+
+    'Đơn vị thi công: <b>'+esc(d.donViThiCong||'—')+'</b>'
+  ) : '—';
+};
 function nhatKyForm(){
   if(!state.showForm.nhatky) return '';
   const heThongOpts = uniq(state.danhMuc.map(r=>r.heThong).filter(Boolean));
   const activeItems = state.suaChua.filter(s=>{ const d = state.dots.find(x=>x.id===s.dotId); return !d || d.trangThai==='Đang diễn ra'; });
+  const firstDot = state.dots[0];
   return `<div class="form-panel">
     <div class="form-grid">
-      <div class="field"><label>Tên đơn vị thi công</label><input id="nk-donvi" placeholder="VD: Đội sửa chữa lò hơi..."></div>
       <div class="field"><label>Ngày thi công *</label><input id="nk-ngay" type="date" value="${todayStr()}"></div>
       <div class="field"><label>Ca</label><input id="nk-ca" placeholder="VD: Ca 1"></div>
       <div class="field"><label>Giờ bắt đầu</label><input id="nk-giobatdau" type="time"></div>
       <div class="field"><label>Giờ kết thúc</label><input id="nk-gioketthuc" type="time"></div>
-      <div class="field"><label>Đợt *</label><select id="nk-dot">${state.dots.map(d=>`<option value="${esc(d.id)}">${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
+      <div class="field"><label>Đợt *</label><select id="nk-dot" onchange="updateNkDotInfo()">${state.dots.map(d=>`<option value="${esc(d.id)}">${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
+      <div class="field full"><label>Thông tin công trình (tự động lấy từ Đợt đã chọn — chỉ khai báo 1 lần khi tạo Đợt, không cần nhập lại mỗi ngày)</label>
+        <div class="readonly-box" id="nk-dot-info">${firstDot ? ('Hạng mục công trình: <b>'+esc(firstDot.tenHangMucCongTrinh||'—')+'</b><br>Gói thầu: <b>'+esc(firstDot.tenGoiThau||'—')+'</b><br>Đơn vị thi công: <b>'+esc(firstDot.donViThiCong||'—')+'</b>') : '—'}</div>
+      </div>
       <div class="field"><label>Hệ thống (tùy chọn)</label><input id="nk-hethong" list="nk-hethong-list" placeholder="Chọn hoặc bỏ trống">
         <datalist id="nk-hethong-list">${heThongOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
       </div>
@@ -1264,7 +1281,8 @@ window.addNhatKy = async function(){
   if(!dotId){ alert('Vui lòng chọn Đợt.'); return; }
   const rec = {
     id:'NK-'+pad(state.nhatKy.length+1), ngay, ca:g('nk-ca'), gioBatDau:g('nk-giobatdau'), gioKetThuc:g('nk-gioketthuc'),
-    donViThiCong:g('nk-donvi'), dotId, toMay: dotObj?dotObj.toMay:'', heThong:g('nk-hethong'), hangMucId:g('nk-hangmuc'),
+    tenHangMucCongTrinh: dotObj?dotObj.tenHangMucCongTrinh:'', tenGoiThau: dotObj?dotObj.tenGoiThau:'', donViThiCong: dotObj?dotObj.donViThiCong:'',
+    dotId, toMay: dotObj?dotObj.toMay:'', heThong:g('nk-hethong'), hangMucId:g('nk-hangmuc'),
     kyThuatB:g('nk-kythuatb'), canBoGiamSat:'', trangThai:'Chờ duyệt',
     nguoiTao: state.session? state.session.name : '', nguoiDuyet:'', thoiGianDuyet:''
   };
@@ -1311,6 +1329,76 @@ window.deleteAnh = async function(id){
   deleteFromSheet('HinhAnh', id);
   render();
 };
+window.exportNhatKy = async function(){
+  if(!(await withXLSXReady())) return;
+  const sorted = state.nhatKy.slice().sort((a,b)=> String(a.dotId||'').localeCompare(String(b.dotId||'')) || (a.ngay||'').localeCompare(b.ngay||'') || String(a.id).localeCompare(String(b.id)));
+  const trangSoMap = computeNkTrangSoMap();
+  const rows = sorted.map(n=>{
+    const dotObj = state.dots.find(d=>d.id===n.dotId);
+    const row = {
+      'Mã nhật ký': n.id, 'Trang số': trangSoMap[n.id]||'', 'Ngày thi công': n.ngay, 'Ca': n.ca,
+      'Giờ bắt đầu': n.gioBatDau, 'Giờ kết thúc': n.gioKetThuc,
+      'Tên hạng mục công trình': n.tenHangMucCongTrinh, 'Tên gói thầu': n.tenGoiThau, 'Đơn vị thi công': n.donViThiCong,
+      'Đợt': dotObj?dotObj.ten:n.dotId, 'Tổ máy': n.toMay, 'Hệ thống': n.heThong, 'Mã hạng mục liên quan': n.hangMucId
+    };
+    NK_SECTIONS.forEach(s=>{
+      const cols = NK_SHEET_KEY_MAP[s.key];
+      row[cols[0]] = n[s.key];
+      row[cols[1]] = n[s.key+'_yk'];
+    });
+    row['Kỹ thuật B'] = n.kyThuatB;
+    row['Cán bộ giám sát'] = n.canBoGiamSat;
+    row['Trạng thái'] = n.trangThai;
+    row['Người tạo'] = n.nguoiTao;
+    row['Người duyệt'] = n.nguoiDuyet;
+    row['Thời gian duyệt'] = n.thoiGianDuyet;
+    return row;
+  });
+  const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'NhatKyThiCong'); XLSX.writeFile(wb,'nhat-ky-thi-cong.xlsx');
+};
+window.importNhatKy = function(input){
+  if(!can('nhatKy')){ noPermAlert(); input.value=''; return; }
+  const file=input.files[0]; if(!file) return;
+  const dotSel = document.getElementById('nk-dot');
+  const dotId = dotSel ? dotSel.value : '';
+  if(!dotId){ alert('Vui lòng mở biểu mẫu "+ Thêm nhật ký" và chọn Đợt trước khi nhập Excel — toàn bộ nhật ký trong file sẽ được gắn vào đợt đó (Tên hạng mục công trình/Gói thầu/Đơn vị thi công cũng lấy tự động từ đợt này).'); input.value=''; return; }
+  const dotObj = state.dots.find(d=>d.id===dotId);
+  const reader = new FileReader();
+  reader.onload = async e=>{
+    if(!(await withXLSXReady())) return;
+    const wb = XLSX.read(e.target.result, {type:'array'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    let added=0, skipped=0;
+    rows.forEach(r=>{
+      const ngay = String(r['Ngày thi công']||'').trim();
+      if(!ngay){ skipped++; return; }
+      const trangThaiIn = String(r['Trạng thái']||'').trim();
+      const rec = {
+        id:'NK-'+pad(state.nhatKy.length+1), ngay, ca:String(r['Ca']||''),
+        gioBatDau:String(r['Giờ bắt đầu']||''), gioKetThuc:String(r['Giờ kết thúc']||''),
+        tenHangMucCongTrinh: dotObj.tenHangMucCongTrinh||'', tenGoiThau: dotObj.tenGoiThau||'', donViThiCong: dotObj.donViThiCong||'',
+        dotId: dotObj.id, toMay: dotObj.toMay, heThong: String(r['Hệ thống']||''), hangMucId:'',
+        kyThuatB:String(r['Kỹ thuật B']||''), canBoGiamSat:String(r['Cán bộ giám sát']||''),
+        trangThai: trangThaiIn==='Đã duyệt' ? 'Đã duyệt' : 'Chờ duyệt',
+        nguoiTao: state.session?state.session.name:'', nguoiDuyet:String(r['Người duyệt']||''), thoiGianDuyet:String(r['Thời gian duyệt']||'')
+      };
+      NK_SECTIONS.forEach(s=>{
+        const cols = NK_SHEET_KEY_MAP[s.key];
+        rec[s.key] = String(r[cols[0]]||'');
+        rec[s.key+'_yk'] = String(r[cols[1]]||'');
+      });
+      state.nhatKy.unshift(rec);
+      syncToSheet('nhat_ky', rec);
+      added++;
+    });
+    await persist('nhat-ky', state.nhatKy, true);
+    alert('Đã nhập '+added+' nhật ký vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng thiếu Ngày thi công. Ảnh đính kèm không hỗ trợ nhập qua Excel — cần thêm trực tiếp trong app.');
+    input.value=''; render();
+  };
+  reader.readAsArrayBuffer(file);
+};
+
 
 /* ---- Bước duyệt: Giám sát/QC (hoặc CV P4/Quản trị) mở form riêng để bổ sung "Ý kiến giám sát" cho từng mục,
    sau đó chuyển trạng thái Chờ duyệt -> Đã duyệt. Dùng lại đúng type 'nhat_ky' khi đồng bộ (upsert theo Mã nhật ký,
@@ -1351,8 +1439,15 @@ function nkApproveFormHtml(n){
   </div>`;
 }
 
+function computeNkTrangSoMap(){
+  const sorted = state.nhatKy.slice().sort((a,b)=> String(a.dotId||'').localeCompare(String(b.dotId||'')) || (a.ngay||'').localeCompare(b.ngay||'') || String(a.id).localeCompare(String(b.id)));
+  const counters = {}, map = {};
+  sorted.forEach(n=>{ counters[n.dotId] = (counters[n.dotId]||0)+1; map[n.id] = counters[n.dotId]; });
+  return map;
+}
 function renderNhatKy(){
   const canNk = can('nhatKy');
+  const trangSoMap = computeNkTrangSoMap();
   const heThongOpts = uniq(state.nhatKy.map(n=>n.heThong).filter(Boolean));
   const filtered = state.nhatKy.filter(n=>
     (!state.nkFilter.dotId || n.dotId===state.nkFilter.dotId) &&
@@ -1377,8 +1472,12 @@ function renderNhatKy(){
     const yKienBlock = daDuyet ? NK_SECTIONS.filter(s=>n[s.key+'_yk']).map(s=>`<div style="margin-top:6px;"><b style="font-size:12px;">${esc(s.label)}:</b><div style="font-size:13px;line-height:1.5;">${esc(n[s.key+'_yk']).replace(/\n/g,'<br>')}</div></div>`).join('') : '';
     return `<div class="repair-item">
       <div class="repair-head" style="cursor:default;">
-        <div><span class="tag-chip">${esc(n.id)}</span><b>${fmtDate(n.ngay)}</b> <span class="progress-mini">${caText?(' · '+esc(caText)):''}${n.donViThiCong?(' · '+esc(n.donViThiCong)):''}${n.heThong?(' · '+esc(n.heThong)):''}${dotObj?(' · '+esc(dotObj.ten)):''}</span></div>
+        <div><span class="tag-chip">${esc(n.id)}</span><b>${fmtDate(n.ngay)}</b> <span class="progress-mini">Trang số ${trangSoMap[n.id]||'—'}${caText?(' · '+esc(caText)):''}${n.donViThiCong?(' · '+esc(n.donViThiCong)):''}${n.heThong?(' · '+esc(n.heThong)):''}${dotObj?(' · '+esc(dotObj.ten)):''}</span></div>
         <span class="status ${daDuyet?'good':'warn'}">${esc(n.trangThai)}</span>
+      </div>
+      <div class="record-meta" style="margin-top:6px;">
+        ${n.tenHangMucCongTrinh?`<span>Hạng mục công trình: ${esc(n.tenHangMucCongTrinh)}</span>`:''}
+        ${n.tenGoiThau?`<span>Gói thầu: ${esc(n.tenGoiThau)}</span>`:''}
       </div>
       <div class="section-label" style="margin-top:10px;font-size:12px;">Thực tế hiện trường (nhà thầu ghi)</div>
       ${nhaThauBlock || '<div class="empty" style="padding:8px 0;">Chưa ghi nội dung nào.</div>'}
@@ -1405,7 +1504,11 @@ function renderNhatKy(){
   }).join('');
 
   return `<div class="page-head"><div><div class="page-eyebrow">Ghi chép hiện trường</div><div class="page-title">Nhật ký thi công</div></div>
-    ${canNk?`<div class="head-actions"><button class="btn" onclick="toggleForm('nhatky')">${state.showForm.nhatky?'Đóng biểu mẫu':'+ Thêm nhật ký'}</button></div>`:''}
+    <div class="head-actions">
+      ${canNk?`<label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importNhatKy(this)"></label>`:''}
+      <button class="btn-ghost" onclick="exportNhatKy()">Xuất Excel</button>
+      ${canNk?`<button class="btn" onclick="toggleForm('nhatky')">${state.showForm.nhatky?'Đóng biểu mẫu':'+ Thêm nhật ký'}</button>`:''}
+    </div>
   </div>
   ${nhatKyForm()}
   ${filterBar}
@@ -1496,6 +1599,9 @@ function dotForm(){
       <datalist id="tomay-list">${toMayOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
     </div>
     <div class="field"><label>Ngày bắt đầu</label><input id="dot-batdau" type="date" value="${todayStr()}"></div>
+    <div class="field full"><label>Tên hạng mục công trình <span style="color:var(--muted);font-weight:400;">(dùng chung cho Nhật ký thi công của cả đợt, chỉ nhập 1 lần ở đây)</span></label><input id="dot-hangmuc" placeholder="VD: Sửa chữa ống lò hơi tổ máy 1"></div>
+    <div class="field"><label>Tên gói thầu</label><input id="dot-goithau"></div>
+    <div class="field"><label>Tên đơn vị thi công</label><input id="dot-donvi"></div>
   </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('dot')">Hủy</button><button class="btn" onclick="addDot()">Tạo đợt</button></div></div>`;
 }
 function renderDots(){
@@ -1504,6 +1610,7 @@ function renderDots(){
     const st = d.trangThai==='Đang diễn ra' ? 'warn' : 'good';
     return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(d.id)}</span>${esc(d.ten)} <span style="color:var(--muted);font-weight:400;">· ${esc(d.toMay)}</span></div><span class="status ${st}">${esc(d.trangThai)}</span></div>
     <div class="record-meta"><span>Bắt đầu: ${fmtDate(d.ngayBatDau)}</span>${d.ngayKetThuc?`<span>Kết thúc: ${fmtDate(d.ngayKetThuc)}</span>`:''}<span>${soKT} lượt kiểm tra</span></div>
+    ${(d.tenHangMucCongTrinh||d.tenGoiThau||d.donViThiCong)?`<div class="record-meta">${d.tenHangMucCongTrinh?`<span>Hạng mục công trình: ${esc(d.tenHangMucCongTrinh)}</span>`:''}${d.tenGoiThau?`<span>Gói thầu: ${esc(d.tenGoiThau)}</span>`:''}${d.donViThiCong?`<span>Đơn vị thi công: ${esc(d.donViThiCong)}</span>`:''}</div>`:''}
     <div class="record-actions">${can('dot') ? (d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt (chuyển vào lịch sử)</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại đợt</button>`) : ''}</div>
     </div>`;
   }).join('');
