@@ -252,7 +252,17 @@ const CAUSES = [
     fix:['Cắt bỏ hoàn toàn mối hàn lỗi, hàn lại theo đúng WPS đã duyệt','Xử lý nhiệt trước/sau hàn (PWHT) đúng quy định nếu vật liệu yêu cầu','Kiểm tra NDT 100% mối hàn sửa chữa trước khi nghiệm thu','Rà soát chứng chỉ thợ hàn và quy trình áp dụng tại hiện trường']}
 ];
 
-const NK_LOAI = ['Hiện trạng hư hỏng','Tiến độ thi công','Hoàn thành nghiệm thu','Khác'];
+const NK_SECTIONS = [
+  {key:'dieuKienTC', label:'Diễn biến điều kiện thi công (thời tiết, nhiệt độ và các thông tin liên quan)'},
+  {key:'lucLuong', label:'Lực lượng thi công của nhà thầu (nhân công, xe máy, thiết bị thi công đặc chủng)'},
+  {key:'congViecChinh', label:'Công việc thi công chính trong ca'},
+  {key:'anToan', label:'Công tác An toàn, vệ sinh, môi trường'},
+  {key:'nghiemThu', label:'Các nội dung thi công được nghiệm thu trong ca'},
+  {key:'suCo', label:'Các sự cố, hư hỏng, vi phạm trong ca'},
+  {key:'phatSinh', label:'Các vấn đề phát sinh và biện pháp khắc phục'},
+  {key:'ykienKhac', label:'Các ý kiến hoặc lưu ý khác (nếu có)'},
+  {key:'danhGiaChung', label:'Đánh giá chung và lưu ý cho ca sau'}
+];
 const NK_PHOTO_SUGGEST = ['Hiện trạng hư hỏng','Trước sửa chữa','Trong quá trình thi công','Sau khi hoàn thành','Vị trí tổng thể','Khác'];
 
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
@@ -262,7 +272,7 @@ let state = {
   users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[], nhatKy:[], hinhAnh:[],
   telegram:{botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''},
   showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false,nhatky:false},
-  nkFilter:{dotId:'',heThong:'',loai:''}, nkPendingPhotos:[], lightboxImg:null,
+  nkFilter:{dotId:'',heThong:'',trangThai:''}, nkPendingPhotos:[], lightboxImg:null, nkApprovingId:null,
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
   vtSel:{dotId:''},
@@ -389,13 +399,33 @@ function mapSheetTaiLieu(rows){
     heThong:String(r['Hệ thống']||''), link:String(r['Link']||''), ghiChu:String(r['Ghi chú']||'')
   })).filter(t=>t.id);
 }
+const NK_SHEET_KEY_MAP = {
+  dieuKienTC:['Diễn biến điều kiện thi công - Nhà thầu ghi','Diễn biến điều kiện thi công - Ý kiến giám sát'],
+  lucLuong:['Lực lượng thi công - Nhà thầu ghi','Lực lượng thi công - Ý kiến giám sát'],
+  congViecChinh:['Công việc thi công chính - Nhà thầu ghi','Công việc thi công chính - Ý kiến giám sát'],
+  anToan:['An toàn vệ sinh môi trường - Nhà thầu ghi','An toàn vệ sinh môi trường - Ý kiến giám sát'],
+  nghiemThu:['Nội dung nghiệm thu - Nhà thầu ghi','Nội dung nghiệm thu - Ý kiến giám sát'],
+  suCo:['Sự cố hư hỏng vi phạm - Nhà thầu ghi','Sự cố hư hỏng vi phạm - Ý kiến giám sát'],
+  phatSinh:['Vấn đề phát sinh và khắc phục - Nhà thầu ghi','Vấn đề phát sinh và khắc phục - Ý kiến giám sát'],
+  ykienKhac:['Ý kiến lưu ý khác - Nhà thầu ghi','Ý kiến lưu ý khác - Ý kiến giám sát'],
+  danhGiaChung:['Đánh giá chung và lưu ý ca sau - Nhà thầu ghi','Đánh giá chung và lưu ý ca sau - Ý kiến giám sát']
+};
 function mapSheetNhatKy(rows){
-  return rows.map(r=>({
-    id:String(r['Mã nhật ký']||''), ngay:String(r['Ngày công việc']||''), dotId:String(r['Đợt']||''),
-    toMay:String(r['Tổ máy']||''), heThong:String(r['Hệ thống']||''), hangMucId:String(r['Mã hạng mục liên quan']||''),
-    loai:String(r['Loại nội dung']||''), noiDung:String(r['Nội dung công việc']||''), nhanLuc:String(r['Nhân lực']||''),
-    antoanld:String(r['An toàn lao động']||''), nguoiGhi:String(r['Người ghi']||''), ghiChu:String(r['Ghi chú']||'')
-  })).filter(n=>n.id);
+  return rows.map(r=>{
+    const rec = {
+      id:String(r['Mã nhật ký']||''), ngay:String(r['Ngày thi công']||''), ca:String(r['Ca']||''),
+      gioBatDau:String(r['Giờ bắt đầu']||''), gioKetThuc:String(r['Giờ kết thúc']||''), donViThiCong:String(r['Đơn vị thi công']||''),
+      dotId:String(r['Đợt']||''), toMay:String(r['Tổ máy']||''), heThong:String(r['Hệ thống']||''), hangMucId:String(r['Mã hạng mục liên quan']||''),
+      kyThuatB:String(r['Kỹ thuật B']||''), canBoGiamSat:String(r['Cán bộ giám sát']||''), trangThai:String(r['Trạng thái']||'Chờ duyệt'),
+      nguoiTao:String(r['Người tạo']||''), nguoiDuyet:String(r['Người duyệt']||''), thoiGianDuyet:String(r['Thời gian duyệt']||'')
+    };
+    NK_SECTIONS.forEach(s=>{
+      const cols = NK_SHEET_KEY_MAP[s.key];
+      rec[s.key] = String(r[cols[0]]||'');
+      rec[s.key+'_yk'] = String(r[cols[1]]||'');
+    });
+    return rec;
+  }).filter(n=>n.id);
 }
 function mapSheetHinhAnh(rows){
   return rows.map(r=>({
@@ -1147,7 +1177,7 @@ function renderVatTu(){
 window.setTab = t => { state.tab=t; render(); window.scrollTo(0,0); };
 window.toggleForm = k => { state.showForm[k]=!state.showForm[k]; render(); };
 window.setCause = id => { state.activeCause=id; render(); };
-/* ---------- NHẬT KÝ THI CÔNG + ẢNH ---------- */
+/* ---------- NHẬT KÝ THI CÔNG + ẢNH (theo mẫu giấy: Nhà thầu ghi / Ý kiến giám sát, có bước duyệt) ---------- */
 window.onNkPhotoSelect = function(input){
   if(!can('nhatKy')){ noPermAlert(); input.value=''; return; }
   const files = Array.from(input.files||[]);
@@ -1184,49 +1214,61 @@ window.removeNkPendingPhoto = function(tempId){
 };
 window.setNkFilter = function(field, value){ state.nkFilter[field]=value; render(); };
 
+function nkPhotoUploaderHtml(){
+  return `<div class="field full">
+    <label>Hình ảnh</label>
+    <label class="file-btn">Chụp ảnh / Chọn ảnh<input type="file" accept="image/*" capture="environment" multiple onchange="onNkPhotoSelect(this)"></label>
+    <div class="nk-photo-grid">
+      ${state.nkPendingPhotos.map(p=>`<div class="nk-photo-item">
+        <img src="${p.dataUrl}" style="width:100%;border-radius:6px;">
+        <input list="nk-photo-suggest" placeholder="Tên ảnh (VD: Hiện trạng hư hỏng)" value="${esc(p.tenAnh)}" oninput="setNkPendingPhotoName('${p.tempId}', this.value)">
+        <button class="mini-btn" style="margin-top:4px;width:100%;" onclick="removeNkPendingPhoto('${p.tempId}')">Xóa ảnh</button>
+      </div>`).join('')}
+    </div>
+    <datalist id="nk-photo-suggest">${NK_PHOTO_SUGGEST.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+  </div>`;
+}
+
 function nhatKyForm(){
   if(!state.showForm.nhatky) return '';
   const heThongOpts = uniq(state.danhMuc.map(r=>r.heThong).filter(Boolean));
   const activeItems = state.suaChua.filter(s=>{ const d = state.dots.find(x=>x.id===s.dotId); return !d || d.trangThai==='Đang diễn ra'; });
-  return `<div class="form-panel"><div class="form-grid">
-    <div class="field"><label>Ngày công việc *</label><input id="nk-ngay" type="date" value="${todayStr()}"></div>
-    <div class="field"><label>Đợt *</label><select id="nk-dot">${state.dots.map(d=>`<option value="${esc(d.id)}">${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
-    <div class="field"><label>Hệ thống (tùy chọn)</label><input id="nk-hethong" list="nk-hethong-list" placeholder="Chọn hoặc bỏ trống">
-      <datalist id="nk-hethong-list">${heThongOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
-    </div>
-    <div class="field"><label>Hạng mục liên quan (tùy chọn)</label><select id="nk-hangmuc"><option value="">— Không liên kết —</option>${activeItems.map(i=>`<option value="${esc(i.id)}">${esc(i.id)} · ${esc(i.heThong)}-${esc(i.thietBi)}-${esc(i.viTri)}/${esc(i.lopOng)}</option>`).join('')}</select></div>
-    <div class="field"><label>Loại nội dung</label><select id="nk-loai">${NK_LOAI.map(l=>`<option>${esc(l)}</option>`).join('')}</select></div>
-    <div class="field full"><label>Nội dung công việc *</label><textarea id="nk-noidung" rows="3" placeholder="Mô tả công việc đã thực hiện trong ngày..."></textarea></div>
-    <div class="field"><label>Nhân lực</label><input id="nk-nhanluc" placeholder="VD: 4 người, tổ hàn 1"></div>
-    <div class="field"><label>An toàn lao động</label><input id="nk-atld" placeholder="Không có sự cố / mô tả nếu có"></div>
-    <div class="field full">
-      <label>Hình ảnh</label>
-      <label class="file-btn">Chụp ảnh / Chọn ảnh<input type="file" accept="image/*" capture="environment" multiple onchange="onNkPhotoSelect(this)"></label>
-      <div class="nk-photo-grid">
-        ${state.nkPendingPhotos.map(p=>`<div class="nk-photo-item">
-          <img src="${p.dataUrl}" style="width:100%;border-radius:6px;">
-          <input list="nk-photo-suggest" placeholder="Tên ảnh (VD: Hiện trạng hư hỏng)" value="${esc(p.tenAnh)}" oninput="setNkPendingPhotoName('${p.tempId}', this.value)">
-          <button class="mini-btn" style="margin-top:4px;width:100%;" onclick="removeNkPendingPhoto('${p.tempId}')">Xóa ảnh</button>
-        </div>`).join('')}
+  return `<div class="form-panel">
+    <div class="form-grid">
+      <div class="field"><label>Tên đơn vị thi công</label><input id="nk-donvi" placeholder="VD: Đội sửa chữa lò hơi..."></div>
+      <div class="field"><label>Ngày thi công *</label><input id="nk-ngay" type="date" value="${todayStr()}"></div>
+      <div class="field"><label>Ca</label><input id="nk-ca" placeholder="VD: Ca 1"></div>
+      <div class="field"><label>Giờ bắt đầu</label><input id="nk-giobatdau" type="time"></div>
+      <div class="field"><label>Giờ kết thúc</label><input id="nk-gioketthuc" type="time"></div>
+      <div class="field"><label>Đợt *</label><select id="nk-dot">${state.dots.map(d=>`<option value="${esc(d.id)}">${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
+      <div class="field"><label>Hệ thống (tùy chọn)</label><input id="nk-hethong" list="nk-hethong-list" placeholder="Chọn hoặc bỏ trống">
+        <datalist id="nk-hethong-list">${heThongOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
       </div>
-      <datalist id="nk-photo-suggest">${NK_PHOTO_SUGGEST.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+      <div class="field full"><label>Hạng mục liên quan (tùy chọn)</label><select id="nk-hangmuc"><option value="">— Không liên kết —</option>${activeItems.map(i=>`<option value="${esc(i.id)}">${esc(i.id)} · ${esc(i.heThong)}-${esc(i.thietBi)}-${esc(i.viTri)}/${esc(i.lopOng)}</option>`).join('')}</select></div>
     </div>
-    <div class="field full"><label>Ghi chú</label><input id="nk-ghichu"></div>
-  </div><div class="form-actions"><button class="btn-ghost" onclick="toggleForm('nhatky')">Hủy</button><button class="btn" onclick="addNhatKy()">Lưu nhật ký</button></div></div>`;
+    <div class="section-label" style="margin-top:16px;">Thực tế hiện trường (nhà thầu ghi)</div>
+    <div class="form-grid">
+      ${NK_SECTIONS.map(s=>`<div class="field full"><label>${esc(s.label)}</label><textarea id="nk-${s.key}" rows="2"></textarea></div>`).join('')}
+      <div class="field"><label>Kỹ thuật B (ký, ghi rõ họ tên)</label><input id="nk-kythuatb" value="${esc(state.session?state.session.name:'')}"></div>
+    </div>
+    ${nkPhotoUploaderHtml()}
+    <div class="form-actions"><button class="btn-ghost" onclick="toggleForm('nhatky')">Hủy</button><button class="btn" onclick="addNhatKy()">Lưu nhật ký</button></div>
+  </div>`;
 }
 
 window.addNhatKy = async function(){
   if(!can('nhatKy')){ noPermAlert(); return; }
   const g=id=>document.getElementById(id).value.trim();
-  const ngay=g('nk-ngay')||todayStr(), dotId=g('nk-dot'), noiDung=g('nk-noidung');
+  const ngay=g('nk-ngay')||todayStr(), dotId=g('nk-dot');
   const dotObj = state.dots.find(d=>d.id===dotId);
-  if(!dotId || !noiDung){ alert('Vui lòng chọn Đợt và nhập Nội dung công việc.'); return; }
+  if(!dotId){ alert('Vui lòng chọn Đợt.'); return; }
   const rec = {
-    id:'NK-'+pad(state.nhatKy.length+1), ngay, dotId, toMay: dotObj?dotObj.toMay:'',
-    heThong: g('nk-hethong'), hangMucId: g('nk-hangmuc'), loai: g('nk-loai')||NK_LOAI[0],
-    noiDung, nhanLuc: g('nk-nhanluc'), antoanld: g('nk-atld'),
-    nguoiGhi: state.session? state.session.name : '', ghiChu: g('nk-ghichu')
+    id:'NK-'+pad(state.nhatKy.length+1), ngay, ca:g('nk-ca'), gioBatDau:g('nk-giobatdau'), gioKetThuc:g('nk-gioketthuc'),
+    donViThiCong:g('nk-donvi'), dotId, toMay: dotObj?dotObj.toMay:'', heThong:g('nk-hethong'), hangMucId:g('nk-hangmuc'),
+    kyThuatB:g('nk-kythuatb'), canBoGiamSat:'', trangThai:'Chờ duyệt',
+    nguoiTao: state.session? state.session.name : '', nguoiDuyet:'', thoiGianDuyet:''
   };
+  NK_SECTIONS.forEach(s=>{ rec[s.key] = g('nk-'+s.key); rec[s.key+'_yk'] = ''; });
   state.nhatKy.unshift(rec);
   await persist('nhat-ky', state.nhatKy, true);
   syncToSheet('nhat_ky', rec);
@@ -1270,19 +1312,58 @@ window.deleteAnh = async function(id){
   render();
 };
 
+/* ---- Bước duyệt: Giám sát/QC (hoặc CV P4/Quản trị) mở form riêng để bổ sung "Ý kiến giám sát" cho từng mục,
+   sau đó chuyển trạng thái Chờ duyệt -> Đã duyệt. Dùng lại đúng type 'nhat_ky' khi đồng bộ (upsert theo Mã nhật ký,
+   ghi đè toàn bộ dòng) nên không cần thêm loại request mới ở Apps Script. ---- */
+window.startApproveNhatKy = function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  state.nkApprovingId = id; render();
+};
+window.cancelApproveNhatKy = function(){ state.nkApprovingId = null; render(); };
+window.submitApproveNhatKy = async function(id){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  const n = state.nhatKy.find(x=>x.id===id);
+  if(!n){ state.nkApprovingId=null; render(); return; }
+  const g=key=>{ const el=document.getElementById('nk-yk-'+key); return el? el.value.trim() : ''; };
+  NK_SECTIONS.forEach(s=>{ n[s.key+'_yk'] = g(s.key); });
+  const cbEl = document.getElementById('nk-canbogiamsat');
+  n.canBoGiamSat = (cbEl? cbEl.value.trim() : '') || (state.session? state.session.name : '');
+  n.trangThai = 'Đã duyệt';
+  n.nguoiDuyet = state.session? state.session.name : '';
+  n.thoiGianDuyet = new Date().toISOString();
+  await persist('nhat-ky', state.nhatKy, true);
+  syncToSheet('nhat_ky', n);
+  state.nkApprovingId = null;
+  render();
+};
+
+function nkApproveFormHtml(n){
+  return `<div class="form-panel" style="margin-top:10px;" onclick="event.stopPropagation()">
+    <div class="section-label" style="margin-top:0;">Ý kiến của giám sát thi công / Chủ đầu tư</div>
+    <div class="form-grid">
+      ${NK_SECTIONS.map(s=>`<div class="field full"><label>${esc(s.label)}</label>
+        ${n[s.key]?`<div class="settings-note" style="margin-bottom:6px;"><b>Nhà thầu ghi:</b> ${esc(n[s.key]).replace(/\n/g,'<br>')}</div>`:''}
+        <textarea id="nk-yk-${s.key}" rows="2" placeholder="Ý kiến giám sát...">${esc(n[s.key+'_yk'])}</textarea>
+      </div>`).join('')}
+      <div class="field"><label>Cán bộ giám sát (ký, ghi rõ họ tên)</label><input id="nk-canbogiamsat" value="${esc(n.canBoGiamSat||(state.session?state.session.name:''))}"></div>
+    </div>
+    <div class="form-actions"><button class="btn-ghost" onclick="cancelApproveNhatKy()">Hủy</button><button class="btn" onclick="submitApproveNhatKy('${n.id}')">Lưu duyệt</button></div>
+  </div>`;
+}
+
 function renderNhatKy(){
   const canNk = can('nhatKy');
   const heThongOpts = uniq(state.nhatKy.map(n=>n.heThong).filter(Boolean));
   const filtered = state.nhatKy.filter(n=>
     (!state.nkFilter.dotId || n.dotId===state.nkFilter.dotId) &&
     (!state.nkFilter.heThong || n.heThong===state.nkFilter.heThong) &&
-    (!state.nkFilter.loai || n.loai===state.nkFilter.loai)
+    (!state.nkFilter.trangThai || n.trangThai===state.nkFilter.trangThai)
   ).slice().sort((a,b)=> (b.ngay||'').localeCompare(a.ngay||'') || String(b.id).localeCompare(String(a.id)));
 
   const filterBar = `<div class="form-panel" style="padding:12px 16px;"><div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
     <div class="field"><label>Lọc theo Đợt</label><select onchange="setNkFilter('dotId', this.value)"><option value="">— Tất cả —</option>${state.dots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.nkFilter.dotId?'selected':''}>${esc(d.ten)}</option>`).join('')}</select></div>
     <div class="field"><label>Lọc theo Hệ thống</label><select onchange="setNkFilter('heThong', this.value)"><option value="">— Tất cả —</option>${heThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.nkFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
-    <div class="field"><label>Lọc theo Loại nội dung</label><select onchange="setNkFilter('loai', this.value)"><option value="">— Tất cả —</option>${NK_LOAI.map(l=>`<option ${l===state.nkFilter.loai?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field"><label>Lọc theo Trạng thái</label><select onchange="setNkFilter('trangThai', this.value)"><option value="">— Tất cả —</option><option ${state.nkFilter.trangThai==='Chờ duyệt'?'selected':''}>Chờ duyệt</option><option ${state.nkFilter.trangThai==='Đã duyệt'?'selected':''}>Đã duyệt</option></select></div>
   </div></div>`;
 
   const cards = filtered.map(n=>{
@@ -1290,24 +1371,36 @@ function renderNhatKy(){
     const photos = state.hinhAnh.filter(h=>h.maNhatKy===n.id);
     const hangMuc = n.hangMucId ? state.suaChua.find(s=>s.id===n.hangMucId) : null;
     const safeLink = s => String(s).replace(/'/g,"\\'");
+    const daDuyet = n.trangThai==='Đã duyệt';
+    const caText = [n.ca, (n.gioBatDau||n.gioKetThuc)?((n.gioBatDau||'?')+'–'+(n.gioKetThuc||'?')):''].filter(Boolean).join(' · ');
+    const nhaThauBlock = NK_SECTIONS.filter(s=>n[s.key]).map(s=>`<div style="margin-top:6px;"><b style="font-size:12px;">${esc(s.label)}:</b><div style="font-size:13px;line-height:1.5;">${esc(n[s.key]).replace(/\n/g,'<br>')}</div></div>`).join('');
+    const yKienBlock = daDuyet ? NK_SECTIONS.filter(s=>n[s.key+'_yk']).map(s=>`<div style="margin-top:6px;"><b style="font-size:12px;">${esc(s.label)}:</b><div style="font-size:13px;line-height:1.5;">${esc(n[s.key+'_yk']).replace(/\n/g,'<br>')}</div></div>`).join('') : '';
     return `<div class="repair-item">
       <div class="repair-head" style="cursor:default;">
-        <div><span class="tag-chip">${esc(n.id)}</span><b>${fmtDate(n.ngay)}</b> <span class="progress-mini">· ${esc(n.loai||'—')}${n.heThong?(' · '+esc(n.heThong)):''}${dotObj?(' · '+esc(dotObj.ten)):''}</span></div>
-        ${canNk?`<button class="mini-btn" onclick="deleteNhatKy('${n.id}')">Xóa</button>`:''}
+        <div><span class="tag-chip">${esc(n.id)}</span><b>${fmtDate(n.ngay)}</b> <span class="progress-mini">${caText?(' · '+esc(caText)):''}${n.donViThiCong?(' · '+esc(n.donViThiCong)):''}${n.heThong?(' · '+esc(n.heThong)):''}${dotObj?(' · '+esc(dotObj.ten)):''}</span></div>
+        <span class="status ${daDuyet?'good':'warn'}">${esc(n.trangThai)}</span>
       </div>
-      <div style="margin-top:8px;font-size:13px;line-height:1.5;">${esc(n.noiDung).replace(/\n/g,'<br>')}</div>
-      <div class="record-meta" style="margin-top:6px;">
-        ${n.nhanLuc?`<span>Nhân lực: ${esc(n.nhanLuc)}</span>`:''}
-        ${n.antoanld?`<span>ATLĐ: ${esc(n.antoanld)}</span>`:''}
+      <div class="section-label" style="margin-top:10px;font-size:12px;">Thực tế hiện trường (nhà thầu ghi)</div>
+      ${nhaThauBlock || '<div class="empty" style="padding:8px 0;">Chưa ghi nội dung nào.</div>'}
+      <div class="record-meta" style="margin-top:8px;">
         ${hangMuc?`<span>Hạng mục: ${esc(hangMuc.id)}</span>`:''}
-        <span>Người ghi: ${esc(n.nguoiGhi)}</span>
+        ${n.kyThuatB?`<span>Kỹ thuật B: ${esc(n.kyThuatB)}</span>`:''}
+        <span>Người tạo: ${esc(n.nguoiTao)}</span>
       </div>
-      ${n.ghiChu?`<div class="record-note">${esc(n.ghiChu)}</div>`:''}
-      ${photos.length?`<div class="nk-photo-grid">${photos.map(p=>`<div class="nk-photo-item">
+      ${daDuyet ? `<div class="section-label" style="margin-top:12px;font-size:12px;">Ý kiến của Giám sát thi công / Chủ đầu tư</div>
+        ${yKienBlock || '<div class="empty" style="padding:8px 0;">Không có ý kiến bổ sung.</div>'}
+        <div class="record-meta" style="margin-top:8px;">${n.canBoGiamSat?`<span>Cán bộ giám sát: ${esc(n.canBoGiamSat)}</span>`:''}<span>Người duyệt: ${esc(n.nguoiDuyet)}</span><span>${n.thoiGianDuyet?fmtDate(n.thoiGianDuyet.slice(0,10)):''}</span></div>`
+      : ''}
+      ${photos.length?`<div class="nk-photo-grid" style="margin-top:10px;">${photos.map(p=>`<div class="nk-photo-item">
         <img src="${esc(p.link)}" style="width:100%;border-radius:6px;cursor:pointer;" onclick="setLightbox('${safeLink(p.link)}')">
         <div style="font-size:10.5px;color:var(--dim);margin-top:3px;text-align:center;">${esc(p.tenAnh)}</div>
         ${canNk?`<button class="mini-btn" style="width:100%;margin-top:2px;" onclick="deleteAnh('${p.id}')">Xóa ảnh</button>`:''}
       </div>`).join('')}</div>`:''}
+      ${canNk?`<div class="form-actions" style="margin-top:10px;">
+        ${!daDuyet?`<button class="mini-btn" onclick="startApproveNhatKy('${n.id}')">${state.nkApprovingId===n.id?'Đang bổ sung ý kiến…':'Duyệt / Bổ sung ý kiến'}</button>`:''}
+        <button class="mini-btn" onclick="deleteNhatKy('${n.id}')">Xóa</button>
+      </div>`:''}
+      ${(state.nkApprovingId===n.id) ? nkApproveFormHtml(n) : ''}
     </div>`;
   }).join('');
 
@@ -1316,11 +1409,9 @@ function renderNhatKy(){
   </div>
   ${nhatKyForm()}
   ${filterBar}
-  <div class="settings-note" style="margin:14px 0;">Ảnh được nén và lưu trên Google Drive (dùng chung tài khoản Google với ứng dụng); link chia sẻ ở chế độ "bất kỳ ai có link đều xem được" để hiển thị được trong app.</div>
+  <div class="settings-note" style="margin:14px 0;">Ảnh được nén và lưu trên Google Drive (dùng chung tài khoản Google với ứng dụng); link chia sẻ ở chế độ "bất kỳ ai có link đều xem được" để hiển thị được trong app. Mỗi nhật ký có 2 bước: tạo mới (Chờ duyệt, ghi phần "nhà thầu") và sau đó Duyệt/bổ sung Ý kiến giám sát (chuyển Đã duyệt).</div>
   ${cards || '<div class="empty">Chưa có nhật ký thi công nào.</div>'}`;
 }
-
-
 
 /* ---------- RENDER ---------- */
 function render(){
