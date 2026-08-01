@@ -193,6 +193,14 @@ table.dm tr:last-child td{border-bottom:none;}
 .voice-fab-btn.listening{background:#e2564f;animation:micPulse 1.1s infinite;}
 .voice-fab-hint{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:11.5px;padding:5px 9px;border-radius:7px;max-width:220px;text-align:right;}
 @media (min-width:901px){ .voice-fab{bottom:24px;} }
+.wizard-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;display:flex;align-items:flex-end;justify-content:center;}
+.wizard-card{background:var(--panel);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,.4);}
+.wizard-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;}
+.wizard-prompt{font-size:18px;font-weight:600;color:var(--text);line-height:1.4;}
+.wizard-status{font-size:12.5px;color:var(--accent);margin-top:8px;min-height:16px;}
+.wizard-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.wizard-actions .btn,.wizard-actions .btn-ghost{flex:1;min-width:110px;}
+@media (min-width:701px){ .wizard-overlay{align-items:center;} .wizard-card{border-radius:16px;} }
 </style>
 </head>
 <body>
@@ -204,7 +212,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyMPu3GW7vL_RRye8F3dq4TU1FEkA92d7-JMP9tkP_WLFB14SplbsBYhTNYEzM_AZ8mrg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbw13J9xX1irMKCVj3e9cShBuQXi2aeAUxZfGHlEwKN1aLMdCFdVibl02838mk_9In-A/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -485,6 +493,294 @@ window.voiceSearchLsPipe = function(btn){
   });
 };
 function pipeCode(r){ return (r.toMay?r.toMay+' · ':'')+r.heThong+' - '+r.thietBi+' - '+r.viTri+' - '+r.lopOng; }
+
+/* ---------- HỘI THOẠI GIỌNG NÓI (voice wizard: app hỏi bằng giọng nói, người dùng trả lời bằng giọng nói) ---------- */
+function speak(text, onend){
+  if(!('speechSynthesis' in window)){ if(onend) onend(); return; }
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'vi-VN'; u.rate = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const vi = voices.find(v=>v.lang && v.lang.toLowerCase().indexOf('vi')===0);
+    if(vi) u.voice = vi;
+    let done = false;
+    const finish = ()=>{ if(done) return; done=true; if(onend) onend(); };
+    u.onend = finish; u.onerror = finish;
+    window.speechSynthesis.speak(u);
+    // phong khi su kien onend khong bao gio ban tren mot so trinh duyet/webview loi — dat timeout du phong
+    setTimeout(finish, Math.max(2500, text.length*140));
+  }catch(e){ if(onend) onend(); }
+}
+function ttsSupported(){ return ('speechSynthesis' in window); }
+// Chuyen so doc bang tieng Viet ("hai muoi ba phay nam") thanh so thap phan — uu tien lay truc tiep chu so neu STT da tra ve dang so
+const VN_ONES = {'khong':0,'mot':1,'hai':2,'ba':3,'bon':4,'tu':4,'nam':5,'lam':5,'nham':5,'sau':6,'bay':7,'tam':8,'chin':9};
+function parseVNIntWords(text){
+  let w = normalizeVN(text).split(' ').filter(t=>t && t!=='linh' && t!=='le');
+  if(!w.length) return null;
+  let hundred = 0;
+  const tIdx = w.indexOf('tram');
+  if(tIdx===1 && VN_ONES.hasOwnProperty(w[0])){ hundred = VN_ONES[w[0]]*100; w = w.slice(2); }
+  else if(tIdx!==-1) return null;
+  if(w.length===0) return hundred || null;
+  let tens=0, unit=0, matched=false;
+  if(w[0]==='muoi' || w[0]==='chuc'){
+    tens=10; matched=true;
+    const u = w[1]; if(u && VN_ONES.hasOwnProperty(u)) unit = VN_ONES[u];
+  } else if(w.length>=2 && (w[1]==='muoi'||w[1]==='chuc') && VN_ONES.hasOwnProperty(w[0])){
+    tens = VN_ONES[w[0]]*10; matched=true;
+    const u = w[2]; if(u && VN_ONES.hasOwnProperty(u)) unit = VN_ONES[u];
+  } else if(w.length===1 && VN_ONES.hasOwnProperty(w[0])){
+    unit = VN_ONES[w[0]]; matched=true;
+  }
+  if(!matched && !hundred) return null;
+  return hundred+tens+unit;
+}
+function parseVNNumber(text){
+  if(!text) return null;
+  let t = normalizeVN(text);
+  const digitMatch = t.match(/-?\d+([.,]\d+)?/);
+  if(digitMatch) return parseFloat(digitMatch[0].replace(',','.'));
+  t = t.replace(/\bphet\b|\bphay\b|\bcham\b/g, ' PHAY ');
+  const parts = t.split('PHAY').map(p=>p.trim()).filter(p=>p!=='');
+  if(!parts.length) return null;
+  const intPart = parseVNIntWords(parts[0]);
+  if(intPart===null) return null;
+  if(parts.length>1){
+    const decPart = parseVNIntWords(parts[1]);
+    if(decPart!==null) return parseFloat(intPart+'.'+decPart);
+  }
+  return intPart;
+}
+// Nhan lenh thoai co dinh: dung/sai/tiep/dung lai... — tra ve 'yes'|'no'|'stop'|'redo'|null
+function matchVoiceCommand(text){
+  const t = normalizeVN(text);
+  if(!t) return null;
+  const yes = ['dung','dung roi','ok','oke','vang','uh','tiep','tiep tuc','phai'];
+  const no = ['sai','khong dung','khong phai','sua lai','lai'];
+  const stop = ['xong','dung lai','thoi','ket thuc','huy','ngung'];
+  if(stop.some(k=>t===k||t.includes(k))) return 'stop';
+  if(no.some(k=>t===k||t.includes(k))) return 'no';
+  if(yes.some(k=>t===k||t.includes(k))) return 'yes';
+  return null;
+}
+
+/* ---------- WIZARD GIỌNG NÓI: bộ điều khiển hội thoại chung, dùng cho nhiều module nhập liệu ---------- */
+function openWizard(opts){
+  closeWizard(true);
+  state.wizard = {
+    title: opts.title, steps: opts.steps, index: 0,
+    data: opts.data || {}, status:'idle', pendingConfirm:null,
+    onDone: opts.onDone, transcript:''
+  };
+  render();
+  runWizardStep();
+}
+function closeWizard(silent){
+  if(voiceRec){ try{ voiceRec.stop(); }catch(e){} }
+  if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+  voiceListening=false;
+  state.wizard = null;
+  if(!silent) render();
+}
+window.closeWizard = closeWizard;
+function wizardPromptText(step){
+  const w = state.wizard;
+  return typeof step.prompt==='function' ? step.prompt(w.data) : step.prompt;
+}
+function runWizardStep(){
+  const w = state.wizard; if(!w) return;
+  if(w.index>=w.steps.length){ finalizeWizard(); return; }
+  const step = w.steps[w.index];
+  if(step.kind==='resolve'){
+    const idxAtStart = w.index;
+    w.status='speaking'; render();
+    Promise.resolve(step.compute(w.data)).then(result=>{
+      if(!state.wizard || state.wizard.index!==idxAtStart) return;
+      state.wizard.status='speaking'; state.wizard.transcript=''; render();
+      speak(result.message, ()=>{
+        if(!state.wizard || state.wizard.index!==idxAtStart) return;
+        if(result.fatal){ closeWizard(); if(result.alertMsg) alert(result.alertMsg); return; }
+        if(result.ok) advanceWizard();
+        else { state.wizard.index = Math.max(0, state.wizard.index + (result.backSteps||0)); runWizardStep(); }
+      });
+    });
+    return;
+  }
+  w.status='speaking'; w.transcript=''; w.pendingConfirm=null; render();
+  const promptText = wizardPromptText(step);
+  const idxAtStart = w.index;
+  speak(promptText, ()=>{ if(state.wizard && state.wizard.index===idxAtStart) beginListenForStep(); });
+}
+function beginListenForStep(){
+  const w = state.wizard; if(!w) return;
+  const idxAtStart = w.index;
+  if(!voiceSupported()){ w.status='waiting-input'; render(); return; }
+  w.status='listening'; render();
+  try{
+    const rec = newVoiceRecognizer();
+    voiceRec = rec;
+    rec.onresult = e=>{
+      if(!state.wizard || state.wizard.index!==idxAtStart) return;
+      const txt = (e.results[0][0].transcript||'').trim();
+      handleWizardTranscript(txt);
+    };
+    rec.onerror = ()=>{ if(state.wizard && state.wizard.index===idxAtStart){ state.wizard.status='waiting-input'; render(); } };
+    rec.onend = ()=>{ if(state.wizard && state.wizard.index===idxAtStart && state.wizard.status==='listening'){ state.wizard.status='waiting-input'; render(); } };
+    rec.start();
+  }catch(err){ w.status='waiting-input'; render(); }
+}
+function handleWizardTranscript(txt){
+  const w = state.wizard; if(!w) return;
+  w.transcript = txt;
+  const step = w.steps[w.index];
+  if(w.pendingConfirm){
+    const cmd = matchVoiceCommand(txt);
+    if(cmd==='yes'){ applyPendingConfirm(true); return; }
+    if(cmd==='no'){ applyPendingConfirm(false); return; }
+    speak('Anh nói đúng hay sai?', ()=>beginListenForStep());
+    return;
+  }
+  const cmd0 = matchVoiceCommand(txt);
+  if(cmd0==='stop'){ closeWizard(); return; }
+  processStepAnswer(step, txt);
+}
+function processStepAnswer(step, txt){
+  const w = state.wizard; if(!w) return;
+  const norm = normalizeVN(txt);
+  if(step.kind==='choice'){
+    if(step.optional && (!txt || /^(bo qua|khong co|k co)$/.test(norm))){
+      w.data[step.key]=''; w.data[step.key+'_label']=''; advanceWizard(); return;
+    }
+    const opts = step.getOptions(w.data);
+    const best = fuzzyPickOption(txt, opts);
+    if(!best){ speak('Không nhận ra, anh nói lại '+step.label.toLowerCase()+' được không?', ()=>beginListenForStep()); return; }
+    w.data[step.key]=best.value; w.data[step.key+'_label']=best.label;
+    if(step.onPick){ step.onPick(best.value, w.data); return; }
+    if(step.confirm){ askConfirm(best.label, ()=>advanceWizard(), ()=>runWizardStep()); }
+    else { advanceWizard(); }
+  } else if(step.kind==='number'){
+    const val = parseVNNumber(txt);
+    if(val===null){ speak('Không nghe rõ số, anh đọc lại '+step.label.toLowerCase()+' được không?', ()=>beginListenForStep()); return; }
+    w.data[step.key]=val;
+    const readback = String(val).replace('.', ' phẩy ')+(step.unit?(' '+step.unit):'');
+    askConfirm(readback, ()=>advanceWizard(), ()=>runWizardStep());
+  } else {
+    if(step.optional && (!txt || /^(bo qua|khong co)$/.test(norm))){ w.data[step.key]=''; advanceWizard(); return; }
+    w.data[step.key] = ((w.data[step.key]||'') + (w.data[step.key]?' ':'') + txt).trim();
+    w.status='review'; render();
+    listenForTextFollowup();
+  }
+}
+function listenForTextFollowup(){
+  const w = state.wizard; if(!w) return;
+  const idxAtStart = w.index;
+  if(!voiceSupported()) return;
+  let settled=false;
+  const timer = setTimeout(()=>{ if(!settled){ settled=true; if(state.wizard && state.wizard.index===idxAtStart) advanceWizard(); } }, 3500);
+  try{
+    const rec = newVoiceRecognizer();
+    voiceRec = rec;
+    rec.onresult = e=>{
+      clearTimeout(timer); if(settled || !state.wizard || state.wizard.index!==idxAtStart) return; settled=true;
+      const txt = (e.results[0][0].transcript||'').trim();
+      const cmd = matchVoiceCommand(txt);
+      if(cmd==='stop'){ closeWizard(); return; }
+      if(cmd==='no'){ state.wizard.data[step_key(state.wizard)]=''; runWizardStep(); return; }
+      if(cmd==='yes'){ advanceWizard(); return; }
+      const wz = state.wizard; const st=wz.steps[wz.index];
+      wz.data[st.key]=((wz.data[st.key]||'')+' '+txt).trim(); wz.status='review'; render();
+      listenForTextFollowup();
+    };
+    rec.onerror = ()=>{ clearTimeout(timer); if(!settled){ settled=true; if(state.wizard && state.wizard.index===idxAtStart) advanceWizard(); } };
+    rec.start();
+  }catch(e){ clearTimeout(timer); if(!settled){ settled=true; advanceWizard(); } }
+}
+function step_key(w){ return w.steps[w.index].key; }
+function askConfirm(readbackLabel, onYes, onNo){
+  const w = state.wizard; if(!w) return;
+  w.pendingConfirm = {onYes, onNo};
+  w.status='confirming'; render();
+  const idxAtStart = w.index;
+  speak('Anh vừa đọc: '+readbackLabel+'. Đúng không?', ()=>{ if(state.wizard && state.wizard.index===idxAtStart) beginListenForStep(); });
+}
+function applyPendingConfirm(isYes){
+  const w = state.wizard; if(!w) return;
+  const pc = w.pendingConfirm; w.pendingConfirm=null;
+  if(isYes){ if(pc && pc.onYes) pc.onYes(); } else { if(pc && pc.onNo) pc.onNo(); }
+}
+window.wizardManualConfirm = function(isYes){ applyPendingConfirm(isYes); };
+window.wizardManualNext = function(){ advanceWizard(); };
+window.wizardManualRedo = function(){ runWizardStep(); };
+window.wizardManualSkip = function(){
+  const w=state.wizard; if(!w) return; const step=w.steps[w.index];
+  w.data[step.key]=''; advanceWizard();
+};
+window.wizardSetTextValue = function(val){
+  const w=state.wizard; if(!w) return; const step=w.steps[w.index];
+  w.data[step.key]=val;
+};
+window.wizardChoicePick = function(value, label){
+  const w=state.wizard; if(!w) return; const step=w.steps[w.index];
+  w.data[step.key]=value; w.data[step.key+'_label']=label;
+  if(step.onPick){ step.onPick(value, w.data); return; }
+  if(step.confirm){ askConfirm(label, ()=>advanceWizard(), ()=>runWizardStep()); }
+  else { advanceWizard(); }
+};
+window.wizardNumberManualConfirm = function(){
+  const w=state.wizard; if(!w) return; const step=w.steps[w.index];
+  const el = document.getElementById('wizard-num-input'); if(!el) return;
+  const val = parseVNNumber(el.value);
+  if(val===null){ alert('Vui lòng nhập số hợp lệ.'); return; }
+  w.data[step.key]=val;
+  const readback = String(val).replace('.', ' phẩy ')+(step.unit?(' '+step.unit):'');
+  askConfirm(readback, ()=>advanceWizard(), ()=>runWizardStep());
+};
+window.wizardTapListen = function(){ beginListenForStep(); };
+function advanceWizard(){
+  const w = state.wizard; if(!w) return;
+  if(voiceRec){ try{ voiceRec.stop(); }catch(e){} }
+  w.index++; w.pendingConfirm=null;
+  runWizardStep();
+}
+function finalizeWizard(){
+  const w = state.wizard; if(!w) return;
+  const data = w.data; const onDone = w.onDone;
+  if(onDone) onDone(data);
+}
+function renderWizardModal(){
+  const w = state.wizard; if(!w) return '';
+  const step = w.steps[w.index];
+  if(!step) return `<div class="wizard-overlay"><div class="wizard-card"><div class="wizard-head"><span>${esc(w.title)}</span></div><div class="wizard-prompt">Đang lưu…</div></div></div>`;
+  const statusLabel = {speaking:'🔊 Đang đọc câu hỏi…', listening:'🎤 Đang nghe…', confirming:'🔊 Đang xác nhận…', 'waiting-input':'Chưa nghe rõ — bấm mic để nói lại, hoặc nhập tay bên dưới', review:'✓ Đã ghi nhận'}[w.status] || '';
+  const promptText = wizardPromptText(step);
+  const progress = 'Bước '+(w.index+1)+'/'+w.steps.length;
+  let bodyHtml;
+  if(w.pendingConfirm){
+    bodyHtml = `<div class="wizard-actions"><button class="btn" onclick="wizardManualConfirm(true)">✓ Đúng</button><button class="btn-ghost" onclick="wizardManualConfirm(false)">✗ Nói lại</button></div>`;
+  } else if(step.kind==='text'){
+    bodyHtml = `<textarea id="wizard-text-input" rows="3" style="width:100%;margin-top:10px;" oninput="wizardSetTextValue(this.value)">${esc(w.data[step.key]||'')}</textarea>
+      <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button><button class="btn" onclick="wizardManualNext()">Tiếp tục ▸</button>${step.optional?`<button class="btn-ghost" onclick="wizardManualSkip()">Bỏ qua</button>`:''}</div>`;
+  } else if(step.kind==='number'){
+    bodyHtml = `<input id="wizard-num-input" type="number" step="0.01" inputmode="decimal" style="width:100%;margin-top:10px;font-size:20px;text-align:center;" value="${w.data[step.key]!=null?esc(String(w.data[step.key])):''}">
+      <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button><button class="btn" onclick="wizardNumberManualConfirm()">Xác nhận</button></div>`;
+  } else {
+    const opts = step.getOptions(w.data);
+    bodyHtml = `<select style="width:100%;margin-top:10px;" onchange="const o=this.options[this.selectedIndex]; wizardChoicePick(this.value, o.text)">
+      <option value="">— chọn ${esc(step.label.toLowerCase())} —</option>
+      ${opts.map(o=>`<option value="${esc(o.value)}" ${w.data[step.key]===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
+      </select>
+      <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button>${step.optional?`<button class="btn-ghost" onclick="wizardManualSkip()">Bỏ qua</button>`:''}</div>`;
+  }
+  return `<div class="wizard-overlay">
+    <div class="wizard-card">
+      <div class="wizard-head"><span>${esc(w.title)} · ${esc(progress)}</span><button class="mini-btn" onclick="closeWizard()">Đóng</button></div>
+      <div class="wizard-prompt">${esc(promptText)}</div>
+      <div class="wizard-status">${statusLabel}${w.transcript?(' — nghe được: "'+esc(w.transcript)+'"'):''}</div>
+      ${bodyHtml}
+    </div>
+  </div>`;
+}
 
 /* ---------- Phan quyen ---------- */
 const ROLE_LABELS = {
@@ -1127,6 +1423,98 @@ window.addKiemTra = async function(){
       +'Chi\u1ec1u d\u00e0y \u0111o: '+chieuDayDo+'mm / Thi\u1ebft k\u1ebf: '+dm.chieuDay+'mm ('+rec.phanTramConLai+'% c\u00f2n l\u1ea1i)\n'
       +'\u0110\u00e3 \u0111\u01b0a v\u00e0o danh s\u00e1ch c\u1eaft thay.');
   }
+};
+
+/* ---------- Hội thoại giọng nói cho Kiểm tra (đo chiều dày) — chế độ đo liên tục ---------- */
+function buildKtWizardSteps(loopMode){
+  const steps = [];
+  if(!loopMode){
+    steps.push({key:'dotId', label:'Đợt', kind:'choice', confirm:false,
+      prompt:'Đọc tên đợt kiểm tra sửa chữa.',
+      getOptions:()=> state.dots.filter(d=>d.trangThai==='Đang diễn ra').map(d=>({value:d.id, label:d.ten}))});
+    steps.push({key:'heThong', label:'Hệ thống', kind:'choice', confirm:false,
+      prompt:'Đọc tên hệ thống.',
+      getOptions:(data)=>{
+        const dotObj = state.dots.find(d=>d.id===data.dotId);
+        const toMay = dotObj?dotObj.toMay:'';
+        const list = uniq(state.danhMuc.filter(r=>isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong).filter(Boolean));
+        return list.map(v=>({value:v,label:v}));
+      }});
+    steps.push({key:'thietBi', label:'Thiết bị', kind:'choice', confirm:false, optional:true,
+      prompt:'Đọc tên thiết bị, hoặc nói "bỏ qua" nếu hệ thống này không chia thiết bị.',
+      getOptions:(data)=>{
+        const dotObj = state.dots.find(d=>d.id===data.dotId);
+        const toMay = dotObj?dotObj.toMay:'';
+        const list = uniq(state.danhMuc.filter(r=> r.heThong===data.heThong && (isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay))).map(r=>r.thietBi).filter(Boolean));
+        return list.map(v=>({value:v,label:v}));
+      }});
+  }
+  steps.push({key:'viTri', label:'Vị trí', kind:'number', confirm:false,
+    prompt:'Đọc số vị trí.'});
+  steps.push({key:'lopOng', label:'Lớp ống', kind:'number', confirm:false,
+    prompt:'Đọc số lớp ống.'});
+  steps.push({kind:'resolve', compute:(data)=>{
+    const dotObj = state.dots.find(d=>d.id===data.dotId);
+    const toMay = dotObj?dotObj.toMay:'';
+    const candidates = ktCandidates(toMay, data.heThong, data.thietBi, String(data.viTri), String(data.lopOng));
+    if(candidates.length===1){
+      const dm = candidates[0];
+      data.__dm = dm;
+      return {ok:true, message:'Đã xác định vùng '+dm.vung+', đường kính '+dm.duongKinh+' mi-li-mét, chiều dày thiết kế '+dm.chieuDay+' mi-li-mét.'};
+    } else if(candidates.length===0){
+      return {ok:false, backSteps:-2, message:'Không tìm thấy vùng vật liệu nào khớp vị trí và lớp ống này trong Danh mục kỹ thuật. Anh đọc lại vị trí và lớp ống nhé.'};
+    } else {
+      return {ok:false, backSteps:-2, message:'Có nhiều vùng vật liệu bị chồng lấn cho vị trí này, không thể tự xác định. Anh đọc lại vị trí và lớp ống, hoặc vào Danh mục kỹ thuật sửa lại cho hết chồng lấn.'};
+    }
+  }});
+  steps.push({key:'chieuDayDo', label:'Chiều dày đo', kind:'number', confirm:true, unit:'mi li mét',
+    prompt:'Đọc chiều dày đo được.'});
+  steps.push({key:'ngoaiDang', label:'Ngoại dạng', kind:'text', confirm:false, optional:true,
+    prompt:'Mô tả ngoại dạng bên ngoài, hoặc nói "bỏ qua".'});
+  steps.push({kind:'resolve', compute: async (data)=>{
+    const dotObj = state.dots.find(d=>d.id===data.dotId);
+    const dm = data.__dm;
+    if(!dotObj || !dm) return {ok:false, fatal:true, message:'Thiếu thông tin, không thể lưu bản ghi này.'};
+    const phanTramConLai = (parseFloat(data.chieuDayDo)/parseFloat(dm.chieuDay)*100);
+    const rec = {
+      id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
+      heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:String(data.viTri), lopOng:String(data.lopOng),
+      duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay,
+      chieuDayDo:String(data.chieuDayDo), phanTramConLai: phanTramConLai.toFixed(1),
+      ngoaiDang:data.ngoaiDang||'', ngay:todayStr(),
+      nguoiKiemTra: state.session? state.session.name : '—'
+    };
+    state.kiemTra.unshift(rec);
+    await persist('kiem-tra', state.kiemTra, true);
+    syncToSheet('kiem_tra', rec);
+    await syncSuaChua();
+    render();
+    if(phanTramConLai<=70 && state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length){
+      sendTelegram('CẢNH BÁO CHIỀU DÀY — '+rec.id+'\n'
+        +'Vị trí: '+pipeCode(rec)+'\n'
+        +'Chiều dày đo: '+rec.chieuDayDo+'mm / Thiết kế: '+dm.chieuDay+'mm ('+rec.phanTramConLai+'% còn lại)\n'
+        +'Đã đưa vào danh sách cắt thay.');
+    }
+    return {ok:true, message:'Đã lưu, còn lại '+phanTramConLai.toFixed(0)+' phần trăm.'};
+  }});
+  steps.push({key:'__loop', label:'Tiếp tục', kind:'choice', confirm:false,
+    prompt:'Đo tiếp vị trí khác cùng thiết bị này chứ? Nói "tiếp" hoặc "xong".',
+    getOptions:()=> [{value:'tiep',label:'Tiếp tục đo'},{value:'xong',label:'Xong, kết thúc'}],
+    onPick:(value, data)=>{
+      if(value==='tiep'){
+        const loopData = {dotId:data.dotId, dotId_label:data.dotId_label, heThong:data.heThong, heThong_label:data.heThong_label, thietBi:data.thietBi, thietBi_label:data.thietBi_label};
+        state.wizard = null;
+        openWizard({title:'Kiểm tra (đo chiều dày)', steps: buildKtWizardSteps(true), data: loopData});
+      } else {
+        closeWizard();
+      }
+    }});
+  return steps;
+}
+window.startKtVoiceWizard = function(){
+  if(!can('kiemTra')){ noPermAlert(); return; }
+  if(!state.dots.some(d=>d.trangThai==='Đang diễn ra')){ alert('Chưa có Đợt kiểm tra/sửa chữa nào đang diễn ra. Vui lòng tạo hoặc mở lại một Đợt trước.'); return; }
+  openWizard({title:'Kiểm tra (đo chiều dày)', steps: buildKtWizardSteps(false), data:{}});
 };
 function scSafeSheetName(s){
   return String(s).replace(/[:\\\/\?\*\[\]]/g,'-').slice(0,31) || 'Trang';
@@ -1904,6 +2292,42 @@ function computeNkTrangSoMap(){
   sorted.forEach(n=>{ counters[n.dotId] = (counters[n.dotId]||0)+1; map[n.id] = counters[n.dotId]; });
   return map;
 }
+/* ---------- Hội thoại giọng nói cho Nhật ký thi công ---------- */
+function buildNkWizardSteps(){
+  const steps = [];
+  steps.push({key:'dotId', label:'Đợt', kind:'choice', confirm:false,
+    prompt:'Đọc tên đợt.',
+    getOptions:()=> state.dots.map(d=>({value:d.id, label:d.ten}))});
+  steps.push({key:'ca', label:'Ca làm việc', kind:'text', confirm:false, optional:true,
+    prompt:'Đọc ca làm việc, ví dụ Ca 1. Hoặc nói "bỏ qua".'});
+  NK_SECTIONS.forEach(s=>{
+    steps.push({key:s.key, label:s.label, kind:'text', confirm:false, optional:true,
+      prompt: s.label+'. Nói "bỏ qua" nếu hôm nay không có nội dung mục này.'});
+  });
+  steps.push({kind:'resolve', compute: async (data)=>{
+    const dotObj = state.dots.find(d=>d.id===data.dotId);
+    if(!dotObj) return {ok:false, fatal:true, message:'Chưa xác định được Đợt, không thể lưu nhật ký này.'};
+    const rec = {
+      id:'NK-'+pad(state.nhatKy.length+1), ngay:todayStr(), ca:data.ca||'', gioBatDau:'', gioKetThuc:'',
+      tenHangMucCongTrinh: dotObj.tenHangMucCongTrinh||'', tenGoiThau: dotObj.tenGoiThau||'', donViThiCong: dotObj.donViThiCong||'',
+      dotId: dotObj.id, toMay: dotObj.toMay, heThong:'', hangMucId:'',
+      kyThuatB: state.session?state.session.name:'', canBoGiamSat:'', trangThai:'Chờ duyệt',
+      nguoiTao: state.session?state.session.name:'', nguoiDuyet:'', thoiGianDuyet:''
+    };
+    NK_SECTIONS.forEach(s=>{ rec[s.key]=data[s.key]||''; rec[s.key+'_yk']=''; });
+    state.nhatKy.unshift(rec);
+    await persist('nhat-ky', state.nhatKy, true);
+    syncToSheet('nhat_ky', rec);
+    render();
+    return {ok:true, message:'Đã lưu nhật ký thi công, đang chờ giám sát duyệt. Vào mục Nhật ký để bổ sung ảnh nếu cần.'};
+  }});
+  return steps;
+}
+window.startNkVoiceWizard = function(){
+  if(!can('nhatKy')){ noPermAlert(); return; }
+  if(!state.dots.length){ alert('Chưa có Đợt nào. Vui lòng tạo Đợt trước.'); return; }
+  openWizard({title:'Nhật ký thi công', steps: buildNkWizardSteps(), data:{}});
+};
 function renderNhatKy(){
   const canNk = can('nhatKy');
   const trangSoMap = computeNkTrangSoMap();
@@ -1970,6 +2394,7 @@ function renderNhatKy(){
       ${canNk?`<label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importNhatKy(this)"></label>`:''}
       ${canNk?`<button class="btn-ghost" onclick="exportNhatKyTemplate()">Tải mẫu nhập liệu</button>`:''}
       <button class="btn-ghost" onclick="exportNhatKy()">Xuất Excel (theo mẫu giấy)</button>
+      ${canNk?`<button class="btn-ghost" onclick="startNkVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
       ${canNk?`<button class="btn" onclick="toggleForm('nhatky')">${state.showForm.nhatky?'Đóng biểu mẫu':'+ Thêm nhật ký'}</button>`:''}
     </div>
   </div>
@@ -2014,7 +2439,8 @@ function render(){
     <div class="main">${renderTab()}</div>
   </div>
   <div class="bottom-nav">${bottomNavHtml}</div>
-  ${state.lightboxImg ? `<div class="lightbox-overlay" onclick="closeLightbox()"><img src="${state.lightboxImg}"></div>` : ''}`;
+  ${state.lightboxImg ? `<div class="lightbox-overlay" onclick="closeLightbox()"><img src="${state.lightboxImg}"></div>` : ''}
+  ${state.wizard ? renderWizardModal() : ''}`;
 }
 window.setLightbox = function(url){ state.lightboxImg = url; render(); };
 window.closeLightbox = function(){ state.lightboxImg = null; render(); };
@@ -2319,6 +2745,7 @@ function renderKiemTra(){
       ${canKt?`<label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importKiemTra(this)"></label>`:''}
       <button class="btn-ghost" onclick="exportKiemTraTemplate()">Tải mẫu nhập liệu</button>
       <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel (báo cáo in ấn)</button>
+      ${canKt?`<button class="btn-ghost" onclick="startKtVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
       ${canKt?`<button class="btn" onclick="toggleForm('kiemtra')">${state.showForm.kiemtra?'Đóng biểu mẫu':'+ Thêm bản ghi'}</button>`:''}
     </div></div>
   ${form}
