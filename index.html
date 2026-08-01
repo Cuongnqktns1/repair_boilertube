@@ -495,10 +495,22 @@ window.voiceSearchLsPipe = function(btn){
 function pipeCode(r){ return (r.toMay?r.toMay+' · ':'')+r.heThong+' - '+r.thietBi+' - '+r.viTri+' - '+r.lopOng; }
 
 /* ---------- HỘI THOẠI GIỌNG NÓI (voice wizard: app hỏi bằng giọng nói, người dùng trả lời bằng giọng nói) ---------- */
+let _ttsKeepAlive = null;
+function startTtsKeepAlive(){
+  stopTtsKeepAlive();
+  // Chrome co loi da biet: hang doi speechSynthesis tu tam dung sau ~15s khong hoat dong roi khong bao gio tiep tuc —
+  // goi resume() dinh ky trong luc wizard dang mo de tranh bi "cam lang" giua chung
+  if('speechSynthesis' in window){
+    _ttsKeepAlive = setInterval(()=>{ try{ window.speechSynthesis.resume(); }catch(e){} }, 4000);
+  }
+}
+function stopTtsKeepAlive(){ if(_ttsKeepAlive){ clearInterval(_ttsKeepAlive); _ttsKeepAlive=null; } }
 function speak(text, onend){
   if(!('speechSynthesis' in window)){ if(onend) onend(); return; }
   try{
-    window.speechSynthesis.cancel();
+    // chi huy hang doi neu that su dang co gi do dang doc/cho doc — goi cancel() thua co the kich hoat
+    // loi "ket dinh" hang doi TTS tren mot so ban Chrome, khien cac lan doc sau khong bao gio chay nua
+    if(window.speechSynthesis.speaking || window.speechSynthesis.pending) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'vi-VN'; u.rate = 1;
     const voices = window.speechSynthesis.getVoices();
@@ -506,10 +518,10 @@ function speak(text, onend){
     if(vi) u.voice = vi;
     let done = false;
     const finish = ()=>{ if(done) return; done=true; if(onend) onend(); };
-    u.onend = finish; u.onerror = finish;
+    u.onend = finish; u.onerror = finish; u.onstart = ()=>{};
     window.speechSynthesis.speak(u);
-    // phong khi su kien onend khong bao gio ban tren mot so trinh duyet/webview loi — dat timeout du phong
-    setTimeout(finish, Math.max(2500, text.length*140));
+    // phong khi su kien onend khong bao gio ban (loi trinh duyet/webview, hang doi bi "ket") — dat timeout du phong
+    setTimeout(finish, Math.max(3000, text.length*160));
   }catch(e){ if(onend) onend(); }
 }
 function ttsSupported(){ return ('speechSynthesis' in window); }
@@ -573,6 +585,7 @@ function openWizard(opts){
     data: opts.data || {}, status:'idle', pendingConfirm:null,
     onDone: opts.onDone, transcript:''
   };
+  startTtsKeepAlive();
   render();
   runWizardStep();
 }
@@ -580,6 +593,7 @@ function closeWizard(silent){
   if(voiceRec){ try{ voiceRec.stop(); }catch(e){} }
   if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(e){} }
   voiceListening=false;
+  stopTtsKeepAlive();
   state.wizard = null;
   if(!silent) render();
 }
@@ -594,16 +608,31 @@ function runWizardStep(){
   const step = w.steps[w.index];
   if(step.kind==='resolve'){
     const idxAtStart = w.index;
-    w.status='speaking'; render();
-    Promise.resolve(step.compute(w.data)).then(result=>{
+    w.status='speaking'; w.transcript='Đang xử lý…'; render();
+    const timeoutMs = 15000;
+    let settled = false;
+    const timer = setTimeout(()=>{
+      if(settled) return; settled=true;
+      if(!state.wizard || state.wizard.index!==idxAtStart) return;
+      state.wizard.status='waiting-input'; state.wizard.transcript='Xử lý quá lâu (có thể do mạng chậm/mất kết nối Google Sheet).'; render();
+    }, timeoutMs);
+    Promise.resolve().then(()=>step.compute(w.data)).then(result=>{
+      if(settled) return; settled=true; clearTimeout(timer);
       if(!state.wizard || state.wizard.index!==idxAtStart) return;
       state.wizard.status='speaking'; state.wizard.transcript=''; render();
       speak(result.message, ()=>{
         if(!state.wizard || state.wizard.index!==idxAtStart) return;
-        if(result.fatal){ closeWizard(); if(result.alertMsg) alert(result.alertMsg); return; }
+        if(result.fatal){ closeWizard(); if(result.alertMsg||result.message) alert(result.alertMsg||result.message); return; }
         if(result.ok) advanceWizard();
         else { state.wizard.index = Math.max(0, state.wizard.index + (result.backSteps||0)); runWizardStep(); }
       });
+    }).catch(err=>{
+      if(settled) return; settled=true; clearTimeout(timer);
+      console.error('Lỗi bước xử lý trong hội thoại giọng nói:', err);
+      if(!state.wizard || state.wizard.index!==idxAtStart) return;
+      const msg = 'Đã xảy ra lỗi: '+(err && err.message ? err.message : String(err));
+      state.wizard.status='waiting-input'; state.wizard.transcript=msg; render();
+      alert(msg+'\n\nDữ liệu bước này có thể chưa được lưu. Anh có thể bấm mic để thử lại bước hiện tại, hoặc bấm Đóng để chuyển sang nhập tay.');
     });
     return;
   }
@@ -764,6 +793,10 @@ function renderWizardModal(){
   } else if(step.kind==='number'){
     bodyHtml = `<input id="wizard-num-input" type="number" step="0.01" inputmode="decimal" style="width:100%;margin-top:10px;font-size:20px;text-align:center;" value="${w.data[step.key]!=null?esc(String(w.data[step.key])):''}">
       <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button><button class="btn" onclick="wizardNumberManualConfirm()">Xác nhận</button></div>`;
+  } else if(step.kind==='resolve'){
+    bodyHtml = w.status==='waiting-input'
+      ? `<div class="wizard-actions"><button class="btn" onclick="wizardManualRedo()">Thử lại</button><button class="btn-ghost" onclick="closeWizard()">Đóng, chuyển sang nhập tay</button></div>`
+      : `<div class="wizard-status" style="margin-top:6px;">⏳ Đang xử lý dữ liệu…</div>`;
   } else {
     const opts = step.getOptions(w.data);
     bodyHtml = `<select style="width:100%;margin-top:10px;" onchange="const o=this.options[this.selectedIndex]; wizardChoicePick(this.value, o.text)">
