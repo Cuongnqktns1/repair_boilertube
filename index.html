@@ -212,7 +212,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyMPu3GW7vL_RRye8F3dq4TU1FEkA92d7-JMP9tkP_WLFB14SplbsBYhTNYEzM_AZ8mrg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyW3tiWtFw0DvwJQxhXg5KFTypYM4bf72bR_J9Q5MNmK_oGytd3MdoUIQf_TCGCWy8tAA/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -330,7 +330,7 @@ const NK_PHOTO_SUGGEST = ['Hiện trạng hư hỏng','Trước sửa chữa','T
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
   session:null, authView:'login', authErr:'', theme:'dark',
-  tab:'overview', loading:true,
+  tab:'overview', loading:true, writeErrors:[],
   users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[], nhatKy:[], hinhAnh:[],
   telegram:{botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''},
   showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false,nhatky:false},
@@ -1103,10 +1103,14 @@ function seedDanhMuc(){
 }
 async function persist(key, value, shared){ try{ await storageSet(key, JSON.stringify(value), shared); _dataVersion++; }catch(e){ console.error('Lỗi lưu',key,e); } }
 async function deleteFromSheet(sheetName, id){
-  try{ await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'delete', record:{sheet:sheetName, id}, ts:new Date().toISOString()})}); }catch(e){ /* best-effort */ }
+  const result = await postToSheet({type:'delete', record:{sheet:sheetName, id}, ts:new Date().toISOString()});
+  if(!result.ok) reportWriteError('delete '+sheetName, result.error);
+  return result.ok;
 }
 async function deleteAllFromSheet(sheetName){
-  try{ await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'delete_all', record:{sheet:sheetName}, ts:new Date().toISOString()})}); }catch(e){ /* best-effort */ }
+  const result = await postToSheet({type:'delete_all', record:{sheet:sheetName}, ts:new Date().toISOString()});
+  if(!result.ok) reportWriteError('delete_all '+sheetName, result.error);
+  return result.ok;
 }
 
 /* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
@@ -1201,10 +1205,41 @@ window.deleteDot = async function(id){
   render();
 };
 
-async function syncToSheet(type, record){
+// Ghi len Google Sheet: truoc day dung mode:'no-cors' + Content-Type application/json — cach nay khien trinh duyet
+// KHONG BAO GIO doc duoc phan hoi (fire-and-forget mu), nen moi loi thuc su o phia Apps Script (chua deploy ban moi,
+// thieu quyen Google Drive, loi ghi sheet...) hoan toan vo hinh, khong the biet duoc du lieu co thuc su vao Sheet hay khong.
+// Sua lai: dung Content-Type 'text/plain' (Apps Script van JSON.parse(e.postData.contents) binh thuong du khai bao
+// content-type la gi) de trinh duyet KHONG gui preflight OPTIONS (Apps Script khong xu ly OPTIONS), tu do khong con
+// can no-cors nua va doc duoc phan hoi that — giong het cach fetchSheetAll() da doc duoc GET thanh cong tu truoc.
+async function postToSheet(payload){
   try{
-    await fetch(SHEET_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type, record, ts: new Date().toISOString()})});
-  }catch(e){ /* best-effort, ignore */ }
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 20000);
+    let res;
+    try{
+      res = await fetch(SHEET_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), signal: ctrl.signal});
+    } finally { clearTimeout(timer); }
+    if(!res.ok){ return {ok:false, error:'Máy chủ trả về lỗi HTTP '+res.status}; }
+    let data;
+    try{ data = await res.json(); }catch(e){ return {ok:false, error:'Phản hồi không đúng định dạng JSON'}; }
+    if(!data || !data.ok) return {ok:false, error:(data&&data.error)?String(data.error):'Không rõ nguyên nhân'};
+    return {ok:true};
+  }catch(e){
+    return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ (20 giây)' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
+  }
+}
+function reportWriteError(label, error){
+  console.error('Lỗi ghi lên Google Sheet ['+label+']:', error);
+  state.writeErrors = state.writeErrors || [];
+  state.writeErrors.unshift({time: new Date(), label, error});
+  state.writeErrors = state.writeErrors.slice(0, 8);
+  render();
+}
+window.dismissWriteErrors = function(){ state.writeErrors = []; render(); };
+async function syncToSheet(type, record){
+  const result = await postToSheet({type, record, ts: new Date().toISOString()});
+  if(!result.ok) reportWriteError(type, result.error);
+  return result.ok;
 }
 async function sendTelegramToMany(chatIds, text){
   if(!state.telegram.botToken || !chatIds || chatIds.length===0){
@@ -2465,6 +2500,10 @@ function render(){
         ${(!state.syncing && !sheetAllOnline && state.syncErrorDetail) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">${esc(state.syncErrorDetail)}</div>` : ''}
         ${(!state.syncing && !sheetAllOnline && !state.syncErrorDetail && state.offlineSheetNames && state.offlineSheetNames.length) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">Không khớp dữ liệu ở: ${esc(state.offlineSheetNames.join('; '))}</div>` : ''}
         ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
+        ${(state.writeErrors && state.writeErrors.length) ? `<div style="margin-top:8px;padding:8px;border:1px solid var(--danger);border-radius:8px;background:rgba(226,86,79,.08);">
+          <div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:10.5px;color:var(--danger);">Lỗi lưu lên Google Sheet (${state.writeErrors.length})</b><button class="mini-btn" onclick="dismissWriteErrors()">Ẩn</button></div>
+          ${state.writeErrors.map(w=>`<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">[${esc(w.label)}] ${esc(w.error)}</div>`).join('')}
+        </div>` : ''}
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
         <div style="margin-top:8px;">${themeToggleHtml()}</div>
       </div>
