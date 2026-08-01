@@ -604,6 +604,7 @@ function wizardPromptText(step){
 }
 function runWizardStep(){
   const w = state.wizard; if(!w) return;
+  clearTextAutoAdvance();
   if(w.index>=w.steps.length){ finalizeWizard(); return; }
   const step = w.steps[w.index];
   if(step.kind==='resolve'){
@@ -698,34 +699,24 @@ function processStepAnswer(step, txt){
     if(step.optional && (!txt || /^(bo qua|khong co)$/.test(norm))){ w.data[step.key]=''; advanceWizard(); return; }
     w.data[step.key] = ((w.data[step.key]||'') + (w.data[step.key]?' ':'') + txt).trim();
     w.status='review'; render();
-    listenForTextFollowup();
+    scheduleTextAutoAdvance();
   }
 }
-function listenForTextFollowup(){
+// Sau khi ghi nhan 1 cau tra loi dang van ban tu do (VD tung muc Nhat ky thi cong), thay vi co doan
+// nghe tiep de tu doan lenh thoai (de nham lan: cau noi tiep theo chi can chua tu "phai"/"vang"/"tiep"...
+// la bi hieu nham thanh lenh dieu khien, mat noi dung that su) — gio chi cho im lang roi tu qua muc ke.
+// Neu nguoi dung muon noi them, bam lai nut mic (dung dung duong nghe chuan, da xac nhan chay on).
+function scheduleTextAutoAdvance(){
   const w = state.wizard; if(!w) return;
   const idxAtStart = w.index;
-  if(!voiceSupported()) return;
-  let settled=false;
-  const timer = setTimeout(()=>{ if(!settled){ settled=true; if(state.wizard && state.wizard.index===idxAtStart) advanceWizard(); } }, 3500);
-  try{
-    const rec = newVoiceRecognizer();
-    voiceRec = rec;
-    rec.onresult = e=>{
-      clearTimeout(timer); if(settled || !state.wizard || state.wizard.index!==idxAtStart) return; settled=true;
-      const txt = (e.results[0][0].transcript||'').trim();
-      const cmd = matchVoiceCommand(txt);
-      if(cmd==='stop'){ closeWizard(); return; }
-      if(cmd==='no'){ state.wizard.data[step_key(state.wizard)]=''; runWizardStep(); return; }
-      if(cmd==='yes'){ advanceWizard(); return; }
-      const wz = state.wizard; const st=wz.steps[wz.index];
-      wz.data[st.key]=((wz.data[st.key]||'')+' '+txt).trim(); wz.status='review'; render();
-      listenForTextFollowup();
-    };
-    rec.onerror = ()=>{ clearTimeout(timer); if(!settled){ settled=true; if(state.wizard && state.wizard.index===idxAtStart) advanceWizard(); } };
-    rec.start();
-  }catch(e){ clearTimeout(timer); if(!settled){ settled=true; advanceWizard(); } }
+  if(w._advanceTimer) clearTimeout(w._advanceTimer);
+  w._advanceTimer = setTimeout(()=>{
+    if(state.wizard && state.wizard.index===idxAtStart) advanceWizard();
+  }, 4000);
 }
-function step_key(w){ return w.steps[w.index].key; }
+function clearTextAutoAdvance(){
+  const w = state.wizard; if(w && w._advanceTimer){ clearTimeout(w._advanceTimer); w._advanceTimer=null; }
+}
 function askConfirm(readbackLabel, onYes, onNo){
   const w = state.wizard; if(!w) return;
   w.pendingConfirm = {onYes, onNo};
@@ -765,9 +756,10 @@ window.wizardNumberManualConfirm = function(){
   const readback = String(val).replace('.', ' phẩy ')+(step.unit?(' '+step.unit):'');
   askConfirm(readback, ()=>advanceWizard(), ()=>runWizardStep());
 };
-window.wizardTapListen = function(){ beginListenForStep(); };
+window.wizardTapListen = function(){ clearTextAutoAdvance(); beginListenForStep(); };
 function advanceWizard(){
   const w = state.wizard; if(!w) return;
+  clearTextAutoAdvance();
   if(voiceRec){ try{ voiceRec.stop(); }catch(e){} }
   w.index++; w.pendingConfirm=null;
   runWizardStep();
