@@ -88,6 +88,11 @@ input[type=file]{display:none;}
 }
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
 .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px;}
+.stat-card.clickable{cursor:pointer;transition:border-color .15s;text-align:left;width:100%;font-family:inherit;}
+.stat-card.clickable:hover{border-color:var(--accent-soft);}
+.stat-card.clickable.expanded{border-color:var(--accent);}
+.stat-card .lbl-row{display:flex;justify-content:space-between;align-items:center;}
+.stat-card .caret{font-size:10px;color:var(--dim);}
 .stat-card .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
 .stat-card .val{font-family:var(--display);font-size:28px;font-weight:800;margin-top:5px;}
 .stat-card.danger .val{color:var(--danger);}
@@ -212,7 +217,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyW3tiWtFw0DvwJQxhXg5KFTypYM4bf72bR_J9Q5MNmK_oGytd3MdoUIQf_TCGCWy8tAA/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzWEYQXDQ-Rg_98fgsd7jH0CH7iqeHZKonDLWGVcZY2oB8Qts3mkmlYdtF1qZMRSXgupA/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -330,7 +335,7 @@ const NK_PHOTO_SUGGEST = ['Hiện trạng hư hỏng','Trước sửa chữa','T
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
   session:null, authView:'login', authErr:'', theme:'dark',
-  tab:'overview', loading:true, writeErrors:[],
+  tab:'overview', loading:true, writeErrors:[], ovExpandedMetric:{}, ovSearchQuery:'', ovSearchExpandedKey:null,
   users:[], danhMuc:[], taiLieu:[], kiemTra:[], suaChua:[], dots:[], vatTu:[], nhatKy:[], hinhAnh:[],
   telegram:{botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''},
   showForm:{danhmuc:false,tailieu:false,kiemtra:false,dot:false,vattu:false,nhatky:false},
@@ -780,10 +785,10 @@ function renderWizardModal(){
   if(w.pendingConfirm){
     bodyHtml = `<div class="wizard-actions"><button class="btn" onclick="wizardManualConfirm(true)">✓ Đúng</button><button class="btn-ghost" onclick="wizardManualConfirm(false)">✗ Nói lại</button></div>`;
   } else if(step.kind==='text'){
-    bodyHtml = `<textarea id="wizard-text-input" rows="3" style="width:100%;margin-top:10px;" oninput="wizardSetTextValue(this.value)">${esc(w.data[step.key]||'')}</textarea>
+    bodyHtml = `<textarea id="wizard-text-input" rows="3" style="width:100%;margin-top:10px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 9px;font-size:13px;" oninput="wizardSetTextValue(this.value)">${esc(w.data[step.key]||'')}</textarea>
       <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button><button class="btn" onclick="wizardManualNext()">Tiếp tục ▸</button>${step.optional?`<button class="btn-ghost" onclick="wizardManualSkip()">Bỏ qua</button>`:''}</div>`;
   } else if(step.kind==='number'){
-    bodyHtml = `<input id="wizard-num-input" type="number" step="0.01" inputmode="decimal" style="width:100%;margin-top:10px;font-size:20px;text-align:center;" value="${w.data[step.key]!=null?esc(String(w.data[step.key])):''}">
+    bodyHtml = `<input id="wizard-num-input" type="number" step="0.01" inputmode="decimal" style="width:100%;margin-top:10px;font-size:20px;text-align:center;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 9px;" value="${w.data[step.key]!=null?esc(String(w.data[step.key])):''}">
       <div class="wizard-actions"><button class="btn-ghost" onclick="wizardTapListen()">🎤 Nói</button><button class="btn" onclick="wizardNumberManualConfirm()">Xác nhận</button></div>`;
   } else if(step.kind==='resolve'){
     bodyHtml = w.status==='waiting-input'
@@ -791,7 +796,7 @@ function renderWizardModal(){
       : `<div class="wizard-status" style="margin-top:6px;">⏳ Đang xử lý dữ liệu…</div>`;
   } else {
     const opts = step.getOptions(w.data);
-    bodyHtml = `<select style="width:100%;margin-top:10px;" onchange="const o=this.options[this.selectedIndex]; wizardChoicePick(this.value, o.text)">
+    bodyHtml = `<select style="width:100%;margin-top:10px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 9px;font-size:13px;" onchange="const o=this.options[this.selectedIndex]; wizardChoicePick(this.value, o.text)">
       <option value="">— chọn ${esc(step.label.toLowerCase())} —</option>
       ${opts.map(o=>`<option value="${esc(o.value)}" ${w.data[step.key]===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
       </select>
@@ -952,6 +957,39 @@ function mapSheetHinhAnh(rows){
     link:String(r['Link Drive']||''), thoiGian:String(r['Thời gian tải lên']||''), nguoiTaiLen:String(r['Người tải lên']||'')
   })).filter(h=>h.id);
 }
+// Sau khi anh vua upload (base64) len Google Drive qua syncToSheet('upload_anh',...) va da co phan hoi thanh cong,
+// goi lai ham nay de lay dung Link Drive that (thay vi giu mai anh xem tam bang base64 luu tren may) — nho luc
+// syncToSheet() gio da doc duoc phan hoi that (sua o ban truoc), thoi diem goi ham nay la luc server da luu xong.
+async function refreshHinhAnhFromSheet(){
+  const rows = await fetchSheet('hinh_anh');
+  if(!rows) return;
+  const fresh = mapSheetHinhAnh(rows);
+  const freshById = {}; fresh.forEach(f=>{ freshById[f.id]=f; });
+  state.hinhAnh = state.hinhAnh.map(h=> freshById[h.id] ? freshById[h.id] : h);
+  fresh.forEach(f=>{ if(!state.hinhAnh.some(h=>h.id===f.id)) state.hinhAnh.unshift(f); });
+  await persist('hinh-anh', state.hinhAnh, true);
+  render();
+}
+// Tai anh (dang base64) len Drive qua Apps Script, hien anh xem tam ngay lap tuc (dung du lieu base64 tai cho
+// khi cho phan hoi tu server), sau do tu dong thay bang Link Drive that ngay khi server bao thanh cong.
+async function uploadNkPhotosAndSync(photos, maNhatKy){
+  if(!photos || !photos.length) return;
+  const uploads = photos.map((p, idx)=>{
+    const photoRec = {
+      id: 'HA-'+Date.now().toString(36)+idx, maNhatKy, tenAnh: p.tenAnh||'(Chưa đặt tên)',
+      link: p.dataUrl, thoiGian: new Date().toISOString(), nguoiTaiLen: state.session? state.session.name : ''
+    };
+    state.hinhAnh.unshift(photoRec);
+    return syncToSheet('upload_anh', {
+      id: photoRec.id, maNhatKy: photoRec.maNhatKy, tenAnh: photoRec.tenAnh,
+      base64: p.dataUrl.split(',')[1], mimeType: 'image/jpeg', nguoiTaiLen: photoRec.nguoiTaiLen
+    });
+  });
+  await persist('hinh-anh', state.hinhAnh, true);
+  render();
+  await Promise.all(uploads);
+  await refreshHinhAnhFromSheet();
+}
 function mapSheetSuaChua(itemRows, weldRows){
   const items = itemRows.map(r=>{
     const toMay=String(r['Tổ máy']||''), heThong=String(r['Hệ thống']||''), thietBi=String(r['Thiết bị']||''), viTri=String(r['Vị trí']||''), lopOng=String(r['Lớp ống']||'');
@@ -1041,6 +1079,7 @@ async function syncFromSheetInBackground(){
     return;
   }
   state.syncErrorDetail = '';
+  state.anhFolderUrl = all.anhFolderUrl || '';
   const offlineSheetNames = [];
   const applyDefensive = async (key, sheetRows, mapFn, storageKey, label)=>{
     const rawCount = (sheetRows||[]).length;
@@ -2092,18 +2131,7 @@ window.addNhatKy = async function(){
 
   const photos = state.nkPendingPhotos.slice();
   state.nkPendingPhotos = [];
-  photos.forEach((p, idx)=>{
-    const photoRec = {
-      id: 'HA-'+Date.now().toString(36)+idx, maNhatKy: rec.id, tenAnh: p.tenAnh||'(Chưa đặt tên)',
-      link: p.dataUrl, thoiGian: new Date().toISOString(), nguoiTaiLen: state.session? state.session.name : ''
-    };
-    state.hinhAnh.unshift(photoRec);
-    syncToSheet('upload_anh', {
-      id: photoRec.id, maNhatKy: photoRec.maNhatKy, tenAnh: photoRec.tenAnh,
-      base64: p.dataUrl.split(',')[1], mimeType: 'image/jpeg', nguoiTaiLen: photoRec.nguoiTaiLen
-    });
-  });
-  await persist('hinh-anh', state.hinhAnh, true);
+  uploadNkPhotosAndSync(photos, rec.id);
 
   state.showForm.nhatky = false;
   render();
@@ -2298,18 +2326,7 @@ window.saveNhatKyEdit = async function(id){
 
   const photos = state.nkPendingPhotos.slice();
   state.nkPendingPhotos = [];
-  photos.forEach((p, idx)=>{
-    const photoRec = {
-      id: 'HA-'+Date.now().toString(36)+idx, maNhatKy: n.id, tenAnh: p.tenAnh||'(Chưa đặt tên)',
-      link: p.dataUrl, thoiGian: new Date().toISOString(), nguoiTaiLen: state.session? state.session.name : ''
-    };
-    state.hinhAnh.unshift(photoRec);
-    syncToSheet('upload_anh', {
-      id: photoRec.id, maNhatKy: photoRec.maNhatKy, tenAnh: photoRec.tenAnh,
-      base64: p.dataUrl.split(',')[1], mimeType: 'image/jpeg', nguoiTaiLen: photoRec.nguoiTaiLen
-    });
-  });
-  await persist('hinh-anh', state.hinhAnh, true);
+  uploadNkPhotosAndSync(photos, n.id);
   await persist('nhat-ky', state.nhatKy, true);
   syncToSheet('nhat_ky', n);
   state.nkEditingId = null;
@@ -2433,11 +2450,15 @@ function renderNhatKy(){
         ${yKienBlock || '<div class="empty" style="padding:8px 0;">Không có ý kiến bổ sung.</div>'}
         <div class="record-meta" style="margin-top:8px;">${n.canBoGiamSat?`<span>Cán bộ giám sát: ${esc(n.canBoGiamSat)}</span>`:''}<span>Người duyệt: ${esc(n.nguoiDuyet)}</span><span>${n.thoiGianDuyet?fmtDate(n.thoiGianDuyet.slice(0,10)):''}</span></div>`
       : ''}
-      ${photos.length?`<div class="nk-photo-grid" style="margin-top:10px;">${photos.map(p=>`<div class="nk-photo-item">
+      ${photos.length?`<div class="nk-photo-grid" style="margin-top:10px;">${photos.map(p=>{
+        const isDriveLink = p.link && p.link.indexOf('data:')!==0;
+        return `<div class="nk-photo-item">
         <img src="${esc(p.link)}" style="width:100%;border-radius:6px;cursor:pointer;" onclick="setLightbox('${safeLink(p.link)}')">
         <div style="font-size:10.5px;color:var(--dim);margin-top:3px;text-align:center;">${esc(p.tenAnh)}</div>
+        ${isDriveLink ? `<a href="${esc(p.link)}" target="_blank" class="mini-btn" style="width:100%;margin-top:2px;box-sizing:border-box;display:block;text-align:center;text-decoration:none;">Mở trong Drive ↗</a>` : `<div style="font-size:9.5px;color:var(--warn);margin-top:2px;text-align:center;">Đang tải lên Drive…</div>`}
         ${canNk?`<button class="mini-btn" style="width:100%;margin-top:2px;" onclick="deleteAnh('${p.id}')">Xóa ảnh</button>`:''}
-      </div>`).join('')}</div>`:''}
+      </div>`;
+      }).join('')}</div>`:''}
       ${canNk?`<div class="form-actions" style="margin-top:10px;">
         ${!daDuyet?`<button class="mini-btn" onclick="startApproveNhatKy('${n.id}')">${state.nkApprovingId===n.id?'Đang bổ sung ý kiến…':'Duyệt / Bổ sung ý kiến'}</button>`:''}
         ${!daDuyet?`<button class="mini-btn" onclick="startEditNhatKy('${n.id}')">${state.nkEditingId===n.id?'Đang sửa…':'Sửa'}</button>`:''}
@@ -2492,6 +2513,7 @@ function render(){
         ${(!state.syncing && !sheetAllOnline && state.syncErrorDetail) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">${esc(state.syncErrorDetail)}</div>` : ''}
         ${(!state.syncing && !sheetAllOnline && !state.syncErrorDetail && state.offlineSheetNames && state.offlineSheetNames.length) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">Không khớp dữ liệu ở: ${esc(state.offlineSheetNames.join('; '))}</div>` : ''}
         ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
+        ${state.anhFolderUrl ? `<a href="${esc(state.anhFolderUrl)}" target="_blank" class="mini-btn" style="margin-top:6px;width:100%;display:block;text-align:center;box-sizing:border-box;text-decoration:none;">📁 Xem thư mục ảnh trên Drive ↗</a>` : ''}
         ${(state.writeErrors && state.writeErrors.length) ? `<div style="margin-top:8px;padding:8px;border:1px solid var(--danger);border-radius:8px;background:rgba(226,86,79,.08);">
           <div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:10.5px;color:var(--danger);">Lỗi lưu lên Google Sheet (${state.writeErrors.length})</b><button class="mini-btn" onclick="dismissWriteErrors()">Ẩn</button></div>
           ${state.writeErrors.map(w=>`<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">[${esc(w.label)}] ${esc(w.error)}</div>`).join('')}
@@ -2580,12 +2602,17 @@ function renderDots(){
 function computeDotStats(dotId){
   const kt = state.kiemTra.filter(k=>k.dotId===dotId);
   const uniquePipes = uniq(kt.map(k=>pipeKeyOf(k))).length;
+  // moi ong chi lay lan do MOI NHAT (theo ngay) de hien thi chi tiet - khop dung so luong voi uniquePipes o tren
+  const latestByPipe = {};
+  kt.slice().sort((a,b)=>(a.ngay||'').localeCompare(b.ngay||'')).forEach(k=>{ latestByPipe[pipeKeyOf(k)] = k; });
+  const pipeRows = Object.values(latestByPipe).sort((a,b)=> (a.heThong||'').localeCompare(b.heThong||'') || (a.viTri||'').localeCompare(b.viTri||''));
   const sc = state.suaChua.filter(s=>s.dotId===dotId);
   const catThay = sc.filter(s=>(s.phuongAn||'Cắt thay')==='Cắt thay');
   const hanPhu = sc.filter(s=>s.phuongAn==='Hàn phủ');
   const suaOp = sc.filter(s=>s.phuongAn==='Sửa ốp');
   let weldDone=0, weldTotal=0;
-  catThay.forEach(item=>{ item.welds.forEach(w=>{ weldTotal++; if(w.daHan && w.paut==='Đạt') weldDone++; }); });
+  const weldRows = [];
+  catThay.forEach(item=>{ item.welds.forEach(w=>{ weldTotal++; if(w.daHan && w.paut==='Đạt') weldDone++; weldRows.push({item, weld:w}); }); });
   const vt = state.vatTu.filter(v=>v.dotId===dotId);
   const vtTotals = {};
   vt.forEach(r=>{ const k=r.tenVatTu+'||'+r.donVi; vtTotals[k]=(vtTotals[k]||0)+(parseFloat(r.soLuong)||0); });
@@ -2603,7 +2630,38 @@ function computeDotStats(dotId){
     catThayDone:catThay.filter(s=>s.trangThai==='Hoàn thành').length,
     hanPhuDone:hanPhu.filter(s=>s.trangThai==='Hoàn thành').length,
     suaOpDone:suaOp.filter(s=>s.trangThai==='Hoàn thành').length,
-    weldDone, weldTotal, vtTotals, nTotal, nDone, duKien};
+    weldDone, weldTotal, vtTotals, nTotal, nDone, duKien,
+    pipeRows, catThayItems:catThay, hanPhuItems:hanPhu, suaOpItems:suaOp, weldRows};
+}
+function ovStatCard(dotId, metric, cls, label, valHtml){
+  const expanded = state.ovExpandedMetric[dotId]===metric;
+  return `<button type="button" class="stat-card clickable ${cls} ${expanded?'expanded':''}" onclick="toggleOvMetric('${dotId}','${metric}')">
+    <div class="lbl-row"><span class="lbl">${label}</span><span class="caret">${expanded?'▲':'▼'}</span></div>
+    <div class="val">${valHtml}</div>
+  </button>`;
+}
+function renderOvMetricDetail(dotId, s){
+  const metric = state.ovExpandedMetric[dotId];
+  if(!metric) return '';
+  let inner = '';
+  if(metric==='pipes'){
+    inner = s.pipeRows.length ? s.pipeRows.map(k=>{
+      const p=parseFloat(k.phanTramConLai); const cls=p<=70?'danger':(p<=85?'warn':'good');
+      return `<div class="record"><div class="record-top"><div class="record-loc">${esc(k.heThong)}${k.thietBi?(' - '+esc(k.thietBi)):''} <span style="color:var(--muted);font-weight:400;">· vị trí ${esc(k.viTri)}/${esc(k.lopOng)}</span></div><span class="status ${cls}">${esc(k.phanTramConLai)}% còn lại</span></div>
+        <div class="record-meta"><span>Đo được: ${esc(k.chieuDayDo)}mm</span><span>${fmtDate(k.ngay)}</span></div></div>`;
+    }).join('') : '<div class="empty">Chưa có ống nào được kiểm tra trong đợt này.</div>';
+  } else if(metric==='catThay' || metric==='hanPhu' || metric==='suaOp'){
+    const items = metric==='catThay'?s.catThayItems:(metric==='hanPhu'?s.hanPhuItems:s.suaOpItems);
+    const st = it => it.trangThai==='Hoàn thành'?'good':(it.trangThai==='Đang tiến hành'?'warn':'danger');
+    inner = items.length ? items.map(it=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>${esc(it.heThong)} <span style="color:var(--muted);font-weight:400;">· vị trí ${esc(it.viTri)}/${esc(it.lopOng)}</span></div><span class="status ${st(it)}">${esc(it.trangThai)}</span></div>
+      <div class="record-meta"><span>${esc(it.phanTramConLai)}% còn lại</span><span>Tạo: ${fmtDate(it.ngayTao)}</span><span>${it.ngayHoanThanh?('Hoàn thành: '+fmtDate(it.ngayHoanThanh)):'Chưa hoàn thành'}</span></div></div>`).join('')
+      : '<div class="empty">Chưa có hạng mục nào thuộc loại này trong đợt.</div>';
+  } else if(metric==='welds'){
+    inner = s.weldRows.length ? s.weldRows.map(r=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(r.weld.id)}</span>${r.weld.loai==='chinh_thuc'?'Chính thức':'Biện pháp'} <span style="color:var(--muted);font-weight:400;">· thuộc ${esc(r.item.id)}</span></div><span class="status ${(r.weld.daHan&&r.weld.paut==='Đạt')?'good':'warn'}">${esc(r.weld.paut)}</span></div>
+      <div class="record-meta"><span>Đã cắt: ${r.weld.daCat?'✓':'—'}</span><span>Đã hàn: ${r.weld.daHan?'✓':'—'}</span><span>Thợ hàn: ${esc(r.weld.thoHan||'—')}</span></div></div>`).join('')
+      : '<div class="empty">Chưa có mối hàn nào (chỉ tính hạng mục Cắt thay).</div>';
+  }
+  return `<div style="margin:0 0 14px;">${inner}</div>`;
 }
 function renderDotDashboard(dotId){
   const dot = state.dots.find(d=>d.id===dotId); if(!dot) return '';
@@ -2614,21 +2672,25 @@ function renderDotDashboard(dotId){
     duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ hạng mục đã phát hiện tính đến hiện tại.'
       : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — ước tính theo tốc độ hoàn thành thực tế, tự cập nhật liên tục, có thể thay đổi nếu phát hiện thêm hư hỏng mới trong quá trình kiểm tra.');
   }
+  const expandedMetric = state.ovExpandedMetric[dotId];
+  const isOneOf = (m1)=> expandedMetric===m1;
   return `<div class="repair-item" style="margin-bottom:18px;">
     <div class="repair-head" style="cursor:default;">
       <div><span class="tag-chip">${esc(dot.id)}</span><b style="font-size:15px;">${esc(dot.ten)}</b> <span style="color:var(--muted);">· ${esc(dot.toMay)}</span></div>
       <span class="status ${dot.trangThai==='Đang diễn ra'?'warn':'good'}">${esc(dot.trangThai)}</span>
     </div>
     <div class="grid-cards" style="margin-top:14px;margin-bottom:10px;">
-      <div class="stat-card"><div class="lbl">Ống đã kiểm tra</div><div class="val">${s.uniquePipes}</div></div>
-      <div class="stat-card ${s.catThay>0?'danger':''}"><div class="lbl">Cắt thay (xong/tổng)</div><div class="val">${s.catThayDone}/${s.catThay}</div></div>
-      <div class="stat-card ${s.hanPhu>0?'warn':''}"><div class="lbl">Hàn phủ (xong/tổng)</div><div class="val">${s.hanPhuDone}/${s.hanPhu}</div></div>
-      <div class="stat-card ${s.suaOp>0?'warn':''}"><div class="lbl">Sửa ốp (xong/tổng)</div><div class="val">${s.suaOpDone}/${s.suaOp}</div></div>
+      ${ovStatCard(dot.id,'pipes','','Ống đã kiểm tra', s.uniquePipes)}
+      ${ovStatCard(dot.id,'catThay',s.catThay>0?'danger':'','Cắt thay (xong/tổng)', s.catThayDone+'/'+s.catThay)}
+      ${ovStatCard(dot.id,'hanPhu',s.hanPhu>0?'warn':'','Hàn phủ (xong/tổng)', s.hanPhuDone+'/'+s.hanPhu)}
+      ${ovStatCard(dot.id,'suaOp',s.suaOp>0?'warn':'','Sửa ốp (xong/tổng)', s.suaOpDone+'/'+s.suaOp)}
     </div>
+    ${isOneOf('pipes')||isOneOf('catThay')||isOneOf('hanPhu')||isOneOf('suaOp') ? renderOvMetricDetail(dot.id, s) : ''}
     <div class="grid-cards">
-      <div class="stat-card"><div class="lbl">Mối hàn đã hàn/tổng (Cắt thay)</div><div class="val">${s.weldDone}/${s.weldTotal}</div></div>
+      ${ovStatCard(dot.id,'welds','','Mối hàn đã hàn/tổng (Cắt thay)', s.weldDone+'/'+s.weldTotal)}
       <div class="stat-card" style="grid-column:span 3;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div></div>
     </div>
+    ${isOneOf('welds') ? renderOvMetricDetail(dot.id, s) : ''}
     <div class="section-label" style="margin-top:16px;">Vật tư đã sử dụng</div>
     <div class="table-wrap"><table class="dm"><thead><tr><th>Tên vật tư</th><th>Tổng số lượng</th><th>Đơn vị</th></tr></thead><tbody>${vtRows||'<tr><td colspan="3" style="text-align:center;color:var(--dim);padding:14px;">Chưa có dữ liệu</td></tr>'}</tbody></table></div>
   </div>`;
@@ -2636,6 +2698,10 @@ function renderDotDashboard(dotId){
 window.setOvMode = v => { state.ovMode=v; state.ovYear=null; state.ovDot=null; render(); };
 window.setOvYear = v => { state.ovYear=v; state.ovDot=null; render(); };
 window.setOvDot = v => { state.ovDot=v; render(); };
+window.toggleOvMetric = function(dotId, metric){
+  state.ovExpandedMetric[dotId] = (state.ovExpandedMetric[dotId]===metric) ? null : metric;
+  render();
+};
 
 function renderModuleGridMobile(){
   const tiles = NAV.filter(n=>n.id!=='overview');
@@ -2644,12 +2710,112 @@ function renderModuleGridMobile(){
   </div>
   <div class="module-grid-mobile" style="grid-template-columns:1fr;margin-top:-8px;">${themeToggleHtml()}</div>`;
 }
+/* ---------- Tra cứu 1 đoạn ống bất kỳ (mọi đợt, đang sửa hoặc đã sửa trong lịch sử) ---------- */
+// Tach tu khoa tim kiem thanh: cac so (de nhan dien Vi tri / Vi tri-Lop ong) va cac tu chu (de so khop
+// Ho thong/Thiet bi/To may) — khong doi hoi go dung thu tu hay du cau truc, khong bat buoc dinh dang phan cach
+// co dinh (dau -, /, phay, khoang trang hay noi day du "vi tri X lop Y" deu ra cung 1 ket qua vi chi lay CAC SO).
+function parseOvQuery(query){
+  const norm = normalizeVN(query);
+  const nums = norm.match(/\d+/g) || [];
+  const stripped = norm.replace(/\d+/g,' ').replace(/\b(vi|tri|lop|ong|vt|lo)\b/g,' ');
+  const words = stripped.split(/[^a-z0-9]+/).filter(w=>w.length>1);
+  return {nums, words};
+}
+function ovSearchResults(query){
+  const {nums, words} = parseOvQuery(query);
+  if(!nums.length && !words.length) return [];
+  const map = pipeHistoryMap();
+  return Object.keys(map).filter(key=>{
+    const r = map[key][map[key].length-1];
+    // co 2 so tro len (bat ke go "12-1", "12/1", "12,1", "12 1" hay noi day du "vi tri 12 lop 1")
+    // -> hieu la Vi tri-Lop ong, so khop CHINH XAC ca 2 so nay tren MOI he thong/thiet bi (tra ve toan bo ket qua trung)
+    if(nums.length>=2){
+      if(parseInt(r.viTri,10)!==parseInt(nums[0],10) || parseInt(r.lopOng,10)!==parseInt(nums[1],10)) return false;
+    } else if(nums.length===1){
+      // 1 so don le -> mac dinh hieu la Vi tri
+      if(parseInt(r.viTri,10)!==parseInt(nums[0],10)) return false;
+    }
+    if(words.length){
+      const fields = [r.toMay, r.heThong, r.thietBi].map(v=>normalizeVN(v||''));
+      const allWordsMatch = words.every(w=> fields.some(f=>f.includes(w)));
+      if(!allWordsMatch) return false;
+    }
+    return true;
+  }).map(key=>{
+    const hist = map[key];
+    const latest = hist[hist.length-1];
+    const activeItem = state.suaChua.find(s=>s.pipeKey===key && s.trangThai!=='Hoàn thành');
+    const completedItems = state.suaChua.filter(s=>s.pipeKey===key && s.trangThai==='Hoàn thành').sort((a,b)=>(b.ngayHoanThanh||'').localeCompare(a.ngayHoanThanh||''));
+    return {key, latest, activeItem, completedItems};
+  }).sort((a,b)=> parseFloat(a.latest.phanTramConLai)-parseFloat(b.latest.phanTramConLai));
+}
+window.runOvSearch = function(){
+  const el = document.getElementById('ov-search-input');
+  state.ovSearchQuery = el ? el.value : '';
+  render();
+};
+window.voiceSearchOvPipe = function(btn){
+  startVoiceSearch(btn, txt=>{ state.ovSearchQuery = txt; render(); });
+};
+window.toggleOvSearchExpand = function(key){
+  state.ovSearchExpandedKey = state.ovSearchExpandedKey===key ? null : key;
+  if(state.ovSearchExpandedKey){
+    const item = state.suaChua.find(s=>s.pipeKey===key && s.trangThai!=='Hoàn thành');
+    if(item) state.expandedRepair = item.id;
+  }
+  render();
+};
+function renderOvSearch(){
+  const q = state.ovSearchQuery||'';
+  const hasQuery = q.trim()!=='';
+  const results = hasQuery ? ovSearchResults(q) : [];
+  const resultsHtml = results.map(r=>{
+    const expanded = state.ovSearchExpandedKey===r.key;
+    const p = parseFloat(r.latest.phanTramConLai);
+    const pCls = p<=70?'danger':(p<=85?'warn':'good');
+    let statusBadge, statusCls;
+    if(r.activeItem){ statusBadge='Đang sửa chữa · '+r.activeItem.trangThai; statusCls='warn'; }
+    else if(r.completedItems.length){ statusBadge='Đã sửa chữa ('+r.completedItems.length+' lần)'; statusCls='good'; }
+    else { statusBadge='Chưa cần sửa chữa'; statusCls=pCls; }
+    const label = (r.latest.toMay?r.latest.toMay+' · ':'')+r.latest.heThong+(r.latest.thietBi?(' - '+r.latest.thietBi):'')+' · vị trí '+r.latest.viTri+'/'+r.latest.lopOng;
+    const safeKey = r.key.replace(/'/g,"\\'");
+    let detail = '';
+    if(expanded){
+      if(r.activeItem){
+        detail = renderSuaChuaItemCard(r.activeItem);
+      } else if(r.completedItems.length){
+        detail = r.completedItems.map(it=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>Chu kỳ ${esc(it.chuKy)}</div><span class="status good">${esc(it.trangThai)}</span></div>
+          <div class="record-meta"><span>${esc(it.phuongAn||'Cắt thay')}</span><span>Hoàn thành: ${it.ngayHoanThanh?fmtDate(it.ngayHoanThanh):'—'}</span><span>${it.welds.filter(w=>w.loai==='chinh_thuc').length} mối hàn chính thức</span></div></div>`).join('');
+      } else {
+        detail = `<div class="settings-note">Chưa có hạng mục sửa chữa nào cho vị trí này (hệ thống chỉ tự tạo khi kết quả kiểm tra ≤ 70%). Lần đo gần nhất: ${esc(r.latest.chieuDayDo)}mm ngày ${fmtDate(r.latest.ngay)}, người kiểm tra: ${esc(r.latest.nguoiKiemTra||'—')}.</div>`;
+      }
+    }
+    return `<div class="repair-item" style="margin-bottom:10px;">
+      <div class="repair-head" onclick="toggleOvSearchExpand('${safeKey}')">
+        <div><b>${esc(label)}</b> <span class="progress-mini">· ${esc(r.latest.phanTramConLai)}% còn lại</span></div>
+        <span class="status ${statusCls}">${esc(statusBadge)}</span>
+      </div>
+      ${expanded ? `<div style="margin-top:10px;" onclick="event.stopPropagation()">${detail}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="form-panel" style="padding:14px 16px;margin-bottom:18px;">
+    <div class="field" style="margin-bottom:0;"><label>Tra cứu 1 đoạn ống (đang sửa hoặc đã sửa trong lịch sử) — gõ từ khóa bất kỳ, không cần đủ cấu trúc: chỉ tên hệ thống, chỉ số vị trí, hoặc "vị trí-lớp ống" (VD: 12-1)</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="ov-search-input" placeholder="VD: hơi chính, hoặc 12, hoặc 12-1" value="${esc(q)}" onkeydown="if(event.key==='Enter') runOvSearch()" style="flex:1;">
+        ${voiceMicBtnHtml('voiceSearchOvPipe(this)','Nói để tra cứu đoạn ống')}
+        <button class="btn" style="flex:none;" onclick="runOvSearch()">Tìm kiếm</button>
+      </div>
+    </div>
+    ${hasQuery ? `<div style="margin-top:14px;">${resultsHtml || '<div class="empty">Không tìm thấy đoạn ống nào khớp.</div>'}</div>` : ''}
+  </div>`;
+}
 function renderOverview(){
   if(state.ovMode==='history') return renderOverviewHistory();
   const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra').sort((a,b)=>b.ngayBatDau.localeCompare(a.ngayBatDau));
   return `<div class="page-head"><div><div class="page-eyebrow">Tổng quan hệ thống</div><div class="page-title">Bảng điều khiển</div></div>
     <button class="btn-ghost" onclick="setOvMode('history')">Xem lịch sử theo năm</button></div>
   ${renderModuleGridMobile()}
+  ${renderOvSearch()}
   ${activeDots.length ? activeDots.map(d=>renderDotDashboard(d.id)).join('') : '<div class="empty">Hiện không có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới.</div>'}`;
 }
 function renderOverviewHistory(){
