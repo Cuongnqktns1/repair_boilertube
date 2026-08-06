@@ -127,6 +127,24 @@ input[type=file]{display:none;}
 .field textarea{resize:vertical;min-height:50px;}
 .form-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap;}
 .readonly-box{background:var(--input-bg);border:1px solid var(--border-soft);border-radius:6px;padding:8px 9px;font-family:var(--mono);font-size:13px;color:var(--accent);}
+/* Bảng nhập/sửa Kiểm tra dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) */
+.mtx-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-top:12px;}
+table.mtx{border-collapse:collapse;font-size:12px;}
+table.mtx th{background:var(--panel2);color:var(--muted);text-align:center;padding:7px 6px;font-weight:600;font-size:10.5px;border-bottom:1px solid var(--border);border-left:1px solid var(--border-soft);white-space:nowrap;position:sticky;top:0;}
+table.mtx th:first-child,table.mtx td:first-child{position:sticky;left:0;background:var(--panel2);z-index:1;border-left:none;}
+table.mtx td{padding:3px;border-bottom:1px solid var(--border-soft);border-left:1px solid var(--border-soft);text-align:center;vertical-align:middle;}
+table.mtx td.mtx-vitri{font-size:12px;font-weight:600;padding:6px 10px;white-space:nowrap;}
+table.mtx td.mtx-na{background:var(--panel2);color:var(--dim);font-size:14px;}
+table.mtx td.mtx-conflict{background:var(--danger-soft);}
+.mtx-input{width:56px;text-align:center;background:var(--input-bg);border:1px solid var(--border);border-radius:5px;padding:5px 3px;color:var(--text);font-size:12.5px;}
+.mtx-input:focus{outline:none;border-color:var(--accent);}
+td.mtx-good{background:var(--good-soft);}
+td.mtx-warn{background:var(--warn-soft);}
+td.mtx-danger{background:var(--danger-soft);}
+.mtx-pct{font-size:9px;color:var(--muted);margin-top:1px;line-height:1.2;}
+.mtx-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;}
+.mtx-toolbar .field{min-width:110px;}
+.mtx-rowdel{font-size:13px;color:var(--danger);cursor:pointer;padding:2px 6px;}
 .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
 table.dm{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
 table.dm th{background:var(--panel2);color:var(--muted);text-align:left;padding:9px 10px;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);}
@@ -217,7 +235,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzpbJTc4Udx-aXhqKDhOu8r1rAgffEuQtmerGbRxqHiIln6g48XwimEOOkyKzqQ2rR7cQ/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxrdHaFKUDHe6LMXgT1MvBbHJDZDP7j387533CM84UMqBr7LEeVEtRw9wBgDRdJCRGdRg/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -331,6 +349,10 @@ const NK_SECTIONS = [
   {key:'danhGiaChung', label:'Đánh giá chung và lưu ý cho ca sau'}
 ];
 const NK_PHOTO_SUGGEST = ['Hiện trạng hư hỏng','Trước sửa chữa','Trong quá trình thi công','Sau khi hoàn thành','Vị trí tổng thể','Khác'];
+// Danh sách Ngoại dạng khi khác "Bình thường" đều coi là bất thường — dùng chung cho: select Ngoại dạng
+// (form/ma trận Kiểm tra), và điều kiện tự động đẩy sang Sửa chữa trong syncSuaChua() dù % còn lại > 70%.
+const NGOAI_DANG_OPTIONS = ['Bình thường','Rỗ ăn mòn','Biến dạng / phình','Nứt','Mài mòn cục bộ','Khác'];
+const NGOAI_DANG_BAT_THUONG = NGOAI_DANG_OPTIONS.filter(v=>v!=='Bình thường');
 
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
@@ -342,6 +364,8 @@ let state = {
   nkFilter:{dotId:'',heThong:'',trangThai:''}, nkPendingPhotos:[], lightboxImg:null, nkApprovingId:null,
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
+  // Bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) — thay cho form nhập từng dòng cũ khi gõ bàn phím
+  ktMatrix:{active:false, editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
   scFilter:{dotId:'',toMay:'',heThong:'',thietBi:''},
   ovYear:null, ovDot:null, ovMode:'current',
@@ -965,8 +989,17 @@ async function refreshHinhAnhFromSheet(){
   if(!rows) return;
   const fresh = mapSheetHinhAnh(rows);
   const freshById = {}; fresh.forEach(f=>{ freshById[f.id]=f; });
-  state.hinhAnh = state.hinhAnh.map(h=> freshById[h.id] ? freshById[h.id] : h);
-  fresh.forEach(f=>{ if(!state.hinhAnh.some(h=>h.id===f.id)) state.hinhAnh.unshift(f); });
+  // CHI thay anh xem tam (base64) bang ban tren Sheet khi ban tren Sheet co Link Drive THAT (khac rong) —
+  // neu Link Drive tren Sheet dang rong (upload Drive that bai o Apps Script), TUYET DOI khong ghi de,
+  // giu nguyen anh xem tam dang co de nguoi dung van thay duoc anh, tranh loi da tung gap: anh dang hien tot
+  // bi thay bang link rong roi bien mat hoan toan.
+  state.hinhAnh = state.hinhAnh.map(h=>{
+    const f = freshById[h.id];
+    if(f && f.link) return f;
+    if(f && !f.link) return Object.assign({}, h, {tenAnh:f.tenAnh||h.tenAnh, uploadFailed:true});
+    return h;
+  });
+  fresh.forEach(f=>{ if(f.link && !state.hinhAnh.some(h=>h.id===f.id)) state.hinhAnh.unshift(f); });
   await persist('hinh-anh', state.hinhAnh, true);
   render();
 }
@@ -997,6 +1030,7 @@ function mapSheetSuaChua(itemRows, weldRows){
       id:String(r['Mã hạng mục']||''), pipeKey: pipeKeyOf({toMay,heThong,thietBi,viTri,lopOng}),
       chuKy: parseInt(r['Chu kỳ'],10)||1, dotId:String(r['Đợt']||''), toMay, heThong, thietBi, viTri, lopOng,
       chieuDayTK:'', chieuDayDoGanNhat:'', phanTramConLai:String(r['% còn lại']||''), ngayTao:'',
+      ngoaiDangGanNhat:String(r['Ngoại dạng gần nhất']||''), ghiChuXoaMoiHan:String(r['Ghi chú xóa mối hàn']||''),
       trangThai:String(r['Trạng thái']||''), ngayHoanThanh:String(r['Ngày hoàn thành']||''),
       phuongAn:String(r['Phương án']||'Cắt thay'), welds:[]
     };
@@ -1442,6 +1476,11 @@ window.ktSelect = function(level, value){
   if(level==='dotId'){ state.ktSel.dotId=value; state.ktSel.heThong=''; state.ktSel.thietBi=''; state.ktSel.vung=''; }
   if(level==='heThong'){ state.ktSel.heThong=value; state.ktSel.thietBi=''; state.ktSel.vung=''; }
   if(level==='thietBi'){ state.ktSel.thietBi=value; state.ktSel.vung=''; }
+  if(state.ktMatrix.active){
+    if(level!=='thietBi'){ state.ktMatrix.viTriList=[]; state.ktMatrix.cells={}; }
+    ktMatrixRecomputeCols();
+    ktMatrixRecomputeResolved();
+  }
   render();
   window.updateKtDerived();
 };
@@ -1452,11 +1491,34 @@ function inRange(val, from, to){
   const t = (to===undefined||to===null||to===''||isNaN(parseFloat(to))) ? Infinity : parseFloat(to);
   return v>=f && v<=t;
 }
+// Chuẩn hóa chuỗi trước khi so khớp Hệ thống/Thiết bị: gộp về cùng 1 kiểu Unicode (NFC) và bỏ khoảng trắng
+// thừa đầu/cuối — vì text gõ trực tiếp trên trình duyệt và text trong file Excel cũ (nhất là file làm từ
+// lâu/trên máy khác) có thể lưu dấu tiếng Việt ở 2 dạng Unicode khác nhau (dựng sẵn/tổ hợp), nhìn giống hệt
+// nhau nhưng so sánh "===" tuyệt đối sẽ SAI KHÁC — khiến Danh mục kỹ thuật rõ ràng đã có nhưng vẫn báo
+// "không khớp". Đây là lỗi rất khó phát hiện bằng mắt vì 2 chuỗi hiển thị giống hệt nhau.
+function normTxt(s){ return String(s===undefined||s===null?'':s).normalize('NFC').trim().replace(/\s+/g,' '); }
 function ktCandidates(toMay, heThong, thietBi, viTri, lopOng){
   if(!heThong || !viTri || !lopOng) return [];
-  return state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi)
+  const heN = normTxt(heThong), tbN = normTxt(thietBi);
+  return state.danhMuc.filter(r=> normTxt(r.heThong)===heN && (!tbN || normTxt(r.thietBi)===tbN)
     && (isSharedToMay(r.toMay) || normTM(r.toMay)===normTM(toMay))
     && inRange(viTri, r.viTriTu, r.viTriDen) && inRange(lopOng, r.lopOngTu, r.lopOngDen));
+}
+// Khi ktCandidates() tra ve 0 ket qua, ham nay xac dinh CHINH XAC tieu chi nao da loai het ung vien —
+// giup chan doan thay vi doan mo: "khong khop Danh muc" chung chung khong noi duoc dung cho nao sai.
+function ktDiagnoseMismatch(toMay, heThong, thietBi, viTri, lopOng){
+  const heN = normTxt(heThong), tbN = normTxt(thietBi);
+  const byHe = state.danhMuc.filter(r=> normTxt(r.heThong)===heN);
+  if(!byHe.length) return {code:'heThong', label:'Không có Hệ thống "'+heThong+'" nào trong Danh mục kỹ thuật'};
+  const byTb = tbN ? byHe.filter(r=> normTxt(r.thietBi)===tbN) : byHe;
+  if(!byTb.length) return {code:'thietBi', label:'Hệ thống "'+heThong+'" có trong Danh mục, nhưng không có Thiết bị "'+thietBi+'" khớp'};
+  const byTM = byTb.filter(r=> isSharedToMay(r.toMay) || normTM(r.toMay)===normTM(toMay));
+  if(!byTM.length) return {code:'toMay', label:'Hệ thống/Thiết bị khớp, nhưng Tổ máy của Đợt ("'+(toMay||'—')+'") không khớp Tổ máy khai trong Danh mục (dòng Danh mục đang gán riêng cho 1 tổ máy khác)'};
+  const byVt = byTM.filter(r=> inRange(viTri, r.viTriTu, r.viTriDen));
+  if(!byVt.length) return {code:'viTri', label:'Hệ thống/Thiết bị/Tổ máy khớp, nhưng Vị trí "'+viTri+'" nằm ngoài mọi dải Vị trí đã khai trong Danh mục'};
+  const byLo = byVt.filter(r=> inRange(lopOng, r.lopOngTu, r.lopOngDen));
+  if(!byLo.length) return {code:'lopOng', label:'Hệ thống/Thiết bị/Tổ máy/Vị trí khớp, nhưng Lớp ống "'+lopOng+'" nằm ngoài mọi dải Lớp ống đã khai trong Danh mục'};
+  return {code:'unknown', label:'Không xác định được nguyên nhân cụ thể'};
 }
 window.updateKtDerived = function(){
   const vt = document.getElementById('kt-vitri'), lo = document.getElementById('kt-lopong');
@@ -1523,6 +1585,316 @@ window.addKiemTra = async function(){
       +'\u0110\u00e3 \u0111\u01b0a v\u00e0o danh s\u00e1ch c\u1eaft thay.');
   }
 };
+
+/* ---------- Kiểm tra — bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) ----------
+   Đây là form nhập bằng bàn phím DUY NHẤT cho Kiểm tra (thay form nhập từng dòng cũ) — mô phỏng đúng
+   thói quen của NDT khi ghi tay trên giấy: chọn Đợt/Hệ thống/Thiết bị 1 lần, rồi điền số đo cho cả
+   một dải Vị trí × Lớp ống trong 1 màn hình. Giọng nói vẫn dùng wizard hỏi-đáp riêng bên dưới, không đổi.
+   LƯU Ý QUAN TRỌNG: bảng này chỉ là lớp NHẬP/SỬA — khi lưu, mỗi ô có số liệu vẫn tách thành 1 bản ghi
+   Kiểm tra riêng (đúng cấu trúc dài hiện có, ghi vào cùng sheet KiemTra), không đổi schema lưu trữ hay
+   bất kỳ phần hiển thị/báo cáo/xu hướng mòn nào khác của app. */
+function mtxKeyId(key){ return 'mtx-pct-'+String(key).replace(/[^a-zA-Z0-9_]/g,'_'); }
+function ktMatrixDefaultLopOngRange(toMay, heThong, thietBi){
+  const rows = state.danhMuc.filter(r=> r.heThong===heThong && (!thietBi || r.thietBi===thietBi)
+    && (isSharedToMay(r.toMay) || normTM(r.toMay)===normTM(toMay)));
+  let maxLop = 0;
+  rows.forEach(r=>{ const t = parseFloat(r.lopOngDen); if(!isNaN(t) && t>maxLop) maxLop=t; });
+  if(maxLop<1) maxLop = 8;
+  if(maxLop>20) maxLop = 20; // chặn an toàn nếu Danh mục nhập nhầm số quá lớn
+  const cols = []; for(let i=1;i<=maxLop;i++) cols.push(String(i));
+  return cols;
+}
+function ktMatrixRecomputeCols(){
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  const toMay = dotObj?dotObj.toMay:'';
+  state.ktMatrix.lopOngCols = ktMatrixDefaultLopOngRange(toMay, state.ktSel.heThong, state.ktSel.thietBi);
+}
+function ktMatrixRecomputeResolved(){
+  const m = state.ktMatrix;
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  const toMay = dotObj?dotObj.toMay:'';
+  const resolved = {};
+  m.viTriList.forEach(vt=>{
+    m.lopOngCols.forEach(lo=>{
+      const key = vt+'__'+lo;
+      const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, vt, lo);
+      resolved[key] = candidates.length===1 ? candidates[0] : (candidates.length===0 ? null : 'conflict');
+    });
+  });
+  m.resolved = resolved;
+}
+window.toggleKtMatrix = function(){
+  if(!can('kiemTra')){ noPermAlert(); return; }
+  const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
+  if(!activeDots.length){ alert('Chưa có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới trước khi nhập kết quả kiểm tra.'); return; }
+  if(state.ktMatrix.active){
+    state.ktMatrix = {active:false, editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]};
+  } else {
+    if(!state.ktSel.dotId || !activeDots.some(d=>d.id===state.ktSel.dotId)) state.ktSel.dotId = activeDots[0].id;
+    state.ktMatrix = {active:true, editMode:false, ngay:todayStr(), rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]};
+    ktMatrixRecomputeCols();
+    ktMatrixRecomputeResolved();
+  }
+  render();
+};
+window.ktMatrixSetRange = function(){
+  const m = state.ktMatrix;
+  const fromEl = document.getElementById('mtx-range-from'), toEl = document.getElementById('mtx-range-to');
+  const from = parseInt((fromEl&&fromEl.value)||'',10), to = parseInt((toEl&&toEl.value)||'',10);
+  if(isNaN(from) || isNaN(to) || from>to){ alert('Vui lòng nhập đúng khoảng Vị trí (Từ ≤ Đến).'); return; }
+  if(to-from>300 && !confirm('Khoảng vị trí có '+(to-from+1)+' dòng, khá lớn — tiếp tục?')) return;
+  const existing = new Set(m.viTriList);
+  for(let i=from;i<=to;i++) existing.add(String(i));
+  m.viTriList = Array.from(existing).sort((a,b)=>(parseFloat(a)-parseFloat(b)) || a.localeCompare(b));
+  ktMatrixRecomputeResolved();
+  render();
+};
+window.ktMatrixAddRow = function(){
+  const v = prompt('Nhập Vị trí cần thêm:'); if(!v) return;
+  const m = state.ktMatrix;
+  if(!m.viTriList.includes(v)){
+    m.viTriList.push(v);
+    m.viTriList.sort((a,b)=>(parseFloat(a)-parseFloat(b)) || String(a).localeCompare(String(b)));
+  }
+  ktMatrixRecomputeResolved();
+  render();
+};
+window.ktMatrixRemoveRow = function(viTri){
+  const m = state.ktMatrix;
+  m.viTriList = m.viTriList.filter(v=>v!==viTri);
+  render();
+};
+window.ktMatrixAddCol = function(){
+  const m = state.ktMatrix;
+  const nums = m.lopOngCols.map(Number).filter(n=>!isNaN(n));
+  const next = (nums.length? Math.max(...nums):0)+1;
+  m.lopOngCols.push(String(next));
+  ktMatrixRecomputeResolved();
+  render();
+};
+window.ktMatrixRemoveCol = function(){
+  const m = state.ktMatrix;
+  if(m.lopOngCols.length<=1) return;
+  m.lopOngCols.pop();
+  render();
+};
+window.ktMatrixLoadExisting = function(){
+  const m = state.ktMatrix;
+  if(!state.ktSel.dotId || !state.ktSel.heThong){ alert('Vui lòng chọn Đợt và Hệ thống trước.'); return; }
+  const matches = state.kiemTra.filter(r=> r.dotId===state.ktSel.dotId && r.heThong===state.ktSel.heThong && (!state.ktSel.thietBi || r.thietBi===state.ktSel.thietBi));
+  if(!matches.length){ alert('Chưa có bản ghi Kiểm tra nào khớp Đợt/Hệ thống/Thiết bị đã chọn — có thể nhập mới trực tiếp trên bảng.'); return; }
+  const viSet = new Set(m.viTriList);
+  const loSet = new Set(m.lopOngCols.map(String));
+  const loadedExceptions = m.exceptions.slice();
+  matches.forEach(r=>{
+    viSet.add(String(r.viTri)); loSet.add(String(r.lopOng));
+    m.cells[String(r.viTri)+'__'+String(r.lopOng)] = {val:String(r.chieuDayDo), existingId:r.id};
+    // Bản ghi cũ đang có Ngoại dạng bất thường -> hiện lại vào bảng đánh dấu để anh xem/sửa tiếp,
+    // tránh mất dấu khi mở lại đợt cũ để sửa.
+    if(NGOAI_DANG_BAT_THUONG.includes(r.ngoaiDang) && !loadedExceptions.some(ex=>ex.viTri===String(r.viTri) && ex.lopOng===String(r.lopOng))){
+      loadedExceptions.push({viTri:String(r.viTri), lopOng:String(r.lopOng), ngoaiDang:r.ngoaiDang});
+    }
+  });
+  m.viTriList = Array.from(viSet).sort((a,b)=>(parseFloat(a)-parseFloat(b)) || a.localeCompare(b));
+  m.lopOngCols = Array.from(loSet).sort((a,b)=>(parseFloat(a)-parseFloat(b)) || a.localeCompare(b));
+  m.exceptions = loadedExceptions;
+  m.editMode = true;
+  ktMatrixRecomputeResolved();
+  render();
+};
+window.ktMatrixCellInput = function(viTri, lopOng, el){
+  const key = viTri+'__'+lopOng;
+  const m = state.ktMatrix;
+  if(!m.cells[key]) m.cells[key] = {};
+  m.cells[key].val = el.value;
+  const dm = m.resolved[key];
+  const td = el.closest('td');
+  if(td) td.classList.remove('mtx-good','mtx-warn','mtx-danger');
+  const pctBox = document.getElementById(mtxKeyId(key));
+  const v = parseFloat(el.value);
+  if(dm && dm!=='conflict' && el.value!=='' && !isNaN(v)){
+    const pct = v/parseFloat(dm.chieuDay)*100;
+    if(!isNaN(pct)){
+      const cls = pct<=70?'mtx-danger':(pct<=85?'mtx-warn':'mtx-good');
+      if(td) td.classList.add(cls);
+      if(pctBox) pctBox.textContent = pct.toFixed(0)+'%';
+    }
+  } else if(pctBox) pctBox.textContent = '';
+};
+// Ghi nhận Ngoại dạng bất thường trong bảng ma trận: thay vì thêm 1 lựa chọn vào MỌI ô (đa số sẽ là
+// "Bình thường", làm bảng rối), chỉ hiện 1 danh sách nhỏ bên dưới để đánh dấu đúng những ô thực sự bất
+// thường — chỉ chọn được trong số Vị trí/Lớp ống đã có số đo trong bảng. Ô nào không được đánh dấu ở đây
+// mặc định lưu là "Bình thường" (giữ nguyên hành vi cũ khi tạo mới).
+function ktMatrixFilledLopOngForViTri(vt){
+  const m = state.ktMatrix;
+  return m.lopOngCols.filter(lo=>{ const c = m.cells[vt+'__'+lo]; return c && String(c.val||'').trim()!==''; });
+}
+function ktMatrixFilledViTriList(){
+  return state.ktMatrix.viTriList.filter(vt=> ktMatrixFilledLopOngForViTri(vt).length>0);
+}
+window.ktMatrixExceptionAdd = function(){
+  state.ktMatrix.exceptions.push({viTri:'', lopOng:'', ngoaiDang:NGOAI_DANG_BAT_THUONG[0]});
+  render();
+};
+window.ktMatrixExceptionRemove = function(idx){
+  state.ktMatrix.exceptions.splice(idx,1);
+  render();
+};
+window.ktMatrixExceptionSet = function(idx, field, val){
+  const ex = state.ktMatrix.exceptions[idx]; if(!ex) return;
+  ex[field] = val;
+  if(field==='viTri') ex.lopOng='';
+  render();
+};
+window.ktMatrixClose = function(){
+  if(!confirm('Đóng bảng nhập? Dữ liệu chưa lưu trong bảng sẽ mất (dữ liệu đã lưu trước đó không bị ảnh hưởng).')) return;
+  state.ktMatrix = {active:false, editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]};
+  render();
+};
+window.ktMatrixSave = async function(){
+  if(!can('kiemTra')){ noPermAlert(); return; }
+  const m = state.ktMatrix;
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  if(!dotObj){ alert('Vui lòng chọn Đợt kiểm tra/sửa chữa.'); return; }
+  if(!state.ktSel.heThong){ alert('Vui lòng chọn Hệ thống.'); return; }
+  const ngay = m.ngay || todayStr();
+  const nguoi = state.session? state.session.name : '—';
+  let created=0, updated=0, skipped=0; const belowThreshold=[];
+  let seq = state.kiemTra.length;
+  const exceptionMap = {};
+  (m.exceptions||[]).forEach(ex=>{ if(ex.viTri && ex.lopOng && ex.ngoaiDang) exceptionMap[ex.viTri+'__'+ex.lopOng] = ex.ngoaiDang; });
+  m.viTriList.forEach(vt=>{
+    m.lopOngCols.forEach(lo=>{
+      const key = vt+'__'+lo;
+      const cell = m.cells[key];
+      if(!cell || cell.val===undefined || cell.val===null || String(cell.val).trim()==='') return;
+      const dm = m.resolved[key];
+      if(!dm || dm==='conflict' || isNaN(parseFloat(cell.val))){ skipped++; return; }
+      const chieuDayDo = String(cell.val).trim();
+      const phanTramConLai = (parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
+      if(cell.existingId){
+        const rec = state.kiemTra.find(r=>r.id===cell.existingId);
+        if(rec){
+          rec.danhMucId=dm.id; rec.vung=dm.vung; rec.duongKinh=dm.duongKinh; rec.chieuDayTK=dm.chieuDay;
+          rec.chieuDayDo=chieuDayDo; rec.phanTramConLai=phanTramConLai.toFixed(1);
+          // Chỉ ghi đè Ngoại dạng khi có đánh dấu MỚI trong bảng lần này — nếu không, giữ nguyên giá trị
+          // đã lưu trước đó (tránh vô tình xóa mất ghi nhận bất thường cũ khi chỉ sửa lại số đo).
+          if(exceptionMap[key]) rec.ngoaiDang = exceptionMap[key];
+          syncToSheet('kiem_tra', rec);
+          updated++;
+          if(phanTramConLai<=70) belowThreshold.push(rec);
+        }
+      } else {
+        seq++;
+        const rec = {
+          id:'KT-'+pad(seq), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
+          heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:vt, lopOng:lo,
+          duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo, phanTramConLai:phanTramConLai.toFixed(1),
+          ngoaiDang: exceptionMap[key] || 'Bình thường', ngay, nguoiKiemTra:nguoi
+        };
+        state.kiemTra.unshift(rec);
+        syncToSheet('kiem_tra', rec);
+        created++;
+        if(phanTramConLai<=70) belowThreshold.push(rec);
+      }
+    });
+  });
+  if(created===0 && updated===0){ alert('Chưa có ô nào được nhập số liệu hợp lệ để lưu.'); return; }
+  await persist('kiem-tra', state.kiemTra, true);
+  await syncSuaChua();
+  state.ktMatrix = {active:false, editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]};
+  render();
+  alert('Đã lưu bảng kiểm tra: '+created+' bản ghi mới'+(updated?(', cập nhật '+updated+' bản ghi đã có'):'')+'.'+(skipped?(' Bỏ qua '+skipped+' ô không xác định được vùng vật liệu (xung đột/không khớp Danh mục hoặc số liệu không hợp lệ).'):''));
+  if(belowThreshold.length && state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length){
+    const lines = belowThreshold.map(r=>'• '+pipeCode(r)+': '+r.chieuDayDo+'mm/'+r.chieuDayTK+'mm ('+r.phanTramConLai+'%)').join('\n');
+    sendTelegram('⚠️ <b>CẢNH BÁO CHIỀU DÀY — '+belowThreshold.length+' vị trí dưới ngưỡng (nhập dạng bảng)</b>\n'+lines+'\nĐã đưa vào danh sách cắt thay.');
+  }
+};
+function renderKtMatrix(){
+  const m = state.ktMatrix;
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  const toMay = dotObj?dotObj.toMay:'';
+  const activeDots = state.dots.filter(d=>d.trangThai==='Đang diễn ra');
+  const heThongOpts = uniq(state.danhMuc.filter(r=>isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong));
+  const thietBiOpts = uniq(state.danhMuc.filter(r=>(isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
+  const opt = (arr, cur) => `<option value="">— Chọn —</option>` + arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)||'(không có)'}</option>`).join('');
+
+  let gridHtml = '<div class="empty" style="padding:14px 0;">Chưa có dòng nào — nhập khoảng Vị trí rồi bấm "Tạo dải vị trí", hoặc bấm "+ Thêm 1 dòng".</div>';
+  if(state.ktSel.heThong && m.viTriList.length && m.lopOngCols.length){
+    const headCols = m.lopOngCols.map(lo=>`<th>Lớp ${esc(lo)}</th>`).join('');
+    const bodyRows = m.viTriList.map(vt=>{
+      const cells = m.lopOngCols.map(lo=>{
+        const key = vt+'__'+lo;
+        const dm = m.resolved[key];
+        const cellData = m.cells[key];
+        const val = cellData? (cellData.val||'') : '';
+        if(dm===null || dm===undefined){
+          const diag = ktDiagnoseMismatch(toMay, state.ktSel.heThong, state.ktSel.thietBi, vt, lo);
+          return `<td class="mtx-na" title="${esc(diag.label)}">–</td>`;
+        }
+        if(dm==='conflict'){
+          return `<td class="mtx-conflict" title="Danh mục kỹ thuật có nhiều vùng vật liệu chồng lấn tại ô này — vào tab Danh mục kỹ thuật sửa lại dải Vị trí/Lớp ống trước khi nhập">⚠</td>`;
+        }
+        let cls = '', pctText = '';
+        const pv = parseFloat(val);
+        if(val!=='' && !isNaN(pv)){
+          const p = pv/parseFloat(dm.chieuDay)*100;
+          if(!isNaN(p)){ cls = p<=70?'mtx-danger':(p<=85?'mtx-warn':'mtx-good'); pctText = p.toFixed(0)+'%'; }
+        }
+        return `<td class="${cls}"><input class="mtx-input" type="text" inputmode="decimal" value="${esc(val)}" placeholder="${esc(dm.chieuDay)}" oninput="ktMatrixCellInput('${esc(vt)}','${esc(lo)}', this)"><div class="mtx-pct" id="${mtxKeyId(key)}">${esc(pctText)}</div></td>`;
+      }).join('');
+      return `<tr><td class="mtx-vitri">${esc(vt)} <span class="mtx-rowdel" onclick="ktMatrixRemoveRow('${esc(vt)}')" title="Bỏ dòng này khỏi bảng đang nhập (không xóa bản ghi đã lưu)">✕</span></td>${cells}</tr>`;
+    }).join('');
+    gridHtml = `<div class="mtx-wrap"><table class="mtx"><thead><tr><th>Vị trí</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+  }
+
+  return `<div class="form-panel">
+    <div class="mtx-toolbar">
+      <div class="field"><label>Đợt *</label><select onchange="ktSelect('dotId', this.value)">${activeDots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.ktSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
+      <div class="field"><label>Hệ thống *</label><select onchange="ktSelect('heThong', this.value)">${opt(heThongOpts, state.ktSel.heThong)}</select></div>
+      <div class="field"><label>Thiết bị</label><select onchange="ktSelect('thietBi', this.value)" ${!state.ktSel.heThong?'disabled':''}>${opt(thietBiOpts, state.ktSel.thietBi)}</select></div>
+      <div class="field"><label>Ngày kiểm tra</label><input type="date" value="${esc(m.ngay||todayStr())}" onchange="state.ktMatrix.ngay=this.value"></div>
+    </div>
+    ${state.ktSel.heThong ? `<div class="mtx-toolbar">
+      <div class="field"><label>Từ vị trí</label><input id="mtx-range-from" type="text" placeholder="VD: 1"></div>
+      <div class="field"><label>Đến vị trí</label><input id="mtx-range-to" type="text" placeholder="VD: 64"></div>
+      <button class="mini-btn" onclick="ktMatrixSetRange()">Tạo dải vị trí</button>
+      <button class="mini-btn" onclick="ktMatrixAddRow()">+ Thêm 1 dòng</button>
+      <button class="mini-btn" onclick="ktMatrixAddCol()">+ Thêm cột lớp ống</button>
+      <button class="mini-btn" onclick="ktMatrixRemoveCol()">− Bớt cột lớp ống</button>
+      <button class="mini-btn" onclick="ktMatrixLoadExisting()">Tải dữ liệu đã có (để sửa)</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Ô xám "–" là lớp ống không tồn tại theo Danh mục kỹ thuật tại vị trí đó. Ô "⚠" là xung đột Danh mục kỹ thuật. Bỏ trống ô nào thì ô đó không được lưu — sửa dữ liệu đã có sẽ CẬP NHẬT đúng bản ghi cũ, không tạo trùng.</div>` : `<div class="empty" style="padding:10px 0;">Chọn Hệ thống để bắt đầu.</div>`}
+    ${state.ktSel.heThong ? gridHtml : ''}
+    ${(state.ktSel.heThong && m.viTriList.length) ? (()=>{
+      const viOptsAll = ktMatrixFilledViTriList();
+      const exRows = m.exceptions.map((ex,idx)=>{
+        const loOpts = ex.viTri ? ktMatrixFilledLopOngForViTri(ex.viTri) : [];
+        return `<div class="mtx-toolbar">
+          <select onchange="ktMatrixExceptionSet(${idx},'viTri',this.value)">
+            <option value="">— Vị trí —</option>
+            ${viOptsAll.map(v=>`<option value="${esc(v)}" ${v===ex.viTri?'selected':''}>${esc(v)}</option>`).join('')}
+          </select>
+          <select onchange="ktMatrixExceptionSet(${idx},'lopOng',this.value)" ${!ex.viTri?'disabled':''}>
+            <option value="">— Lớp ống —</option>
+            ${loOpts.map(v=>`<option value="${esc(v)}" ${v===ex.lopOng?'selected':''}>Lớp ${esc(v)}</option>`).join('')}
+          </select>
+          <select onchange="ktMatrixExceptionSet(${idx},'ngoaiDang',this.value)">
+            ${NGOAI_DANG_BAT_THUONG.map(v=>`<option value="${esc(v)}" ${v===ex.ngoaiDang?'selected':''}>${esc(v)}</option>`).join('')}
+          </select>
+          <button class="mini-btn" onclick="ktMatrixExceptionRemove(${idx})">Xóa</button>
+        </div>`;
+      }).join('');
+      return `<div style="margin-top:14px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Ghi nhận Ngoại dạng bất thường (nếu có)</div>
+        ${exRows}
+        <button class="mini-btn" onclick="ktMatrixExceptionAdd()">+ Đánh dấu 1 ô bất thường</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Chỉ chọn được Vị trí/Lớp ống đã có số đo trong bảng trên. Ô nào không được đánh dấu ở đây sẽ tự lưu là "Bình thường".</div>
+      </div>`;
+    })() : ''}
+    <div class="form-actions"><button class="btn-ghost" onclick="ktMatrixClose()">Đóng</button><button class="btn" onclick="ktMatrixSave()">Lưu bảng kiểm tra</button></div>
+  </div>`;
+}
 
 /* ---------- Hội thoại giọng nói cho Kiểm tra (đo chiều dày) — chế độ đo liên tục ---------- */
 function buildKtWizardSteps(loopMode){
@@ -1672,6 +2044,86 @@ window.exportKiemTraTemplate = async function(){
   const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'KiemTra'); XLSX.writeFile(wb,'kiem-tra-du-lieu-tho.xlsx');
 };
+// Xuat bao cao dang BANG MA TRAN (1 dong = 1 Vi tri, cot = tung Lop ong) — giong dung layout bien ban
+// giay NDT truoc day, gon hon de in an/doi chieu, song song voi ban danh sach dai (exportKiemTra).
+// Du lieu van lay tu state.kiemTra (cau truc dai) — chi doi cach trinh bay khi xuat, khong doi luu tru.
+window.exportKiemTraMatrix = async function(){
+  if(!(await withXLSXReady())) return;
+  if(!state.kiemTra.length){ alert('Chưa có bản ghi kiểm tra nào để xuất.'); return; }
+  const byDot = {};
+  state.kiemTra.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
+  const dotIds = Object.keys(byDot).sort((a,b)=>{
+    const da=state.dots.find(x=>x.id===a), db=state.dots.find(x=>x.id===b);
+    return (da?da.ten:a).localeCompare(db?db.ten:b);
+  });
+  const wb = XLSX.utils.book_new();
+  const usedNames = {};
+  dotIds.forEach(dotId=>{
+    const d = state.dots.find(x=>x.id===dotId);
+    const dotRecs = byDot[dotId];
+    let maxLop = 1;
+    dotRecs.forEach(r=>{ const n=parseFloat(r.lopOng); if(!isNaN(n)&&n>maxLop) maxLop=n; });
+    const NCOL = 6+maxLop;
+    const byGroup = {};
+    dotRecs.forEach(r=>{ const gk=(r.heThong||'')+'|||'+(r.thietBi||''); if(!byGroup[gk]) byGroup[gk]=[]; byGroup[gk].push(r); });
+    const groupKeys = Object.keys(byGroup).sort((a,b)=>a.localeCompare(b));
+    const aoa = []; const merges = [];
+    aoa.push(['BIÊN BẢN KIỂM TRA CHIỀU DÀY ỐNG LÒ HƠI (DẠNG BẢNG)']); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push(['NHIỆT ĐIỆN NGHI SƠN']); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    aoa.push(['Đợt kiểm tra/sửa chữa:', d?d.ten:dotId,'','','Tổ máy:', d?d.toMay:'']);
+    merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:3}}); merges.push({s:{r:aoa.length-1,c:5},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push(['Thời gian:', (d&&d.ngayBatDau?fmtDate(d.ngayBatDau):'')+(d&&d.ngayKetThuc?(' đến '+fmtDate(d.ngayKetThuc)):' (đang diễn ra)'),'','','Trạng thái:', d?d.trangThai:'']);
+    merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:3}}); merges.push({s:{r:aoa.length-1,c:5},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    let totalRows = 0;
+    groupKeys.forEach(gk=>{
+      const [heThong, thietBi] = gk.split('|||');
+      const recs = byGroup[gk];
+      const titleIdx = aoa.length;
+      aoa.push([(heThong||'(không có hệ thống)')+(thietBi?(' — '+thietBi):'')]);
+      merges.push({s:{r:titleIdx,c:0},e:{r:titleIdx,c:NCOL-1}});
+      const h1 = aoa.length;
+      const row1 = ['STT','Hệ thống','Thiết bị','Vị trí','Đường kính TK (mm)','Chiều dày TK (mm)','Chiều dày đo được (mm)'];
+      for(let i=1;i<maxLop;i++) row1.push('');
+      aoa.push(row1);
+      const h2 = aoa.length;
+      const row2 = ['','','','','','']; for(let i=1;i<=maxLop;i++) row2.push('Lớp '+i);
+      aoa.push(row2);
+      merges.push({s:{r:h1,c:0},e:{r:h2,c:0}}); merges.push({s:{r:h1,c:1},e:{r:h2,c:1}});
+      merges.push({s:{r:h1,c:2},e:{r:h2,c:2}}); merges.push({s:{r:h1,c:3},e:{r:h2,c:3}});
+      merges.push({s:{r:h1,c:4},e:{r:h2,c:4}}); merges.push({s:{r:h1,c:5},e:{r:h2,c:5}});
+      merges.push({s:{r:h1,c:6},e:{r:h1,c:6+maxLop-1}});
+      const byViTri = {};
+      recs.forEach(r=>{ const key=String(r.viTri); if(!byViTri[key]) byViTri[key]=[]; byViTri[key].push(r); });
+      const viTris = Object.keys(byViTri).sort((a,b)=>(parseFloat(a)-parseFloat(b))||a.localeCompare(b));
+      viTris.forEach((vt,idx)=>{
+        const byLop = {}; byViTri[vt].forEach(r=>{ byLop[String(r.lopOng)]=r; });
+        const first = byViTri[vt][0];
+        const row = [idx+1, heThong, thietBi, vt, first.duongKinh, first.chieuDayTK];
+        for(let i=1;i<=maxLop;i++){ const r=byLop[String(i)]; row.push(r?r.chieuDayDo:'-'); }
+        aoa.push(row); totalRows++;
+      });
+      aoa.push([]);
+    });
+    aoa.push(['Tổng số vị trí: '+totalRows]); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    aoa.push(['Người kiểm tra (ký, ghi rõ họ tên)','','','','Người lập biên bản (ký, ghi rõ họ tên)','','','','Xác nhận của đơn vị (ký, đóng dấu)']);
+    { const rIdx = aoa.length-1;
+      merges.push({s:{r:rIdx,c:0},e:{r:rIdx,c:Math.min(3,NCOL-1)}});
+      if(NCOL>4) merges.push({s:{r:rIdx,c:4},e:{r:rIdx,c:Math.min(7,NCOL-1)}});
+      if(NCOL>8) merges.push({s:{r:rIdx,c:8},e:{r:rIdx,c:NCOL-1}}); }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const cols = [{wch:6},{wch:16},{wch:14},{wch:10},{wch:12},{wch:12}];
+    for(let i=0;i<maxLop;i++) cols.push({wch:9});
+    ws['!cols'] = cols;
+    ws['!merges'] = merges;
+    let name = scSafeSheetName(d?d.ten:dotId);
+    if(usedNames[name]){ usedNames[name]++; name = scSafeSheetName(name+' ('+usedNames[name]+')'); } else { usedNames[name]=1; }
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb,'bien-ban-kiem-tra-chieu-day-ong-dang-bang.xlsx');
+};
 window.deleteKiemTra = async function(id){
   if(!can('kiemTra')){ noPermAlert(); return; }
   if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Google Sheet (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
@@ -1680,35 +2132,147 @@ window.deleteKiemTra = async function(id){
   deleteFromSheet('KiemTra', id);
   render();
 };
+// Phat hien + doc file Excel dang BANG MA TRAN, DOC THANG TU MANG-THO (khong dung sheet_to_json mac dinh) —
+// vi mau bien ban NDT thuong co tieu de 2 DONG (dong 1: STT/He thong/Thiet bi/Vi tri/...; dong 2 (duoi tieu
+// de gop o "Chieu day do duoc"): Lop ong 1..8) — sheet_to_json mac dinh CHI lay dong 1 lam ten cot, khien
+// toan bo nhan "Lop ong 1..8" bi lac vao NHU MOT DONG DU LIEU, va khong con cot nao ten "Lop ong N" nua ->
+// nhan sai la file dang danh sach dai, roi bo qua sach du lieu vi thieu cot "Chieu day do (mm)". Ham nay
+// quet toi da 6 dong dau tim dong chua nhan "Lop ong N" (bat ky dong nao), roi tim rieng cac cot He thong/
+// Thiet bi/Vi tri/Ngay kiem tra trong CAC DONG TU DAU DEN DONG DO — nen doc dung du la tieu de 1 dong hay 2 dong.
+function ktMatrixParseSheet(ws){
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  if(!aoa.length) return null;
+  const scanRows = Math.min(aoa.length, 6);
+  let lopHeaderRow = -1, lopOngCols = [];
+  for(let i=0;i<scanRows;i++){
+    const cols = [];
+    (aoa[i]||[]).forEach((cell,ci)=>{
+      const m = String(cell).match(/l[ớo]p\s*[ốo]ng\s*(\d+)/i);
+      if(m) cols.push({col:ci, n:parseInt(m[1],10)});
+    });
+    if(cols.length>=1){ lopHeaderRow = i; lopOngCols = cols; break; }
+  }
+  if(lopHeaderRow===-1) return null;
+  lopOngCols.sort((a,b)=>a.n-b.n);
+  // Dò cột theo kiểu "bắt đầu bằng" (không cần khớp tuyệt đối cả cụm từ) — vì tiêu đề thực tế có thể là
+  // "Ngày kiểm tra", "Ngày đo", hay chỉ ngắn gọn "Ngày" — khớp cứng nguyên cụm dễ bị trượt nếu người lập
+  // file đặt tên hơi khác đi.
+  const findCol = (prefixes)=>{
+    for(let i=0;i<=lopHeaderRow;i++){
+      const row = aoa[i]||[];
+      for(let ci=0;ci<row.length;ci++){
+        const norm = normalizeVN(row[ci]);
+        if(norm && prefixes.some(p=>norm.startsWith(p))) return ci;
+      }
+    }
+    return -1;
+  };
+  const heThongCol = findCol(['he thong']);
+  const thietBiCol = findCol(['thiet bi']);
+  const viTriCol = findCol(['vi tri']);
+  const ngayCol = findCol(['ngay kiem tra','ngay do','ngay']);
+  if(heThongCol===-1 || viTriCol===-1) return null;
+  return {lopOngCols, heThongCol, thietBiCol, viTriCol, ngayCol, dataRows: aoa.slice(lopHeaderRow+1)};
+}
+// Chuyen 1 o ngay-thang trong Excel (co the la so serial cua Excel, chuoi "dd/mm/yyyy", hoac da la
+// "yyyy-mm-dd") ve dung dinh dang ISO "yyyy-MM-dd" ma fmtDate()/input type=date cua app dang can.
+function parseExcelDateCell(val){
+  if(val===undefined || val===null || val==='') return '';
+  if(typeof val==='number' && isFinite(val)){
+    const ms = Math.round((val-25569)*86400*1000); // 25569 = so ngay giua moc Excel (1899-12-30) va moc Unix (1970-01-01)
+    const d = new Date(ms);
+    if(isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0,10);
+  }
+  const s = String(val).trim();
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  return '';
+}
 window.importKiemTra = function(input){
   if(!can('kiemTra')){ noPermAlert(); input.value=''; return; }
   const file=input.files[0]; if(!file) return;
-  if(!state.ktSel.dotId){ alert('Vui lòng mở biểu mẫu Kiểm tra và chọn Đợt kiểm tra/sửa chữa trước khi nhập Excel — toàn bộ dữ liệu trong file sẽ được gắn vào đợt/tổ máy đó.'); input.value=''; return; }
+  if(!state.ktSel.dotId){ alert('Vui lòng chọn Đợt kiểm tra/sửa chữa (ở bảng "+ Nhập/sửa kết quả") trước khi nhập Excel — toàn bộ dữ liệu trong file sẽ được gắn vào đợt/tổ máy đó.'); input.value=''; return; }
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const reader=new FileReader();
   reader.onload=async e=>{
     if(!(await withXLSXReady())) return;
     const wb=XLSX.read(e.target.result,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    let added=0, skipped=0, ambiguous=0;
-    rows.forEach(r=>{
-      const heThong=r['Hệ thống']||r['He thong'], thietBi=r['Thiết bị']||r['Thiet bi']||'';
-      const vungCol=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'');
-      const viTri=String(r['Vị trí']||r['Vi tri']||''), lopOng=String(r['Lớp ống']||r['Lop ong']||'');
-      const chieuDayDo = r['Chiều dày đo (mm)']||r['Chieu day do'];
-      if(!heThong || !viTri || !lopOng || !chieuDayDo){ skipped++; return; }
-      let candidates = ktCandidates(dotObj.toMay, String(heThong), String(thietBi), viTri, lopOng);
-      let dm = candidates.length===1 ? candidates[0] : (vungCol ? candidates.find(c=>c.vung===vungCol) : null);
-      if(!dm){ if(candidates.length>1) ambiguous++; else skipped++; return; }
-      const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-      const newRec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:String(r['Ngày kiểm tra']||r['Ngay kiem tra']||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
-      state.kiemTra.unshift(newRec);
-      syncToSheet('kiem_tra', newRec);
-      added++;
-    });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const mtx = ktMatrixParseSheet(ws);
+    let added=0, skipped=0, ambiguous=0, missingHeader=0;
+    const reasonTally = {};
+    if(mtx){
+      // ---- Dạng bảng ma trận (tiêu đề 1 hoặc 2 dòng): mỗi dòng dữ liệu = 1 Vị trí, mỗi cột Lớp ống N có số liệu riêng ----
+      mtx.dataRows.forEach(row=>{
+        const rowHasContent = (row||[]).some(c=>String(c===undefined||c===null?'':c).trim()!=='');
+        if(!rowHasContent) return;
+        const heThong = String(row[mtx.heThongCol]||'').trim();
+        const thietBi = mtx.thietBiCol>=0 ? String(row[mtx.thietBiCol]||'').trim() : '';
+        const viTriVal = String(row[mtx.viTriCol]||'').trim();
+        if(!heThong || !viTriVal){ missingHeader++; return; }
+        const ngay = (mtx.ngayCol>=0 ? parseExcelDateCell(row[mtx.ngayCol]) : '') || todayStr();
+        mtx.lopOngCols.forEach(col=>{
+          const raw = row[col.col];
+          const cellStr = String(raw===undefined||raw===null?'':raw).trim();
+          if(!cellStr || cellStr==='-' || cellStr==='—') return;
+          if(isNaN(parseFloat(cellStr))){ skipped++; return; }
+          const candidates = ktCandidates(dotObj.toMay, heThong, thietBi, viTriVal, String(col.n));
+          const dm = candidates.length===1 ? candidates[0] : null;
+          if(!dm){
+            if(candidates.length>1) ambiguous++;
+            else {
+              skipped++;
+              const diag = ktDiagnoseMismatch(dotObj.toMay, heThong, thietBi, viTriVal, String(col.n));
+              reasonTally[diag.code] = (reasonTally[diag.code]||{count:0,label:diag.label});
+              reasonTally[diag.code].count++;
+              reasonTally[diag.code].label = diag.label;
+            }
+            return;
+          }
+          const phanTramConLai=(parseFloat(cellStr)/parseFloat(dm.chieuDay)*100);
+          const newRec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:viTriVal, lopOng:String(col.n), duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:cellStr, phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:'Bình thường', ngay, nguoiKiemTra: state.session?state.session.name:'—'};
+          state.kiemTra.unshift(newRec);
+          syncToSheet('kiem_tra', newRec);
+          added++;
+        });
+      });
+    } else {
+      // ---- Dạng danh sách dài (như cũ): mỗi dòng = 1 bản ghi (1 Vị trí + 1 Lớp ống) ----
+      const rows=XLSX.utils.sheet_to_json(ws, {defval:''});
+      rows.forEach(r=>{
+        const heThong=r['Hệ thống']||r['He thong'], thietBi=r['Thiết bị']||r['Thiet bi']||'';
+        const vungCol=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'');
+        const viTri=String(r['Vị trí']||r['Vi tri']||''), lopOng=String(r['Lớp ống']||r['Lop ong']||'');
+        const chieuDayDo = r['Chiều dày đo (mm)']||r['Chieu day do'];
+        if(!heThong || !viTri || !lopOng || !chieuDayDo){ skipped++; return; }
+        let candidates = ktCandidates(dotObj.toMay, String(heThong), String(thietBi), viTri, lopOng);
+        let dm = candidates.length===1 ? candidates[0] : (vungCol ? candidates.find(c=>c.vung===vungCol) : null);
+        if(!dm){
+          if(candidates.length>1) ambiguous++;
+          else {
+            skipped++;
+            const diag = ktDiagnoseMismatch(dotObj.toMay, String(heThong), String(thietBi), viTri, lopOng);
+            reasonTally[diag.code] = (reasonTally[diag.code]||{count:0,label:diag.label});
+            reasonTally[diag.code].count++;
+            reasonTally[diag.code].label = diag.label;
+          }
+          return;
+        }
+        const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
+        const newRec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:(parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
+        state.kiemTra.unshift(newRec);
+        syncToSheet('kiem_tra', newRec);
+        added++;
+      });
+    }
     await persist('kiem-tra', state.kiemTra, true);
     await syncSuaChua();
-    alert('Đã nhập '+added+' dòng vào đợt "'+dotObj.ten+'". Bỏ qua '+skipped+' dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' dòng có nhiều vùng khớp — cần bổ sung cột "Quy ước vùng vật liệu trên bản vẽ" trong file để phân biệt.'):''));
+    const reasonLines = Object.keys(reasonTally).sort((a,b)=>reasonTally[b].count-reasonTally[a].count)
+      .map(code=>'• ('+reasonTally[code].count+' ô/dòng) '+reasonTally[code].label).join('\n');
+    alert('Đã nhập '+added+' bản ghi vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):''));
     input.value=''; render();
   };
   reader.readAsArrayBuffer(file);
@@ -1732,7 +2296,11 @@ async function syncSuaChua(){
     const relevant = cycleStart ? history.filter(h=>h.ngay > cycleStart) : history;
     if(relevant.length===0) return;
     const latest = relevant[relevant.length-1];
-    if(parseFloat(latest.phanTramConLai) > 70) return;
+    // Đẩy sang Sửa chữa khi HOẶC chiều dày còn lại ≤70%, HOẶC ngoại dạng quan sát được là bất thường
+    // (Rỗ ăn mòn/Biến dạng-phình/Nứt/Mài mòn cục bộ/Khác) — dù chiều dày vẫn còn tốt, vì đây là các dấu
+    // hiệu hư hỏng cần xử lý ngay, không chỉ dựa vào % còn lại.
+    const ngoaiDangBatThuong = NGOAI_DANG_BAT_THUONG.includes(latest.ngoaiDang);
+    if(parseFloat(latest.phanTramConLai) > 70 && !ngoaiDangBatThuong) return;
     let activeItem = (lastItem && lastItem.trangThai!=='Hoàn thành') ? lastItem : null;
     if(!activeItem){
       const chuKy = (lastItem ? lastItem.chuKy : 0) + 1;
@@ -1741,6 +2309,7 @@ async function syncSuaChua(){
       activeItem = {id:displayId, pipeKey:key, chuKy, dotId:latest.dotId, toMay:latest.toMay,
         heThong:latest.heThong, thietBi:latest.thietBi, viTri:latest.viTri, lopOng:latest.lopOng,
         chieuDayTK:latest.chieuDayTK, chieuDayDoGanNhat:latest.chieuDayDo, phanTramConLai:latest.phanTramConLai,
+        ngoaiDangGanNhat: latest.ngoaiDang||'', ghiChuXoaMoiHan:'',
         ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:'Cắt thay',
         welds:[{id:displayId+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''},
                {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''}]};
@@ -1748,6 +2317,7 @@ async function syncSuaChua(){
       syncToSheet('sua_chua_item', activeItem);
     } else {
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
+      activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
@@ -1804,7 +2374,20 @@ window.removeWeld = async function(itemId, weldId){
   if(!can('hanCat')){ noPermAlert(); return; }
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const w = item.welds.find(x=>x.id===weldId);
-  if(w && w.loai==='chinh_thuc'){ alert('Không thể xóa mối hàn chính thức (w1/w2), chỉ có thể xóa mối hàn biện pháp.'); return; }
+  if(!w) return;
+  if(w.loai==='chinh_thuc'){
+    // Mối 1 (w1) luôn bắt buộc phải có — chỉ cho phép xóa mối 2 trở đi, dùng cho trường hợp 2 hạng mục
+    // Cắt thay liền kề nhau dùng chung 1 mối hàn ranh giới thay vì mỗi bên tự có đủ 2 mối hàn riêng.
+    if(weldId.endsWith('-w1')){
+      alert('Không thể xóa mối hàn chính thức đầu tiên (mối 1) — hạng mục Cắt thay luôn phải có tối thiểu mối hàn này.');
+      return;
+    }
+    const lyDo = prompt('Bắt buộc nhập lý do xóa mối hàn chính thức "'+weldId+'" (VD: đoạn ống liền kề dùng chung mối hàn với hạng mục bên cạnh):');
+    if(!lyDo || !lyDo.trim()){ alert('Chưa nhập lý do — không thể xóa mối hàn chính thức khi chưa có lý do rõ ràng.'); return; }
+    if(!confirm('Xác nhận xóa mối hàn chính thức "'+weldId+'"?\n\nLý do: '+lyDo.trim()+'\n\nHành động này sẽ được ghi lại vào lịch sử hạng mục, không thể hoàn tác.')) return;
+    const stamp = '['+fmtDate(todayStr())+' · '+(state.session?state.session.name:'—')+'] Xóa '+weldId+' — Lý do: '+lyDo.trim();
+    item.ghiChuXoaMoiHan = (item.ghiChuXoaMoiHan ? item.ghiChuXoaMoiHan+'\n' : '') + stamp;
+  }
   item.welds = item.welds.filter(x=>x.id!==weldId);
   if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
@@ -2451,11 +3034,16 @@ function renderNhatKy(){
         <div class="record-meta" style="margin-top:8px;">${n.canBoGiamSat?`<span>Cán bộ giám sát: ${esc(n.canBoGiamSat)}</span>`:''}<span>Người duyệt: ${esc(n.nguoiDuyet)}</span><span>${n.thoiGianDuyet?fmtDate(n.thoiGianDuyet.slice(0,10)):''}</span></div>`
       : ''}
       ${photos.length?`<div class="nk-photo-grid" style="margin-top:10px;">${photos.map(p=>{
+        const hasImg = !!p.link;
         const isDriveLink = p.link && p.link.indexOf('data:')!==0;
+        let statusHtml;
+        if(p.uploadFailed) statusHtml = `<div style="font-size:9.5px;color:var(--danger);margin-top:2px;text-align:center;">⚠ Lỗi tải lên Drive — chỉ còn tên, chưa có ảnh</div>`;
+        else if(isDriveLink) statusHtml = `<a href="${esc(p.link)}" target="_blank" class="mini-btn" style="width:100%;margin-top:2px;box-sizing:border-box;display:block;text-align:center;text-decoration:none;">Mở trong Drive ↗</a>`;
+        else statusHtml = `<div style="font-size:9.5px;color:var(--warn);margin-top:2px;text-align:center;">Đang tải lên Drive…</div>`;
         return `<div class="nk-photo-item">
-        <img src="${esc(p.link)}" style="width:100%;border-radius:6px;cursor:pointer;" onclick="setLightbox('${safeLink(p.link)}')">
+        ${hasImg ? `<img src="${esc(p.link)}" style="width:100%;border-radius:6px;cursor:pointer;" onclick="setLightbox('${safeLink(p.link)}')">` : `<div style="width:100%;aspect-ratio:1;border-radius:6px;border:1px dashed var(--danger);display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:22px;">✕</div>`}
         <div style="font-size:10.5px;color:var(--dim);margin-top:3px;text-align:center;">${esc(p.tenAnh)}</div>
-        ${isDriveLink ? `<a href="${esc(p.link)}" target="_blank" class="mini-btn" style="width:100%;margin-top:2px;box-sizing:border-box;display:block;text-align:center;text-decoration:none;">Mở trong Drive ↗</a>` : `<div style="font-size:9.5px;color:var(--warn);margin-top:2px;text-align:center;">Đang tải lên Drive…</div>`}
+        ${statusHtml}
         ${canNk?`<button class="mini-btn" style="width:100%;margin-top:2px;" onclick="deleteAnh('${p.id}')">Xóa ảnh</button>`:''}
       </div>`;
       }).join('')}</div>`:''}
@@ -2916,35 +3504,9 @@ function renderKiemTra(){
   if(!state.ktSel.dotId && activeDots.length===1) state.ktSel.dotId = activeDots[0].id;
   const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
   const toMay = dotObj ? dotObj.toMay : '';
-  const heThongOpts = uniq(state.danhMuc.filter(r=>isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong));
-  const thietBiOpts = uniq(state.danhMuc.filter(r=>(isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)) && r.heThong===state.ktSel.heThong).map(r=>r.thietBi));
-  const opt = (arr, cur) => `<option value="">— Chọn —</option>` + arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)||'(không có)'}</option>`).join('');
-  const candidates = ktCandidates(toMay, state.ktSel.heThong, state.ktSel.thietBi, state.ktSel.viTri, state.ktSel.lopOng);
-  const dm = candidates.length===1 ? candidates[0] : null;
-  state.ktCandidates = candidates; state.ktResolved = dm;
 
   const noActiveDot = activeDots.length===0;
-  const form = !state.showForm.kiemtra ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới (gắn với 1 tổ máy) trước khi nhập kết quả kiểm tra.</div></div>` : `<div class="form-panel">
-    <div class="form-grid">
-      <div class="field full"><label>Đợt kiểm tra/sửa chữa (tổ máy) *</label><select onchange="ktSelect('dotId', this.value)">${activeDots.map(d=>`<option value="${esc(d.id)}" ${d.id===state.ktSel.dotId?'selected':''}>${esc(d.ten)} — ${esc(d.toMay)}</option>`).join('')}</select></div>
-      <div class="field"><label>Hệ thống *</label><select onchange="ktSelect('heThong', this.value)">${opt(heThongOpts, state.ktSel.heThong)}</select></div>
-      <div class="field"><label>Thiết bị</label><select onchange="ktSelect('thietBi', this.value)" ${!state.ktSel.heThong?'disabled':''}>${opt(thietBiOpts, state.ktSel.thietBi)}</select></div>
-      <div class="field"><label>Vị trí ống (số cụ thể) *</label><input id="kt-vitri" value="${esc(state.ktSel.viTri)}" placeholder="VD: 145" oninput="updateKtDerived()"></div>
-      <div class="field"><label>Lớp ống (số cụ thể) *</label><input id="kt-lopong" value="${esc(state.ktSel.lopOng)}" placeholder="VD: 3" oninput="updateKtDerived()"></div>
-      <div class="field full" id="kt-ambig-wrap" style="display:${candidates.length!==1 && state.ktSel.viTri && state.ktSel.lopOng?'block':'none'};background:var(--danger-soft);color:var(--danger);border:1px solid #4a2422;border-radius:7px;padding:11px 13px;font-size:12.5px;line-height:1.5;">
-        ${candidates.length>1?('<b>Danh mục kỹ thuật đang bị xung đột:</b> có '+candidates.length+' vùng vật liệu ('+candidates.map(c=>esc(c.vung)).join(', ')+') cùng bao trùm vị trí/lớp ống này. Vui lòng vào tab "Danh mục kỹ thuật" sửa lại dải Vị trí/Lớp ống cho KHÔNG chồng lấn, rồi quay lại kiểm tra.') : (candidates.length===0?'Không tìm thấy vùng vật liệu nào trong Danh mục kỹ thuật khớp với Vị trí/Lớp ống này.':'')}
-      </div>
-      <div class="field"><label>Vùng vật liệu (tự động, theo bản vẽ)</label><div class="readonly-box" id="kt-vung-box">${dm? esc(dm.vung) : '—'}</div></div>
-      <div class="field"><label>Đường kính (mm)</label><div class="readonly-box" id="kt-dk-box">${dm?esc(dm.duongKinh):'—'}</div></div>
-      <div class="field"><label>Chiều dày thiết kế (mm)</label><div class="readonly-box" id="kt-day-box">${dm?esc(dm.chieuDay):'—'}</div></div>
-      <div class="field"><label>Vật liệu</label><div class="readonly-box" id="kt-vl-box">${dm?esc(dm.vatLieu||'—'):'—'}</div></div>
-      <div class="field"><label>Chiều dày đo được (mm) *</label><input id="kt-do" placeholder="VD: 3.9"></div>
-      <div class="field"><label>Ngoại dạng quan sát</label><select id="kt-ngoaidang"><option>Bình thường</option><option>Rỗ ăn mòn</option><option>Biến dạng / phình</option><option>Nứt</option><option>Mài mòn cục bộ</option><option>Khác</option></select></div>
-      <div class="field"><label>Ngày kiểm tra</label><input id="kt-ngay" type="date" value="${todayStr()}"></div>
-      <div class="field"><label>Người kiểm tra</label><input id="kt-nguoi" value="${esc(state.session.name)}" disabled></div>
-    </div>
-    <div class="form-actions"><button class="btn-ghost" onclick="toggleForm('kiemtra')">Hủy</button><button class="btn" onclick="addKiemTra()">Lưu kết quả</button></div>
-  </div>`);
+  const form = !state.ktMatrix.active ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới (gắn với 1 tổ máy) trước khi nhập kết quả kiểm tra.</div></div>` : renderKtMatrix());
 
   const canKt = can('kiemTra');
   const ktGroups = {};
@@ -2972,11 +3534,12 @@ function renderKiemTra(){
 
   return `<div class="page-head"><div><div class="page-eyebrow">Nhật ký</div><div class="page-title">Kiểm tra (đo đạc)</div></div>
     <div class="head-actions">
-      ${canKt?`<label class="file-btn">Nhập Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importKiemTra(this)"></label>`:''}
+      ${canKt?`<label class="file-btn">Nhập Excel (danh sách hoặc dạng bảng)<input type="file" accept=".xlsx,.xls,.csv" onchange="importKiemTra(this)"></label>`:''}
       <button class="btn-ghost" onclick="exportKiemTraTemplate()">Tải mẫu nhập liệu</button>
-      <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel (báo cáo in ấn)</button>
+      <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel (danh sách dài)</button>
+      <button class="btn-ghost" onclick="exportKiemTraMatrix()">Xuất Excel (dạng bảng, để in)</button>
       ${canKt?`<button class="btn-ghost" onclick="startKtVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
-      ${canKt?`<button class="btn" onclick="toggleForm('kiemtra')">${state.showForm.kiemtra?'Đóng biểu mẫu':'+ Thêm bản ghi'}</button>`:''}
+      ${canKt?`<button class="btn" onclick="toggleKtMatrix()">${state.ktMatrix.active?'Đóng bảng nhập':'+ Nhập/sửa kết quả (dạng bảng)'}</button>`:''}
     </div></div>
   ${form}
   ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`;
@@ -3013,9 +3576,11 @@ function renderSuaChuaItemCard(item){
       </select>
       <input placeholder="Thợ hàn" ${disHanCat} value="${esc(w.thoHan)}" style="width:110px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;" onchange="setWeldField('${item.id}','${w.id}','thoHan', this.value)">
       ${(w.loai==='bien_phap' && canHanCat)?`<button class="mini-btn" onclick="removeWeld('${item.id}','${w.id}')">Xóa</button>`:''}
+      ${(w.loai==='chinh_thuc' && !w.id.endsWith('-w1') && canHanCat)?`<button class="mini-btn" style="color:var(--danger);" onclick="removeWeld('${item.id}','${w.id}')" title="Chỉ dùng khi đoạn ống này liền kề, dùng chung mối hàn với hạng mục bên cạnh — bắt buộc nhập lý do">Xóa (cần lý do)</button>`:''}
       ${(w.nguoiThucHien||w.nguoiXacNhanPAUT)?`<div style="width:100%;font-size:10.5px;color:var(--dim);margin-top:3px;">${w.nguoiThucHien?('Cắt/hàn bởi: '+esc(w.nguoiThucHien)):''}${(w.nguoiThucHien&&w.nguoiXacNhanPAUT)?' · ':''}${w.nguoiXacNhanPAUT?('PAUT xác nhận bởi: '+esc(w.nguoiXacNhanPAUT)):''}</div>`:''}
     </div>`).join('');
-    bodyHtml = `${weldRows}${canHanCat?`<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`:''}`;
+    bodyHtml = `${weldRows}${canHanCat?`<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`:''}
+      ${item.ghiChuXoaMoiHan?`<div style="margin-top:10px;font-size:11px;color:var(--muted);white-space:pre-line;border-top:1px dashed var(--border-soft);padding-top:8px;"><b>Lịch sử xóa mối hàn chính thức:</b>\n${esc(item.ghiChuXoaMoiHan)}</div>`:''}`;
   } else {
     bodyHtml = `<div class="field" style="max-width:260px;"><label>Trạng thái (${esc(phuongAn)})</label><select ${disHanCat} onchange="setManualStatus('${item.id}', this.value)">
       <option ${item.trangThai==='Chờ xử lý'?'selected':''}>Chờ xử lý</option>
@@ -3026,7 +3591,7 @@ function renderSuaChuaItemCard(item){
   const canXoaSc = can('xoaSuaChua');
   return `<div class="repair-item">
     <div class="repair-head" onclick="toggleRepairExpand('${item.id}')">
-      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${phuongAn==='Cắt thay'?(doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${item.phanTramConLai}% còn lại</span></div>
+      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${phuongAn==='Cắt thay'?(doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${item.phanTramConLai}% còn lại${(item.ngoaiDangGanNhat && item.ngoaiDangGanNhat!=='Bình thường')?(' · Ngoại dạng: '+esc(item.ngoaiDangGanNhat)):''}</span></div>
       <span class="status ${s}">${esc(item.trangThai)}</span>
     </div>
     ${expanded ? `<div style="margin-top:12px;" onclick="event.stopPropagation()">${bodyHtml}
