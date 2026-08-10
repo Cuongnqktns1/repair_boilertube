@@ -1104,6 +1104,25 @@ window.retrySync = function(){
   state.syncing = true; render();
   syncFromSheetInBackground();
 };
+// Nhiều người (4-5 người trong đợt sửa chữa) cùng mở app để xem tình trạng cùng lúc — nhưng app chỉ tải
+// dữ liệu Google Sheet lúc mở lên/bấm "Đồng bộ lại", không tự đẩy dữ liệu mới sang các máy khác đang mở
+// sẵn. Bù lại bằng cách tự đồng bộ ngầm định kỳ + mỗi khi quay lại tab — nhưng KHÔNG tự đồng bộ khi đang
+// có form/bảng ma trận/hội thoại giọng nói đang mở, để tránh làm gián đoạn/mất focus ô đang gõ dở.
+function isUserActivelyEditing(){
+  if(state.wizard) return true;
+  if(state.ktMatrix && state.ktMatrix.active) return true;
+  if(state.showForm && Object.values(state.showForm).some(v=>v)) return true;
+  return false;
+}
+function startAutoSync(){
+  setInterval(()=>{
+    if(document.hidden || !state.session || state.syncing || isUserActivelyEditing()) return;
+    syncFromSheetInBackground();
+  }, 90000); // 90 giây/lần
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && state.session && !state.syncing && !isUserActivelyEditing()) syncFromSheetInBackground();
+  });
+}
 async function syncFromSheetInBackground(){
   const all = await fetchSheetAll();
   if(!all){
@@ -2359,7 +2378,23 @@ window.setManualStatus = async function(itemId, value){
   syncToSheet('sua_chua_item', item);
   render();
 };
-window.toggleRepairExpand = function(id){ state.expandedRepair = state.expandedRepair===id? null : id; render(); };
+// Tải lại đúng dữ liệu Sửa chữa (SuaChuaHangMuc + SuaChua) ngay khi mở 1 hạng mục ra để xem/sửa — vì có
+// thể nhiều người (4-5 người) đang cùng mở app xem trong lúc sửa chữa, tránh trường hợp anh đang thao tác
+// trên bản dữ liệu cũ (do người khác vừa cập nhật mà máy mình chưa tự đồng bộ kịp).
+async function refreshSuaChuaFromSheet(){
+  try{
+    const [itemRows, weldRows] = await Promise.all([fetchSheet('sua_chua_item'), fetchSheet('sua_chua_weld')]);
+    if(!itemRows && !weldRows) return; // mất mạng — giữ nguyên dữ liệu đang có, không ghi đè bằng rỗng
+    const fresh = mapSheetSuaChua(itemRows||[], weldRows||[]);
+    if(fresh.length){ state.suaChua = fresh; await persist('sua-chua', state.suaChua, true); }
+  }catch(e){ console.error('Không tải lại được dữ liệu Sửa chữa mới nhất:', e); }
+}
+window.toggleRepairExpand = async function(id){
+  const opening = state.expandedRepair !== id;
+  state.expandedRepair = opening ? id : null;
+  render();
+  if(opening && !state.syncing){ await refreshSuaChuaFromSheet(); render(); }
+};
 window.addBienPhapWeld = async function(itemId){
   if(!can('hanCat')){ noPermAlert(); return; }
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
@@ -3874,6 +3909,7 @@ function renderAnalysis(){
 
 document.body.classList.add(voiceSupported() ? 'voice-ok' : 'voice-no');
 loadAll();
+startAutoSync();
 </script>
 </body>
 </html>
