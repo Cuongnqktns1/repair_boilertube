@@ -371,6 +371,7 @@ let state = {
   ovYear:null, ovDot:null, ovMode:'current',
   expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
   scExpandedHeThong:null, ktExpandedHeThong:null,
+  ktSelectedIds:{}, // chon nhieu dong Kiem tra qua checkbox de xoa hang loat (vd don sach du lieu test)
   dmSectionOpen:{thongSo:false, taiLieu:false},
   lsYear:null, lsDot:null, lsHeThong:null, lsKey:null,
 };
@@ -3676,6 +3677,7 @@ function renderKiemTra(){
   const form = !state.ktMatrix.active ? '' : (noActiveDot ? `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có đợt nào đang diễn ra. Vào tab "Đợt kiểm tra/sửa chữa" để tạo đợt mới (gắn với 1 tổ máy) trước khi nhập kết quả kiểm tra.</div></div>` : renderKtMatrix());
 
   const canKt = can('kiemTra');
+  const ktSelectedCount = Object.keys(state.ktSelectedIds).length;
   const ktGroups = {};
   state.kiemTra.forEach(r=>{ const k = r.heThong||'(không có hệ thống)'; if(!ktGroups[k]) ktGroups[k]=[]; ktGroups[k].push(r); });
   const ktHeThongNames = Object.keys(ktGroups).sort((a,b)=>a.localeCompare(b));
@@ -3686,7 +3688,8 @@ function renderKiemTra(){
     const recRows = groupRecs.map(r=>{
       const p=parseFloat(r.phanTramConLai); const s=p<=70?'danger':(p<=85?'warn':'good');
       const d = state.dots.find(x=>x.id===r.dotId);
-      return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${r.id}</span>${esc(pipeCode(r))} <span style="color:var(--muted);font-weight:400;">· vùng ${esc(r.vung)}${d?(' · '+esc(d.ten)):''}</span></div><span class="status ${s}">${r.phanTramConLai}% còn lại</span></div>
+      const checked = !!state.ktSelectedIds[r.id];
+      return `<div class="record"><div class="record-top"><div class="record-loc">${canKt?`<input type="checkbox" ${checked?'checked':''} onchange="toggleKtSelect('${r.id}')" style="margin-right:6px;vertical-align:middle;">`:''}<span class="tag-chip">${r.id}</span>${esc(pipeCode(r))} <span style="color:var(--muted);font-weight:400;">· vùng ${esc(r.vung)}${d?(' · '+esc(d.ten)):''}</span></div><span class="status ${s}">${r.phanTramConLai}% còn lại</span></div>
       <div class="record-meta"><span>Đo được: ${esc(r.chieuDayDo)}mm</span><span>Thiết kế: ${esc(r.chieuDayTK)}mm</span><span>Ø${esc(r.duongKinh)}mm</span><span>Ngoại dạng: ${esc(r.ngoaiDang||'—')}</span><span>${fmtDate(r.ngay)}</span><span>${esc(r.nguoiKiemTra)}</span></div>
       ${canKt?`<div class="record-actions"><button class="mini-btn" onclick="deleteKiemTra('${r.id}')">Xóa</button></div>`:''}</div>`;
     }).join('');
@@ -3695,7 +3698,10 @@ function renderKiemTra(){
         <div><b style="font-size:14px;">${esc(ht)}</b> <span class="progress-mini">· ${groupRecs.length} bản ghi</span></div>
         <span class="status ${expanded?'good':'warn'}">${expanded?'Thu gọn ▲':'Xem chi tiết ▼'}</span>
       </div>
-      ${expanded ? `<div style="margin-top:10px;" onclick="event.stopPropagation()">${recRows}</div>` : ''}
+      ${expanded ? `<div style="margin-top:10px;" onclick="event.stopPropagation()">
+        ${canKt?`<div style="margin-bottom:8px;"><button class="mini-btn" onclick="ktSelectAllInGroup('${safeHt}')">Chọn tất cả (${groupRecs.length})</button> <button class="mini-btn" onclick="ktDeselectAllInGroup('${safeHt}')">Bỏ chọn nhóm này</button></div>`:''}
+        ${recRows}
+      </div>` : ''}
     </div>`;
   }).join('');
 
@@ -3707,11 +3713,51 @@ function renderKiemTra(){
       <button class="btn-ghost" onclick="exportKiemTraMatrix()">Xuất Excel (dạng bảng, để in)</button>
       ${canKt?`<button class="btn-ghost" onclick="startKtVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
       ${canKt?`<button class="btn" onclick="toggleKtMatrix()">${state.ktMatrix.active?'Đóng bảng nhập':'+ Nhập/sửa kết quả (dạng bảng)'}</button>`:''}
+      ${canKt && ktSelectedCount ? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="deleteSelectedKiemTra()">Xóa ${ktSelectedCount} dòng đã chọn</button><button class="btn-ghost" onclick="ktClearSelection()">Bỏ chọn (${ktSelectedCount})</button>` : ''}
     </div></div>
   ${form}
+  ${canKt && state.kiemTra.length ? `<div class="settings-note" style="margin-bottom:10px;">Tích chọn ô vuông ở đầu mỗi dòng (mở rộng từng nhóm Hệ thống để thấy) để chọn nhiều bản ghi cùng lúc, rồi bấm "Xóa ... dòng đã chọn" ở trên — tiện dọn dữ liệu test/nhập nhầm hàng loạt.</div>` : ''}
   ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`;
 }
 window.toggleKtHeThong = function(key){ state.ktExpandedHeThong = state.ktExpandedHeThong===key ? null : key; render(); };
+window.toggleKtSelect = function(id){
+  if(state.ktSelectedIds[id]) delete state.ktSelectedIds[id]; else state.ktSelectedIds[id] = true;
+  render();
+};
+window.ktSelectAllInGroup = function(ht){
+  state.kiemTra.filter(r=>(r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
+  render();
+};
+window.ktDeselectAllInGroup = function(ht){
+  state.kiemTra.filter(r=>(r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ delete state.ktSelectedIds[r.id]; });
+  render();
+};
+window.ktClearSelection = function(){ state.ktSelectedIds = {}; render(); };
+// Xoa hang loat cac ban ghi Kiem tra da tick chon (vd don sach du lieu test truoc khi nhap du lieu that) —
+// dung lai endpoint delete_batch (deleteManyFromSheet) da xay cho truong hop xoa ca Dot, xoa 1 lan duy nhat
+// thay vi tung dong mot. Neu that bai thi khoi phuc lai toan bo cho local, tranh mat "ao" nhu cac loi da gap.
+window.deleteSelectedKiemTra = async function(){
+  if(!can('kiemTra')){ noPermAlert(); return; }
+  const ids = Object.keys(state.ktSelectedIds);
+  if(!ids.length){ alert('Chưa chọn dòng nào — tích vào ô vuông ở đầu mỗi bản ghi (trong từng nhóm Hệ thống đã mở rộng) để chọn.'); return; }
+  if(!confirm('Xóa '+ids.length+' bản ghi Kiểm tra đã chọn? Sẽ xóa cả trên Google Sheet. Chỉ nên dùng khi xóa dữ liệu tạo lỗi/trùng lặp/dữ liệu test, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
+  const idSet = new Set(ids);
+  const removedRecs = state.kiemTra.filter(r=>idSet.has(r.id));
+  state.kiemTra = state.kiemTra.filter(r=>!idSet.has(r.id));
+  state.ktSelectedIds = {};
+  await persist('kiem-tra', state.kiemTra, true);
+  render();
+  const ok = await deleteManyFromSheet('KiemTra', ids);
+  if(!ok){
+    state.kiemTra = state.kiemTra.concat(removedRecs);
+    await persist('kiem-tra', state.kiemTra, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — toàn bộ '+ids.length+' bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  } else {
+    await syncSuaChua();
+    render();
+  }
+};
 
 window.setScFilter = function(field, value){ state.scFilter[field]=value; render(); };
 window.toggleScHeThong = function(key){ state.scExpandedHeThong = state.scExpandedHeThong===key ? null : key; render(); };
