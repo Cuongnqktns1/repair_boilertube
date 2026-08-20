@@ -235,7 +235,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwds1C32cNKBj8dH3l_ZOKj81UgKxhIjPAowydGtC4gQrB08aI18B1oBvhrmbPwmw9epQ/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwv49GeTQtrnHJMGwkajGglsarEi3D8gmvKWzuMjR7uUEu0XLtyUylR3GIuLsKg8oKrzA/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -1355,6 +1355,15 @@ async function syncKiemTraBatch(records){
   if(!result.ok) reportWriteError('kiem_tra_batch', result.error);
   return result;
 }
+// Cap nhat nhieu ban ghi Kiem tra DA CO SAN (sua lai so do) trong 1 request duy nhat — dung khi Luu bang
+// ma tran nhap tay co nhieu o da ton tai duoc sua cung luc. Khac voi syncKiemTraBatch (chi dung cho ban
+// ghi MOI, tu bo qua neu trung), ham nay cap nhat DUNG theo ID da biet, khong kiem tra trung khoa tu nhien.
+async function syncKiemTraBatchUpdate(records){
+  if(!records || !records.length) return {ok:true, updated:0};
+  const result = await postToSheet({type:'kiem_tra_batch_update', records, ts: new Date().toISOString()}, 60000);
+  if(!result.ok) reportWriteError('kiem_tra_batch_update', result.error);
+  return result;
+}
 async function sendTelegramToMany(chatIds, text){
   if(!state.telegram.botToken || !chatIds || chatIds.length===0){
     alert('Chưa cấu hình Bot Token hoặc Chat ID cảnh báo trong sheet CauHinh trên Google Sheet.');
@@ -1833,6 +1842,7 @@ window.ktMatrixSave = async function(){
   let seq = state.kiemTra.length;
   const exceptionMap = {};
   (m.exceptions||[]).forEach(ex=>{ if(ex.viTri && ex.lopOng && ex.ngoaiDang) exceptionMap[ex.viTri+'__'+ex.lopOng] = ex.ngoaiDang; });
+  const pendingCreate = [], pendingUpdate = []; // gom lai, gui gop thanh toi da 2 request thay vi tung o mot
   m.viTriList.forEach(vt=>{
     m.lopOngCols.forEach(lo=>{
       const key = vt+'__'+lo;
@@ -1850,7 +1860,7 @@ window.ktMatrixSave = async function(){
           // Chỉ ghi đè Ngoại dạng khi có đánh dấu MỚI trong bảng lần này — nếu không, giữ nguyên giá trị
           // đã lưu trước đó (tránh vô tình xóa mất ghi nhận bất thường cũ khi chỉ sửa lại số đo).
           if(exceptionMap[key]) rec.ngoaiDang = exceptionMap[key];
-          syncToSheet('kiem_tra', rec);
+          pendingUpdate.push(rec);
           updated++;
           if(phanTramConLai<=70) belowThreshold.push(rec);
         }
@@ -1863,7 +1873,7 @@ window.ktMatrixSave = async function(){
           ngoaiDang: exceptionMap[key] || 'Bình thường', ngay, nguoiKiemTra:nguoi
         };
         state.kiemTra.unshift(rec);
-        syncToSheet('kiem_tra', rec);
+        pendingCreate.push(rec);
         created++;
         if(phanTramConLai<=70) belowThreshold.push(rec);
       }
@@ -1871,10 +1881,22 @@ window.ktMatrixSave = async function(){
   });
   if(created===0 && updated===0){ alert('Chưa có ô nào được nhập số liệu hợp lệ để lưu.'); return; }
   await persist('kiem-tra', state.kiemTra, true);
+  // Gui len Google Sheet theo LO — toi da 2 request (1 cho o moi, 1 cho o cap nhat) thay vi tung o mot goi
+  // 1 request rieng nhu truoc (khong cho/await) — cach cu voi bang lon (hang chuc/hang tram o) se ban ra
+  // ngan ay request cung luc, nghen hang doi khoa ben Apps Script va rot mat phan lon (dung loi da gap o
+  // Nhap Excel hang loat, sau do lai gap tiep o day vi ham nay chua duoc sua cung dot).
+  const [createResult, updateResult] = await Promise.all([
+    syncKiemTraBatch(pendingCreate),
+    syncKiemTraBatchUpdate(pendingUpdate)
+  ]);
   await syncSuaChua();
   state.ktMatrix = {active:false, editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]};
   render();
-  alert('Đã lưu bảng kiểm tra: '+created+' bản ghi mới'+(updated?(', cập nhật '+updated+' bản ghi đã có'):'')+'.'+(skipped?(' Bỏ qua '+skipped+' ô không xác định được vùng vật liệu (xung đột/không khớp Danh mục hoặc số liệu không hợp lệ).'):''));
+  const syncFailed = !createResult.ok || !updateResult.ok;
+  const syncNote = syncFailed
+    ? '\n\n⚠️ LỖI: một phần dữ liệu chưa ghi được lên Google Sheet (lỗi mạng/máy chủ) — dữ liệu tạm thời chỉ có trên máy này. Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra, và mở lại bảng để lưu bổ sung phần còn thiếu nếu cần.'
+    : (createResult.skippedDup ? '\n\nGhi chú: '+createResult.skippedDup+' ô đã có sẵn trên Sheet từ trước (trùng dữ liệu), không bị ghi đè/nhân đôi.' : '');
+  alert('Đã lưu bảng kiểm tra: '+created+' bản ghi mới'+(updated?(', cập nhật '+updated+' bản ghi đã có'):'')+'.'+(skipped?(' Bỏ qua '+skipped+' ô không xác định được vùng vật liệu (xung đột/không khớp Danh mục hoặc số liệu không hợp lệ).'):'')+syncNote);
   if(belowThreshold.length && state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length){
     const lines = belowThreshold.map(r=>'• '+pipeCode(r)+': '+r.chieuDayDo+'mm/'+r.chieuDayTK+'mm ('+r.phanTramConLai+'%)').join('\n');
     sendTelegram('⚠️ <b>CẢNH BÁO CHIỀU DÀY — '+belowThreshold.length+' vị trí dưới ngưỡng (nhập dạng bảng)</b>\n'+lines+'\nĐã đưa vào danh sách cắt thay.');
