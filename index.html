@@ -235,7 +235,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxrdHaFKUDHe6LMXgT1MvBbHJDZDP7j387533CM84UMqBr7LEeVEtRw9wBgDRdJCRGdRg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwds1C32cNKBj8dH3l_ZOKj81UgKxhIjPAowydGtC4gQrB08aI18B1oBvhrmbPwmw9epQ/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -1196,6 +1196,16 @@ async function deleteAllFromSheet(sheetName){
   if(!result.ok) reportWriteError('delete_all '+sheetName, result.error);
   return result.ok;
 }
+// Xoa nhieu ban ghi cung luc trong 1 request (dung khi xoa ca 1 Dot kem theo hang tram ban ghi Kiem tra
+// lien quan) — thay vi goi deleteFromSheet rieng cho tung dong, vi goi nhu the ma khong cho (await) tung
+// cai se ban ra hang loat request cung luc, nghen hang doi khoa ben Apps Script giong het loi tung gap khi
+// Nhap Excel hang loat (388 dong nhung chi luu duoc 16).
+async function deleteManyFromSheet(sheetName, ids){
+  if(!ids || !ids.length) return true;
+  const result = await postToSheet({type:'delete_batch', record:{sheet:sheetName, ids}, ts:new Date().toISOString()}, 60000);
+  if(!result.ok) reportWriteError('delete_batch '+sheetName, result.error);
+  return result.ok;
+}
 
 /* ---------- Kiểm tra chồng lấn dải Vị trí/Lớp ống trong Danh mục kỹ thuật ---------- */
 function normTM(s){ return String(s||'').trim().toLowerCase(); }
@@ -1278,15 +1288,24 @@ window.deleteDot = async function(id){
   await persist('nhat-ky', state.nhatKy, true);
   await persist('hinh-anh', state.hinhAnh, true);
   await persist('dots', state.dots, true);
+  render(); // xoa ngay tren giao dien truoc, phan dong bo len Google Sheet cho chay ngam ben duoi
 
-  deleteFromSheet('Dot', id);
-  ktList.forEach(k=>deleteFromSheet('KiemTra', k.id));
-  scList.forEach(s=>deleteFromSheet('SuaChuaHangMuc', s.id));
-  weldIds.forEach(wid=>deleteFromSheet('SuaChua', wid));
-  vtList.forEach(v=>deleteFromSheet('VatTu', v.id));
-  nkList.forEach(n=>deleteFromSheet('NhatKyThiCong', n.id));
-  haList.forEach(h=>deleteFromSheet('HinhAnh', h.id));
-  render();
+  // Xoa hang loat tren Google Sheet — gop moi loai du lieu thanh 1 request duy nhat (thay vi tung dong
+  // mot nhu truoc, khien trinh duyet ban hang tram request cung luc gay nghen hang doi khoa + roi mat
+  // du lieu, dung loi da gap khi Nhap Excel hang loat). Doi (await) cho xong het roi moi bao ket qua,
+  // tranh tinh trang lan dong bo ngam sau do lai keo ban ghi da xoa quay tro lai vi Sheet chua kip xoa.
+  const delResults = await Promise.all([
+    deleteFromSheet('Dot', id),
+    deleteManyFromSheet('KiemTra', ktList.map(k=>k.id)),
+    deleteManyFromSheet('SuaChuaHangMuc', scList.map(s=>s.id)),
+    deleteManyFromSheet('SuaChua', weldIds),
+    deleteManyFromSheet('VatTu', vtList.map(v=>v.id)),
+    deleteManyFromSheet('NhatKyThiCong', nkList.map(n=>n.id)),
+    deleteManyFromSheet('HinhAnh', haList.map(h=>h.id))
+  ]);
+  if(delResults.some(ok=>!ok)){
+    alert('Đã xóa xong trên máy này, nhưng MỘT SỐ dữ liệu chưa xóa được trên Google Sheet (lỗi mạng/máy chủ). Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra — nếu vẫn còn sót trên Sheet, hãy thử xóa lại đợt này (hoặc phần còn sót) một lần nữa.');
+  }
 };
 
 // Ghi len Google Sheet: truoc day dung mode:'no-cors' + Content-Type application/json — cach nay khien trinh duyet
@@ -1295,10 +1314,10 @@ window.deleteDot = async function(id){
 // Sua lai: dung Content-Type 'text/plain' (Apps Script van JSON.parse(e.postData.contents) binh thuong du khai bao
 // content-type la gi) de trinh duyet KHONG gui preflight OPTIONS (Apps Script khong xu ly OPTIONS), tu do khong con
 // can no-cors nua va doc duoc phan hoi that — giong het cach fetchSheetAll() da doc duoc GET thanh cong tu truoc.
-async function postToSheet(payload){
+async function postToSheet(payload, timeoutMs){
   try{
     const ctrl = new AbortController();
-    const timer = setTimeout(()=>ctrl.abort(), 20000);
+    const timer = setTimeout(()=>ctrl.abort(), timeoutMs || 20000);
     let res;
     try{
       res = await fetch(SHEET_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), signal: ctrl.signal});
@@ -1307,9 +1326,9 @@ async function postToSheet(payload){
     let data;
     try{ data = await res.json(); }catch(e){ return {ok:false, error:'Phản hồi không đúng định dạng JSON'}; }
     if(!data || !data.ok) return {ok:false, error:(data&&data.error)?String(data.error):'Không rõ nguyên nhân'};
-    return {ok:true};
+    return data; // tra ve nguyen data (ok:true + cac truong khac neu co, vd written/skippedDup cua batch)
   }catch(e){
-    return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ (20 giây)' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
+    return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ ('+((timeoutMs||20000)/1000)+' giây)' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
   }
 }
 function reportWriteError(label, error){
@@ -1324,6 +1343,17 @@ async function syncToSheet(type, record){
   const result = await postToSheet({type, record, ts: new Date().toISOString()});
   if(!result.ok) reportWriteError(type, result.error);
   return result.ok;
+}
+// Ghi nhieu ban ghi Kiem tra trong 1 request duy nhat (dung khi Nhap Excel hang loat) — thay vi ban
+// truoc goi syncToSheet() rieng cho tung dong khien trinh duyet ban ra hang tram request gan nhu cung
+// luc, lam nghen hang doi khoa ben Apps Script va rot mat phan lon (vd chi 16/388 dong duoc ghi thanh
+// cong). Cho Apps Script tu doc sheet 1 lan, tu bo qua cac dong da trung (theo Dot+To may+He thong+
+// Thiet bi+Vi tri+Lop ong+Ngay) de nhap lai cung 1 file khong bi nhan doi cac dong da nhap thanh cong truoc do.
+async function syncKiemTraBatch(records){
+  if(!records || !records.length) return {ok:true, written:0, skippedDup:0, skippedIds:[]};
+  const result = await postToSheet({type:'kiem_tra_batch', records, ts: new Date().toISOString()}, 60000);
+  if(!result.ok) reportWriteError('kiem_tra_batch', result.error);
+  return result;
 }
 async function sendTelegramToMany(chatIds, text){
   if(!state.telegram.botToken || !chatIds || chatIds.length===0){
@@ -1403,19 +1433,33 @@ window.addDanhMuc = async function(){
 window.deleteDanhMuc = async function(id){
   if(!can('danhMuc')){ noPermAlert(); return; }
   if(!confirm('Xóa dòng danh mục này? Sẽ xóa cả trên Google Sheet.')) return;
+  const removed = state.danhMuc.find(r=>r.id===id);
   state.danhMuc = state.danhMuc.filter(r=>r.id!==id);
   await persist('danh-muc', state.danhMuc, true);
-  deleteFromSheet('DanhMuc', id);
   render();
+  const ok = await deleteFromSheet('DanhMuc', id);
+  if(!ok && removed){
+    state.danhMuc.push(removed);
+    await persist('danh-muc', state.danhMuc, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — dòng danh mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 window.deleteAllDanhMuc = async function(){
   if(!can('danhMuc')){ noPermAlert(); return; }
   if(!confirm('XÓA TOÀN BỘ Danh mục kỹ thuật? Sẽ xóa cả trên Google Sheet và không thể hoàn tác.')) return;
   if(!confirm('Xác nhận lần 2: chắc chắn xóa toàn bộ Danh mục kỹ thuật?')) return;
+  const backup = state.danhMuc;
   state.danhMuc = [];
   await persist('danh-muc', state.danhMuc, true);
-  deleteAllFromSheet('DanhMuc');
   render();
+  const ok = await deleteAllFromSheet('DanhMuc');
+  if(!ok){
+    state.danhMuc = backup;
+    await persist('danh-muc', state.danhMuc, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — dữ liệu Danh mục đã được khôi phục lại, chưa mất. Vui lòng thử lại khi mạng ổn định.');
+    render();
+  }
 };
 window.exportDanhMuc = async function(){
   if(!(await withXLSXReady())) return;
@@ -1484,10 +1528,17 @@ window.addTaiLieu = async function(){
 window.deleteTaiLieu = async function(id){
   if(!can('danhMuc')){ noPermAlert(); return; }
   if(!confirm('Xóa tài liệu này? Sẽ xóa cả trên Google Sheet.')) return;
+  const removed = state.taiLieu.find(r=>r.id===id);
   state.taiLieu = state.taiLieu.filter(r=>r.id!==id);
   await persist('tai-lieu', state.taiLieu, true);
-  deleteFromSheet('TaiLieu', id);
   render();
+  const ok = await deleteFromSheet('TaiLieu', id);
+  if(!ok && removed){
+    state.taiLieu.push(removed);
+    await persist('tai-lieu', state.taiLieu, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — tài liệu đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 
 /* ---------- KIỂM TRA (ĐO ĐẠC) ---------- */
@@ -2146,10 +2197,21 @@ window.exportKiemTraMatrix = async function(){
 window.deleteKiemTra = async function(id){
   if(!can('kiemTra')){ noPermAlert(); return; }
   if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Google Sheet (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
+  const removed = state.kiemTra.find(r=>r.id===id);
   state.kiemTra = state.kiemTra.filter(r=>r.id!==id);
   await persist('kiem-tra', state.kiemTra, true);
-  deleteFromSheet('KiemTra', id);
-  render();
+  render(); // xoa ngay tren giao dien cho nhanh, cho ket qua xoa tren Sheet chay ngam ben duoi
+  // Truoc day KHONG cho (await) buoc nay — neu xoa tren Sheet loi/cham (vd dang co nhieu request khac
+  // xep hang), ban ghi van bien mat "ao" o may nay nhung Sheet (nguon du lieu dung chung) van con, roi
+  // lan dong bo ngam ke tiep se keo ban ghi cu ve va hien lai — dung y tinh huong da gap. Nay cho (await)
+  // ket qua that su, neu that bai thi khoi phuc lai ban ghi + bao loi ro rang thay vi de tu hoi phuc am tham.
+  const ok = await deleteFromSheet('KiemTra', id);
+  if(!ok && removed){
+    state.kiemTra.push(removed);
+    await persist('kiem-tra', state.kiemTra, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 // Phat hien + doc file Excel dang BANG MA TRAN, DOC THANG TU MANG-THO (khong dung sheet_to_json mac dinh) —
 // vi mau bien ban NDT thuong co tieu de 2 DONG (dong 1: STT/He thong/Thiet bi/Vi tri/...; dong 2 (duoi tieu
@@ -2223,6 +2285,7 @@ window.importKiemTra = function(input){
     const mtx = ktMatrixParseSheet(ws);
     let added=0, skipped=0, ambiguous=0, missingHeader=0;
     const reasonTally = {};
+    const pendingSync = []; // gom het lai, gui 1 lan duy nhat len Google Sheet sau khi doc xong file
     if(mtx){
       // ---- Dạng bảng ma trận (tiêu đề 1 hoặc 2 dòng): mỗi dòng dữ liệu = 1 Vị trí, mỗi cột Lớp ống N có số liệu riêng ----
       mtx.dataRows.forEach(row=>{
@@ -2254,7 +2317,7 @@ window.importKiemTra = function(input){
           const phanTramConLai=(parseFloat(cellStr)/parseFloat(dm.chieuDay)*100);
           const newRec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:viTriVal, lopOng:String(col.n), duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:cellStr, phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:'Bình thường', ngay, nguoiKiemTra: state.session?state.session.name:'—'};
           state.kiemTra.unshift(newRec);
-          syncToSheet('kiem_tra', newRec);
+          pendingSync.push(newRec);
           added++;
         });
       });
@@ -2283,15 +2346,36 @@ window.importKiemTra = function(input){
         const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
         const newRec = {id:'KT-'+pad(state.kiemTra.length+1), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:(parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
         state.kiemTra.unshift(newRec);
-        syncToSheet('kiem_tra', newRec);
+        pendingSync.push(newRec);
         added++;
       });
     }
     await persist('kiem-tra', state.kiemTra, true);
+    // Gui het len Google Sheet trong 1 request duy nhat (thay vi tung dong mot nhu truoc — cach cu voi
+    // file vai tram dong se ban ra ngan ay request gan nhu cung luc, nghen hang doi khoa ben Apps Script
+    // va rot mat phan lon). Apps Script se tu bo qua cac dong da co san (dung cho truong hop nhap lai
+    // dung file sau khi lan truoc bi loi mang chi luu duoc mot phan) nen nhap lai an toan, khong nhan doi.
+    let batchResult = {ok:true, written:0, skippedDup:0, skippedIds:[]};
+    if(pendingSync.length){
+      batchResult = await syncKiemTraBatch(pendingSync);
+      if(batchResult.ok && batchResult.skippedIds && batchResult.skippedIds.length){
+        const skipSet = new Set(batchResult.skippedIds);
+        state.kiemTra = state.kiemTra.filter(k=>!skipSet.has(k.id));
+        await persist('kiem-tra', state.kiemTra, true);
+      }
+    }
     await syncSuaChua();
     const reasonLines = Object.keys(reasonTally).sort((a,b)=>reasonTally[b].count-reasonTally[a].count)
       .map(code=>'• ('+reasonTally[code].count+' ô/dòng) '+reasonTally[code].label).join('\n');
-    alert('Đã nhập '+added+' bản ghi vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):''));
+    let syncMsg;
+    if(!pendingSync.length){
+      syncMsg = '';
+    } else if(!batchResult.ok){
+      syncMsg = '\n\n⚠️ LỖI: Không gửi được lên Google Sheet ('+(batchResult.error||'không rõ nguyên nhân')+'). Dữ liệu đang tạm chỉ có trên máy này, CHƯA có trên Sheet — vui lòng thử nhập lại file này khi mạng ổn định (nhập lại sẽ an toàn, không bị nhân đôi các dòng đã lỡ ghi được).';
+    } else {
+      syncMsg = '\n\nĐã ghi lên Google Sheet: '+batchResult.written+' dòng mới.'+(batchResult.skippedDup?(' Bỏ qua '+batchResult.skippedDup+' dòng đã có sẵn trên Sheet trước đó (trùng Đợt/Hệ thống/Thiết bị/Vị trí/Lớp ống/Ngày) — không ghi đè, không nhân đôi.'):'');
+    }
+    alert('Đã nhập '+added+' bản ghi vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):'')+syncMsg);
     input.value=''; render();
   };
   reader.readAsArrayBuffer(file);
@@ -2436,9 +2520,17 @@ window.deleteSuaChuaItem = async function(itemId){
   const weldIds = item.welds.map(w=>w.id);
   state.suaChua = state.suaChua.filter(s=>s.id!==itemId);
   await persist('sua-chua', state.suaChua, true);
-  deleteFromSheet('SuaChuaHangMuc', itemId);
-  weldIds.forEach(wid=>deleteFromSheet('SuaChua', wid));
   render();
+  const delResults = await Promise.all([
+    deleteFromSheet('SuaChuaHangMuc', itemId),
+    deleteManyFromSheet('SuaChua', weldIds)
+  ]);
+  if(delResults.some(ok=>!ok) && !state.suaChua.some(s=>s.id===itemId)){
+    state.suaChua.push(item);
+    await persist('sua-chua', state.suaChua, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — hạng mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 window.toggleWeldFlag = async function(itemId, weldId, field){
   if(!can('hanCat')){ noPermAlert(); render(); return; }
@@ -2757,22 +2849,40 @@ window.addNhatKy = async function(){
 window.deleteNhatKy = async function(id){
   if(!can('nhatKy')){ noPermAlert(); return; }
   if(!confirm('Xóa nhật ký này? Các ảnh đính kèm cũng sẽ bị xóa khỏi danh sách (kể cả trên Google Sheet).')) return;
+  const removedNk = state.nhatKy.find(n=>n.id===id);
   const removedPhotos = state.hinhAnh.filter(h=>h.maNhatKy===id);
   state.nhatKy = state.nhatKy.filter(n=>n.id!==id);
   state.hinhAnh = state.hinhAnh.filter(h=>h.maNhatKy!==id);
   await persist('nhat-ky', state.nhatKy, true);
   await persist('hinh-anh', state.hinhAnh, true);
-  deleteFromSheet('NhatKyThiCong', id);
-  removedPhotos.forEach(h=> deleteFromSheet('HinhAnh', h.id));
   render();
+  const delResults = await Promise.all([
+    deleteFromSheet('NhatKyThiCong', id),
+    deleteManyFromSheet('HinhAnh', removedPhotos.map(h=>h.id))
+  ]);
+  if(delResults.some(ok=>!ok)){
+    if(removedNk) state.nhatKy.push(removedNk);
+    state.hinhAnh = state.hinhAnh.concat(removedPhotos);
+    await persist('nhat-ky', state.nhatKy, true);
+    await persist('hinh-anh', state.hinhAnh, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — nhật ký đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 window.deleteAnh = async function(id){
   if(!can('nhatKy')){ noPermAlert(); return; }
   if(!confirm('Xóa ảnh này?')) return;
+  const removed = state.hinhAnh.find(h=>h.id===id);
   state.hinhAnh = state.hinhAnh.filter(h=>h.id!==id);
   await persist('hinh-anh', state.hinhAnh, true);
-  deleteFromSheet('HinhAnh', id);
   render();
+  const ok = await deleteFromSheet('HinhAnh', id);
+  if(!ok && removed){
+    state.hinhAnh.push(removed);
+    await persist('hinh-anh', state.hinhAnh, true);
+    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — ảnh đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    render();
+  }
 };
 function nkSafeSheetName(s){
   return String(s).replace(/[:\\\/\?\*\[\]]/g,'-').slice(0,31) || 'Trang';
