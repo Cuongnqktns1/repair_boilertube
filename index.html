@@ -142,6 +142,15 @@ td.mtx-good{background:var(--good-soft);}
 td.mtx-warn{background:var(--warn-soft);}
 td.mtx-danger{background:var(--danger-soft);}
 .mtx-pct{font-size:9px;color:var(--muted);margin-top:1px;line-height:1.2;}
+.diagram-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.diagram-row-label{min-width:110px;max-width:160px;font-size:12px;font-weight:600;color:var(--muted);flex-shrink:0;}
+.diagram-row-cells{display:flex;flex-wrap:wrap;gap:4px;}
+.diagram-cell{width:30px;height:30px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border-soft);user-select:none;}
+.diagram-cell:hover{outline:2px solid var(--accent);}
+.diagram-cell.good{background:var(--good-soft);color:var(--good);}
+.diagram-cell.warn{background:var(--warn-soft);color:var(--warn);}
+.diagram-cell.danger{background:var(--danger-soft);color:var(--danger);}
+.diagram-cell.na{background:var(--panel2);color:var(--dim);border-style:dashed;}
 .mtx-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;}
 .mtx-toolbar .field{min-width:110px;}
 .mtx-rowdel{font-size:13px;color:var(--danger);cursor:pointer;padding:2px 6px;}
@@ -372,6 +381,7 @@ let state = {
   expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
   scExpandedHeThong:null, ktExpandedHeThong:null,
   ktSelectedIds:{}, // chon nhieu dong Kiem tra qua checkbox de xoa hang loat (vd don sach du lieu test)
+  ktViewMode:'list', ktDiagramHeThong:null, // che do xem So do truc quan (tu sinh tu Danh muc + Kiem tra, khong can ban ve ngoai)
   dmSectionOpen:{thongSo:false, taiLieu:false},
   lsYear:null, lsDot:null, lsHeThong:null, lsKey:null,
 };
@@ -1113,6 +1123,13 @@ function isUserActivelyEditing(){
   if(state.wizard) return true;
   if(state.ktMatrix && state.ktMatrix.active) return true;
   if(state.showForm && Object.values(state.showForm).some(v=>v)) return true;
+  // Form Sua nhat ky / Duyet nhat ky dung 2 bien rieng (nkEditingId/nkApprovingId), KHONG nam trong
+  // showForm — truoc day bi bo sot khoi day, nen dong bo nen (90s/lan) van chay binh thuong ngay ca khi
+  // dang go do trong form nay. Vi dien nhat ky thuong mat 10-15 phut (lau hon nhieu chu ky dong bo), dong
+  // bo nen se render lai toan trang giua chung, xoa mat noi dung chua luu trong cac o nhap — day chinh la
+  // nguyen nhan "dien nhat ky khong luu duoc" ma nguoi dung gap phai khi SUA lai nhat ky.
+  if(state.nkEditingId) return true;
+  if(state.nkApprovingId) return true;
   return false;
 }
 function startAutoSync(){
@@ -3713,12 +3730,86 @@ function renderKiemTra(){
       <button class="btn-ghost" onclick="exportKiemTraMatrix()">Xuất Excel (dạng bảng, để in)</button>
       ${canKt?`<button class="btn-ghost" onclick="startKtVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
       ${canKt?`<button class="btn" onclick="toggleKtMatrix()">${state.ktMatrix.active?'Đóng bảng nhập':'+ Nhập/sửa kết quả (dạng bảng)'}</button>`:''}
-      ${canKt && ktSelectedCount ? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="deleteSelectedKiemTra()">Xóa ${ktSelectedCount} dòng đã chọn</button><button class="btn-ghost" onclick="ktClearSelection()">Bỏ chọn (${ktSelectedCount})</button>` : ''}
+      <button class="btn-ghost" onclick="toggleKtViewMode()">${state.ktViewMode==='diagram'?'📋 Xem danh sách':'🗺️ Xem sơ đồ trực quan'}</button>
+      ${canKt && ktSelectedCount && state.ktViewMode==='list' ? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="deleteSelectedKiemTra()">Xóa ${ktSelectedCount} dòng đã chọn</button><button class="btn-ghost" onclick="ktClearSelection()">Bỏ chọn (${ktSelectedCount})</button>` : ''}
     </div></div>
   ${form}
-  ${canKt && state.kiemTra.length ? `<div class="settings-note" style="margin-bottom:10px;">Tích chọn ô vuông ở đầu mỗi dòng (mở rộng từng nhóm Hệ thống để thấy) để chọn nhiều bản ghi cùng lúc, rồi bấm "Xóa ... dòng đã chọn" ở trên — tiện dọn dữ liệu test/nhập nhầm hàng loạt.</div>` : ''}
-  ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`;
+  ${state.ktViewMode==='diagram' ? renderKtDiagram() : `${canKt && state.kiemTra.length ? `<div class="settings-note" style="margin-bottom:10px;">Tích chọn ô vuông ở đầu mỗi dòng (mở rộng từng nhóm Hệ thống để thấy) để chọn nhiều bản ghi cùng lúc, rồi bấm "Xóa ... dòng đã chọn" ở trên — tiện dọn dữ liệu test/nhập nhầm hàng loạt.</div>` : ''}
+  ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`}`;
 }
+window.toggleKtViewMode = function(){ state.ktViewMode = state.ktViewMode==='diagram' ? 'list' : 'diagram'; render(); };
+// So do truc quan Kiem tra — TU SINH tu Danh muc ky thuat (de biet dai Vi tri thuc te ton tai) + Kiem tra
+// (de lay so lieu do moi nhat), khong can ban ve/anh ngoai — moi He thong 1 khu, moi Thiet bi 1 hang, moi
+// Vi tri 1 o vuong to mau theo % con lai THAP NHAT trong cac Lop ong cua vi tri do (lay gia tri xau nhat
+// lam dai dien, dung nguyen tac giong bao dong % con lai o cac noi khac trong app).
+function ktDiagramVtSet(heThong, thietBi, toMay){
+  const ranges = state.danhMuc.filter(r=>r.heThong===heThong && r.thietBi===thietBi && (isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)));
+  const set = new Set();
+  ranges.forEach(r=>{
+    const from = parseInt(r.viTriTu)||1, to = parseInt(r.viTriDen)||from;
+    for(let v=from; v<=to; v++) set.add(String(v));
+  });
+  return Array.from(set).sort((a,b)=>parseInt(a)-parseInt(b));
+}
+function ktDiagramCellInfo(heThong, thietBi, toMay, vt){
+  const recs = state.kiemTra.filter(r=>r.heThong===heThong && r.thietBi===thietBi && String(r.viTri)===String(vt) && (isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)));
+  if(!recs.length) return null;
+  const byLop = {};
+  recs.forEach(r=>{ if(!byLop[r.lopOng] || r.ngay > byLop[r.lopOng].ngay) byLop[r.lopOng] = r; });
+  const latestRecs = Object.values(byLop);
+  const worst = latestRecs.reduce((min,r)=>Math.min(min, parseFloat(r.phanTramConLai)), Infinity);
+  return {pct: worst.toFixed(1), lopCount: latestRecs.length, recs: latestRecs};
+}
+function renderKtDiagram(){
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  const toMay = dotObj ? dotObj.toMay : '';
+  const heThongOpts = uniq(state.danhMuc.filter(r=>isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)).map(r=>r.heThong)).sort((a,b)=>a.localeCompare(b));
+  if(!heThongOpts.length){
+    return `<div class="form-panel"><div class="settings-note" style="margin-top:0;">Chưa có Danh mục kỹ thuật cho tổ máy đang chọn để vẽ sơ đồ.</div></div>`;
+  }
+  if(!state.ktDiagramHeThong || !heThongOpts.includes(state.ktDiagramHeThong)) state.ktDiagramHeThong = heThongOpts[0];
+  const selHt = state.ktDiagramHeThong;
+  const thietBiOpts = uniq(state.danhMuc.filter(r=>(isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)) && r.heThong===selHt).map(r=>r.thietBi)).sort((a,b)=>a.localeCompare(b));
+
+  const rowsHtml = thietBiOpts.map(tb=>{
+    const vtList = ktDiagramVtSet(selHt, tb, toMay);
+    if(!vtList.length) return '';
+    const cellsHtml = vtList.map(vt=>{
+      const info = ktDiagramCellInfo(selHt, tb, toMay, vt);
+      const cls = info ? (parseFloat(info.pct)<=70?'danger':(parseFloat(info.pct)<=85?'warn':'good')) : 'na';
+      const safeHt2 = selHt.replace(/'/g,"\\'"), safeTb2 = (tb||'').replace(/'/g,"\\'");
+      const title = info ? ('Vị trí '+vt+': '+info.pct+'% còn lại'+(info.lopCount>1?(' ('+info.lopCount+' lớp ống)'):'')) : ('Vị trí '+vt+': chưa có dữ liệu đo');
+      return `<div class="diagram-cell ${cls}" title="${esc(title)}" onclick="ktDiagramShowDetail('${esc(safeHt2)}','${esc(safeTb2)}','${esc(vt)}')">${esc(vt)}</div>`;
+    }).join('');
+    return `<div class="diagram-row"><div class="diagram-row-label">${esc(tb)||'(không có thiết bị)'}</div><div class="diagram-row-cells">${cellsHtml}</div></div>`;
+  }).join('');
+
+  const htSelectOpts = heThongOpts.map(h=>`<option value="${esc(h)}" ${h===selHt?'selected':''}>${esc(h)}</option>`).join('');
+  return `<div class="form-panel">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+      <label style="font-size:12.5px;color:var(--dim);">Hệ thống:</label>
+      <select onchange="ktDiagramSetHeThong(this.value)" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;">${htSelectOpts}</select>
+      <div style="margin-left:auto;font-size:10.5px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap;">
+        <span><span class="diagram-cell good" style="display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:middle;"></span>&gt;85%</span>
+        <span><span class="diagram-cell warn" style="display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:middle;"></span>70-85%</span>
+        <span><span class="diagram-cell danger" style="display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:middle;"></span>≤70%</span>
+        <span><span class="diagram-cell na" style="display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:middle;"></span>Chưa đo</span>
+      </div>
+    </div>
+    ${rowsHtml || '<div class="empty">Hệ thống này chưa khai báo dải Vị trí trong Danh mục kỹ thuật.</div>'}
+    <div class="settings-note" style="margin-top:14px;">Sơ đồ mang tính biểu diễn (theo số thứ tự Vị trí khai báo trong Danh mục kỹ thuật), chưa đúng vị trí/hình dáng thật ngoài hiện trường. Bấm vào 1 ô để xem chi tiết số liệu.</div>
+  </div>`;
+}
+window.ktDiagramSetHeThong = function(v){ state.ktDiagramHeThong = v; render(); };
+window.ktDiagramShowDetail = function(heThong, thietBi, vt){
+  const dotObj = state.dots.find(d=>d.id===state.ktSel.dotId);
+  const toMay = dotObj ? dotObj.toMay : '';
+  const info = ktDiagramCellInfo(heThong, thietBi, toMay, vt);
+  if(!info){ alert(heThong+' - '+thietBi+' - Vị trí '+vt+': chưa có dữ liệu đo.'); return; }
+  const lines = info.recs.slice().sort((a,b)=>String(a.lopOng).localeCompare(String(b.lopOng),'vi',{numeric:true}))
+    .map(r=>'• Lớp '+r.lopOng+': '+r.chieuDayDo+'mm / '+r.chieuDayTK+'mm thiết kế ('+r.phanTramConLai+'% còn lại) — đo '+fmtDate(r.ngay)+(r.ngoaiDang&&r.ngoaiDang!=='Bình thường'?(' — Ngoại dạng: '+r.ngoaiDang):'')).join('\n');
+  alert(heThong+' - '+thietBi+' - Vị trí '+vt+':\n\n'+lines);
+};
 window.toggleKtHeThong = function(key){ state.ktExpandedHeThong = state.ktExpandedHeThong===key ? null : key; render(); };
 window.toggleKtSelect = function(id){
   if(state.ktSelectedIds[id]) delete state.ktSelectedIds[id]; else state.ktSelectedIds[id] = true;
