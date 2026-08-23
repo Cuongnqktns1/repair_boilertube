@@ -1098,7 +1098,18 @@ function mapSheetSuaChua(itemRows, weldRows){
   // lieu moi han duoc sua truc tiep tren Google Sheet, nhap Excel hang loat, hoac 1 lan dong bo truoc do bi
   // loi mang khong ghi kip. Hang muc Han phu/Sua op khong dung khung moi han nen giu nguyen trang thai da
   // luu (theo doi thu cong qua setManualStatus).
-  items.forEach(item=>{ if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item); });
+  // Neu gia tri tinh lai KHAC voi gia tri dang luu tren Sheet, ghi luon xuong Sheet (khong doi nguoi dung
+  // thao tac lai) — vi bao cao Telegram dinh ky va file xuat Excel doc TRUC TIEP cot "Trang thai" tren
+  // Sheet, khong tu tinh lai nhu app; neu khong dong bo lai thi bao cao/xuat file se tiep tuc lech voi app.
+  items.forEach(item=>{
+    if((item.phuongAn||'Cắt thay')==='Cắt thay'){
+      const truocTT = item.trangThai, truocNgayHT = item.ngayHoanThanh;
+      recomputeStatus(item);
+      if(item.trangThai!==truocTT || item.ngayHoanThanh!==truocNgayHT){
+        syncToSheet('sua_chua_item', item);
+      }
+    }
+  });
   return items;
 }
 
