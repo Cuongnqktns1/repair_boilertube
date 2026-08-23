@@ -245,7 +245,7 @@ table.dm tr:last-child td{border-bottom:none;}
   </button>
 </div>
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyki7bMlw9B0ODj35JveTrByKkgayvnT5O4jkGyqaSJOecVb7_FtF58eZT0pdbgP4wSLA/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyUjWgEJ9KNKe7EyIybfzaklkahhG-2xrxTdZu6yBfAoOMv0ol9pZTfyEvvy6GRhXJpsA/exec';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -1088,7 +1088,7 @@ function mapSheetSuaChua(itemRows, weldRows){
     item.welds.push({
       id:String(r['Mã mối hàn']||''), loai:String(r['Loại']||'chinh_thuc'),
       daCat:String(r['Đã cắt']||'')==='X', daHan:String(r['Đã hàn']||'')==='X',
-      paut:String(r['PAUT']||'Chưa kiểm tra'), ngayHan:'', thoHan:String(r['Thợ hàn']||''), ghiChu:String(r['Ghi chú']||''),
+      paut:String(r['PAUT']||'Chưa kiểm tra'), ngayHan:String(r['Ngày hàn']||''), thoHan:String(r['Thợ hàn']||''), ghiChu:String(r['Ghi chú']||''),
       nguoiThucHien:String(r['Người thực hiện']||''), nguoiXacNhanPAUT:String(r['Người xác nhận PAUT']||''),
       viTriThucTe:String(r['Vị trí thực tế']||'')
     });
@@ -2781,6 +2781,8 @@ window.toggleWeldFlag = async function(itemId, weldId, field){
   const item = state.suaChua.find(s=>s.id===itemId); const w = item.welds.find(x=>x.id===weldId);
   const wasHoanThanh = item.trangThai==='Hoàn thành';
   w[field] = !w[field];
+  // Ghi lai ngay han khi tich "Da han", dung lam moc tinh toc do han tu moi dau tien (thay vi ngay bat dau dot)
+  if(field==='daHan') w.ngayHan = w.daHan ? (w.ngayHan || todayStr()) : '';
   w.nguoiThucHien = state.session ? state.session.name : (w.nguoiThucHien||'');
   recomputeStatus(item);
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
@@ -3599,11 +3601,14 @@ function computeDotStats(dotId){
   // Tach rieng 2 chi so: "Da han" = da tich cat+han xong (BAT KE PAUT dat hay chua), va "Da PAUT dat" =
   // trong so da han do, bao nhieu da duoc NDT xac nhan dat — de biet toc do PAUT co theo kip toc do han hay
   // khong (truong hop da han nhung NDT chua kip kiem tra la binh thuong, khong phai loi).
-  let weldHanDone=0, weldPautDone=0, weldTotal=0;
+  let weldHanDone=0, weldPautDone=0, weldTotal=0, firstWeldTime=null;
   const weldRows = [];
   catThay.forEach(item=>{ item.welds.forEach(w=>{
     weldTotal++;
-    if(w.daHan) weldHanDone++;
+    if(w.daHan){
+      weldHanDone++;
+      if(w.ngayHan){ const t=new Date(String(w.ngayHan)+'T00:00:00').getTime(); if(!isNaN(t) && (firstWeldTime===null||t<firstWeldTime)) firstWeldTime=t; }
+    }
     if(w.daHan && w.paut==='Đạt') weldPautDone++;
     weldRows.push({item, weld:w});
   }); });
@@ -3613,8 +3618,12 @@ function computeDotStats(dotId){
   const nTotal = sc.length, nDone = sc.filter(s=>s.trangThai==='Hoàn thành').length;
   const dot = state.dots.find(d=>d.id===dotId);
   let duKien = null;
+  // Moc tinh toc do: uu tien ngay moi han dau tien (firstWeldTime) — tranh tinh nham nhung ngay dau dot la
+  // cong tac chuan bi, chua co moi han nao, lam sai lech toc do va ngay du kien hoan thanh. Fallback ve
+  // ngay bat dau dot neu chua co moi nao ghi nhan Ngay han (vd du lieu cu chua duoc dien thu cong).
   if(dot){
-    const days = (Date.now() - new Date(dot.ngayBatDau+'T00:00:00').getTime())/(1000*60*60*24);
+    const basisTime = firstWeldTime!==null ? firstWeldTime : new Date(dot.ngayBatDau+'T00:00:00').getTime();
+    const days = (Date.now() - basisTime)/(1000*60*60*24);
     if(nTotal>0 && nDone>0 && days>0){
       if(nDone>=nTotal) duKien = {done:true};
       else { const speed = nDone/days; const daysLeft=(nTotal-nDone)/speed; duKien = {date:new Date(Date.now()+daysLeft*24*60*60*1000)}; }
@@ -3624,7 +3633,7 @@ function computeDotStats(dotId){
     catThayDone:catThay.filter(s=>s.trangThai==='Hoàn thành').length,
     hanPhuDone:hanPhu.filter(s=>s.trangThai==='Hoàn thành').length,
     suaOpDone:suaOp.filter(s=>s.trangThai==='Hoàn thành').length,
-    weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, chuaChoPhep,
+    weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, chuaChoPhep, firstWeldTime,
     pipeRows, catThayItems:catThay, hanPhuItems:hanPhu, suaOpItems:suaOp, weldRows};
 }
 function ovStatCard(dotId, metric, cls, label, valHtml){
