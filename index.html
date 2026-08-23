@@ -1093,6 +1093,12 @@ function mapSheetSuaChua(itemRows, weldRows){
       viTriThucTe:String(r['Vị trí thực tế']||'')
     });
   });
+  // Tu "chua lanh" trang thai hang muc Cat thay ngay tai buoc doc du lieu (khong doi den luc nguoi dung
+  // thao tac tren app moi tinh lai) — vi cot "Trang thai" tren Sheet la gia tri LUU SAN, se bi lech neu du
+  // lieu moi han duoc sua truc tiep tren Google Sheet, nhap Excel hang loat, hoac 1 lan dong bo truoc do bi
+  // loi mang khong ghi kip. Hang muc Han phu/Sua op khong dung khung moi han nen giu nguyen trang thai da
+  // luu (theo doi thu cong qua setManualStatus).
+  items.forEach(item=>{ if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item); });
   return items;
 }
 
