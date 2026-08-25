@@ -2391,6 +2391,53 @@ window.exportKiemTraMatrix = async function(){
   });
   XLSX.writeFile(wb,'bien-ban-kiem-tra-chieu-day-ong-dang-bang.xlsx');
 };
+// Xuat rieng cac ban ghi CO ngoai dang bat thuong (Xoay op/Rach op/Mon cuc bo/Troc ro/Nut/tu dien khac) —
+// tach khoi bao cao UTM day du (exportKiemTra, liet ke TAT CA vi tri ke ca "Binh thuong") de giam sat de
+// theo doi rieng cac vi tri can chu y ve mat ngoai quan, khong bi lan giua hang tram dong binh thuong.
+window.exportKiemTraNgoaiDang = async function(){
+  if(!(await withXLSXReady())) return;
+  const abnormal = state.kiemTra.filter(r=>isNgoaiDangBatThuong(r.ngoaiDang));
+  if(!abnormal.length){ alert('Chưa ghi nhận vị trí nào có ngoại dạng bất thường.'); return; }
+  const NCOL = 11;
+  const byDot = {};
+  abnormal.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
+  const dotIds = Object.keys(byDot).sort((a,b)=>{
+    const da=state.dots.find(x=>x.id===a), db=state.dots.find(x=>x.id===b);
+    return (da?da.ten:a).localeCompare(db?db.ten:b);
+  });
+  const wb = XLSX.utils.book_new();
+  const usedNames = {};
+  dotIds.forEach(dotId=>{
+    const d = state.dots.find(x=>x.id===dotId);
+    const rows = byDot[dotId].slice().sort((a,b)=> (a.heThong||'').localeCompare(b.heThong||'') || (a.viTri||'').localeCompare(b.viTri||'') || (a.ngay||'').localeCompare(b.ngay||''));
+    const aoa = []; const merges = [];
+    aoa.push(['BÁO CÁO KIỂM TRA NGOẠI DẠNG BẤT THƯỜNG']); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push(['NHIỆT ĐIỆN NGHI SƠN']); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    aoa.push(['Đợt kiểm tra/sửa chữa:', d?d.ten:dotId,'','','Tổ máy:', d?d.toMay:'']);
+    merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:3}}); merges.push({s:{r:aoa.length-1,c:5},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push(['Thời gian:', (d&&d.ngayBatDau?fmtDate(d.ngayBatDau):'')+(d&&d.ngayKetThuc?(' đến '+fmtDate(d.ngayKetThuc)):' (đang diễn ra)'),'','','Trạng thái:', d?d.trangThai:'']);
+    merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:3}}); merges.push({s:{r:aoa.length-1,c:5},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    aoa.push(['STT','Hệ thống','Thiết bị','Vị trí','Lớp ống','Đường kính TK (mm)','Chiều dày đo gần nhất (mm)','% còn lại','Ngoại dạng','Ngày phát hiện','Người kiểm tra']);
+    rows.forEach((r,i)=>{ aoa.push([i+1, r.heThong, r.thietBi, r.viTri, r.lopOng, r.duongKinh, r.chieuDayDo||'—', pctDisplay(r.phanTramConLai), r.ngoaiDang, fmtDate(r.ngay), r.nguoiKiemTra]); });
+    aoa.push([]);
+    aoa.push(['Tổng số vị trí bất thường: '+rows.length]); merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}});
+    aoa.push([]);
+    aoa.push(['Người kiểm tra (ký, ghi rõ họ tên)','','','','Người lập biên bản (ký, ghi rõ họ tên)','','','','Xác nhận của đơn vị (ký, đóng dấu)']);
+    { const rIdx = aoa.length-1;
+      merges.push({s:{r:rIdx,c:0},e:{r:rIdx,c:3}});
+      merges.push({s:{r:rIdx,c:4},e:{r:rIdx,c:7}});
+      merges.push({s:{r:rIdx,c:8},e:{r:rIdx,c:NCOL-1}}); }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:6},{wch:16},{wch:16},{wch:12},{wch:10},{wch:14},{wch:18},{wch:16},{wch:14},{wch:13},{wch:16}];
+    ws['!merges'] = merges;
+    let name = scSafeSheetName(d?d.ten:dotId);
+    if(usedNames[name]){ usedNames[name]++; name = scSafeSheetName(name+' ('+usedNames[name]+')'); } else { usedNames[name]=1; }
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb,'ket-qua-kiem-tra-ngoai-dang.xlsx');
+};
 window.deleteKiemTra = async function(id){
   if(!can('kiemTra')){ noPermAlert(); return; }
   if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Google Sheet (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
@@ -4002,6 +4049,7 @@ function renderKiemTra(){
       <button class="btn-ghost" onclick="exportKiemTraTemplate()">Tải mẫu nhập liệu</button>
       <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel (danh sách dài)</button>
       <button class="btn-ghost" onclick="exportKiemTraMatrix()">Xuất Excel (dạng bảng, để in)</button>
+      <button class="btn-ghost" onclick="exportKiemTraNgoaiDang()">Xuất kết quả kiểm tra ngoại dạng</button>
       ${canKt?`<button class="btn-ghost" onclick="startKtVoiceWizard()">🎤 Nhập bằng giọng nói</button>`:''}
       ${canKt?`<button class="btn" onclick="toggleKtMatrix('utm')">${(state.ktMatrix.active&&state.ktMatrix.mode==='utm')?'Đóng bảng nhập':'+ Nhập/sửa UTM (dạng bảng)'}</button>`:''}
       ${canKt?`<button class="btn-ghost" onclick="toggleKtMatrix('ngoaidang')">${(state.ktMatrix.active&&state.ktMatrix.mode==='ngoaidang')?'Đóng bảng nhập':'📝 Nhập ngoại dạng'}</button>`:''}
