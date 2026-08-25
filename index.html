@@ -2322,7 +2322,7 @@ window.exportKiemTraMatrix = async function(){
     const dotRecs = byDot[dotId];
     let maxLop = 1;
     dotRecs.forEach(r=>{ const n=parseFloat(r.lopOng); if(!isNaN(n)&&n>maxLop) maxLop=n; });
-    const NCOL = 6+maxLop;
+    const NCOL = 8+maxLop; // +2 cot Ngay kiem tra / Nguoi kiem tra so voi ban truoc
     const byGroup = {};
     dotRecs.forEach(r=>{ const gk=(r.heThong||'')+'|||'+(r.thietBi||''); if(!byGroup[gk]) byGroup[gk]=[]; byGroup[gk].push(r); });
     const groupKeys = Object.keys(byGroup).sort((a,b)=>a.localeCompare(b));
@@ -2345,22 +2345,29 @@ window.exportKiemTraMatrix = async function(){
       const h1 = aoa.length;
       const row1 = ['STT','Hệ thống','Thiết bị','Vị trí','Đường kính TK (mm)','Chiều dày TK (mm)','Chiều dày đo được (mm)'];
       for(let i=1;i<maxLop;i++) row1.push('');
+      row1.push('Ngày kiểm tra','Người kiểm tra');
       aoa.push(row1);
       const h2 = aoa.length;
       const row2 = ['','','','','','']; for(let i=1;i<=maxLop;i++) row2.push('Lớp '+i);
+      row2.push('','');
       aoa.push(row2);
       merges.push({s:{r:h1,c:0},e:{r:h2,c:0}}); merges.push({s:{r:h1,c:1},e:{r:h2,c:1}});
       merges.push({s:{r:h1,c:2},e:{r:h2,c:2}}); merges.push({s:{r:h1,c:3},e:{r:h2,c:3}});
       merges.push({s:{r:h1,c:4},e:{r:h2,c:4}}); merges.push({s:{r:h1,c:5},e:{r:h2,c:5}});
       merges.push({s:{r:h1,c:6},e:{r:h1,c:6+maxLop-1}});
+      merges.push({s:{r:h1,c:6+maxLop},e:{r:h2,c:6+maxLop}}); merges.push({s:{r:h1,c:7+maxLop},e:{r:h2,c:7+maxLop}});
       const byViTri = {};
       recs.forEach(r=>{ const key=String(r.viTri); if(!byViTri[key]) byViTri[key]=[]; byViTri[key].push(r); });
       const viTris = Object.keys(byViTri).sort((a,b)=>(parseFloat(a)-parseFloat(b))||a.localeCompare(b));
       viTris.forEach((vt,idx)=>{
         const byLop = {}; byViTri[vt].forEach(r=>{ byLop[String(r.lopOng)]=r; });
         const first = byViTri[vt][0];
+        // Ngay/Nguoi kiem tra: 1 vi tri co the co nhieu lop ong voi ngay do khac nhau — lay lan do MOI NHAT
+        // (giong logic latestByPipe o computeDotStats) de dai dien cho ca dong.
+        const latest = byViTri[vt].slice().sort((a,b)=>(a.ngay||'').localeCompare(b.ngay||'')).slice(-1)[0];
         const row = [idx+1, heThong, thietBi, vt, first.duongKinh, first.chieuDayTK];
         for(let i=1;i<=maxLop;i++){ const r=byLop[String(i)]; row.push(r?r.chieuDayDo:'-'); }
+        row.push(fmtDate(latest.ngay), latest.nguoiKiemTra||'');
         aoa.push(row); totalRows++;
       });
       aoa.push([]);
@@ -2375,6 +2382,7 @@ window.exportKiemTraMatrix = async function(){
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const cols = [{wch:6},{wch:16},{wch:14},{wch:10},{wch:12},{wch:12}];
     for(let i=0;i<maxLop;i++) cols.push({wch:9});
+    cols.push({wch:13},{wch:16}); // Ngay kiem tra, Nguoi kiem tra
     ws['!cols'] = cols;
     ws['!merges'] = merges;
     let name = scSafeSheetName(d?d.ten:dotId);
