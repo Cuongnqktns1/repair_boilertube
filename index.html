@@ -389,6 +389,7 @@ let state = {
   nkFilter:{dotId:'',heThong:'',trangThai:''}, nkPendingPhotos:[], lightboxImg:null, nkApprovingId:null,
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
+  ktExportDotId:'', // '' = xuat tat ca cac dot (nhu truoc), hoac 1 dotId cu the de chi xuat rieng dot do — tranh tai/xuat toan bo lich su khong can thiet
   // Bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) — thay cho form nhập từng dòng cũ khi gõ bàn phím
   ktMatrix:{active:false, mode:'utm', editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
@@ -2557,12 +2558,20 @@ function scSafeSheetName(s){
   return String(s).replace(/[:\\\/\?\*\[\]]/g,'-').slice(0,31) || 'Trang';
 }
 // Xuat bao cao dep, theo tung Dot (1 sheet = 1 dot), dung de in/luu tru — thay cho ban bang du lieu tho truoc day
+window.setKtExportDot = function(v){ state.ktExportDotId = v; render(); };
+// Loc theo dot dang chon o dropdown "Xuat du lieu dot" (state.ktExportDotId) truoc khi xuat — tranh phai
+// tai/xuat TOAN BO lich su (co the hang nghin dong qua nhieu dot) khi chi can 1 dot cu the, nguoi dung tu
+// chon '' (Tat ca cac dot) neu van muon xuat day du nhu truoc.
+function ktApplyExportDotFilter(records){
+  return state.ktExportDotId ? records.filter(r=>r.dotId===state.ktExportDotId) : records;
+}
 window.exportKiemTra = async function(){
   if(!(await withXLSXReady())) return;
-  if(!state.kiemTra.length){ alert('Chưa có bản ghi kiểm tra nào để xuất.'); return; }
+  const sourceRecs = ktApplyExportDotFilter(state.kiemTra);
+  if(!sourceRecs.length){ alert('Chưa có bản ghi kiểm tra nào để xuất (với đợt đang chọn).'); return; }
   const NCOL = 13;
   const byDot = {};
-  state.kiemTra.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
+  sourceRecs.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
   const dotIds = Object.keys(byDot).sort((a,b)=>{
     const da=state.dots.find(x=>x.id===a), db=state.dots.find(x=>x.id===b);
     return (da?da.ten:a).localeCompare(db?db.ten:b);
@@ -2615,9 +2624,10 @@ window.exportKiemTraTemplate = async function(){
 // Du lieu van lay tu state.kiemTra (cau truc dai) — chi doi cach trinh bay khi xuat, khong doi luu tru.
 window.exportKiemTraMatrix = async function(){
   if(!(await withXLSXReady())) return;
-  if(!state.kiemTra.length){ alert('Chưa có bản ghi kiểm tra nào để xuất.'); return; }
+  const sourceRecsMx = ktApplyExportDotFilter(state.kiemTra);
+  if(!sourceRecsMx.length){ alert('Chưa có bản ghi kiểm tra nào để xuất (với đợt đang chọn).'); return; }
   const byDot = {};
-  state.kiemTra.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
+  sourceRecsMx.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
   const dotIds = Object.keys(byDot).sort((a,b)=>{
     const da=state.dots.find(x=>x.id===a), db=state.dots.find(x=>x.id===b);
     return (da?da.ten:a).localeCompare(db?db.ten:b);
@@ -2703,8 +2713,8 @@ window.exportKiemTraMatrix = async function(){
 // theo doi rieng cac vi tri can chu y ve mat ngoai quan, khong bi lan giua hang tram dong binh thuong.
 window.exportKiemTraNgoaiDang = async function(){
   if(!(await withXLSXReady())) return;
-  const abnormal = state.kiemTra.filter(r=>isNgoaiDangBatThuong(r.ngoaiDang));
-  if(!abnormal.length){ alert('Chưa ghi nhận vị trí nào có ngoại dạng bất thường.'); return; }
+  const abnormal = ktApplyExportDotFilter(state.kiemTra).filter(r=>isNgoaiDangBatThuong(r.ngoaiDang));
+  if(!abnormal.length){ alert('Chưa ghi nhận vị trí nào có ngoại dạng bất thường (với đợt đang chọn).'); return; }
   const NCOL = 11;
   const byDot = {};
   abnormal.forEach(r=>{ const k=r.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(r); });
@@ -4328,8 +4338,13 @@ function renderKiemTra(){
 
   const canKt = can('kiemTra');
   const ktSelectedCount = Object.keys(state.ktSelectedIds).length;
+  // CHI hien thi ban ghi thuoc (cac) dot DANG DIEN RA — giong dung cach Bang dieu khien dang lam (dot da
+  // dong chuyen han sang xem o "Lich su & xu huong"), truoc day modul nay hien TAT CA lich su khong loc,
+  // gay nham lan/roi mat khi doi chieu voi Bang dieu khien va lam trang danh sach dai qua muc can thiet.
+  const activeDotIdsKt = new Set(activeDots.map(d=>d.id));
+  const ktVisible = state.kiemTra.filter(r=>activeDotIdsKt.has(r.dotId));
   const ktGroups = {};
-  state.kiemTra.forEach(r=>{ const k = r.heThong||'(không có hệ thống)'; if(!ktGroups[k]) ktGroups[k]=[]; ktGroups[k].push(r); });
+  ktVisible.forEach(r=>{ const k = r.heThong||'(không có hệ thống)'; if(!ktGroups[k]) ktGroups[k]=[]; ktGroups[k].push(r); });
   const ktHeThongNames = Object.keys(ktGroups).sort((a,b)=>a.localeCompare(b));
   const groupsHtml = ktHeThongNames.map(ht=>{
     const groupRecs = ktGroups[ht];
@@ -4355,10 +4370,17 @@ function renderKiemTra(){
     </div>`;
   }).join('');
 
+  const ktExportDotOpts = state.dots.slice().sort((a,b)=>(b.ngayBatDau||'').localeCompare(a.ngayBatDau||'')).map(d=>`<option value="${esc(d.id)}" ${state.ktExportDotId===d.id?'selected':''}>${esc(d.ten)} (${esc(d.trangThai)})</option>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Nhật ký</div><div class="page-title">Kiểm tra (đo đạc)</div></div>
     <div class="head-actions">
       ${canKt?`<label class="file-btn">Nhập Excel (danh sách hoặc dạng bảng)<input type="file" accept=".xlsx,.xls,.csv" onchange="importKiemTra(this)"></label>`:''}
       <button class="btn-ghost" onclick="exportKiemTraTemplate()">Tải mẫu nhập liệu</button>
+      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;">Xuất dữ liệu đợt:
+        <select onchange="setKtExportDot(this.value)" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;">
+          <option value="" ${!state.ktExportDotId?'selected':''}>— Tất cả các đợt —</option>
+          ${ktExportDotOpts}
+        </select>
+      </label>
       <button class="btn-ghost" onclick="exportKiemTra()">Xuất Excel (danh sách dài)</button>
       <button class="btn-ghost" onclick="exportKiemTraMatrix()">Xuất Excel (dạng bảng, để in)</button>
       <button class="btn-ghost" onclick="exportKiemTraNgoaiDang()">Xuất kết quả kiểm tra ngoại dạng</button>
@@ -4387,7 +4409,8 @@ function ktDiagramVtSet(heThong, thietBi, toMay){
   return Array.from(set).sort((a,b)=>parseInt(a)-parseInt(b));
 }
 function ktDiagramCellInfo(heThong, thietBi, toMay, vt){
-  const recs = state.kiemTra.filter(r=>r.heThong===heThong && r.thietBi===thietBi && String(r.viTri)===String(vt) && (isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)));
+  const activeIds = ktActiveDotIds();
+  const recs = state.kiemTra.filter(r=>activeIds.has(r.dotId) && r.heThong===heThong && r.thietBi===thietBi && String(r.viTri)===String(vt) && (isSharedToMay(r.toMay)||normTM(r.toMay)===normTM(toMay)));
   if(!recs.length) return null;
   const byLop = {};
   recs.forEach(r=>{ if(!byLop[r.lopOng] || r.ngay > byLop[r.lopOng].ngay) byLop[r.lopOng] = r; });
@@ -4454,12 +4477,15 @@ window.toggleKtSelect = function(id){
   if(state.ktSelectedIds[id]) delete state.ktSelectedIds[id]; else state.ktSelectedIds[id] = true;
   render();
 };
+function ktActiveDotIds(){ return new Set(state.dots.filter(d=>d.trangThai==='Đang diễn ra').map(d=>d.id)); }
 window.ktSelectAllInGroup = function(ht){
-  state.kiemTra.filter(r=>(r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
+  const activeIds = ktActiveDotIds();
+  state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
   render();
 };
 window.ktDeselectAllInGroup = function(ht){
-  state.kiemTra.filter(r=>(r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ delete state.ktSelectedIds[r.id]; });
+  const activeIds = ktActiveDotIds();
+  state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ delete state.ktSelectedIds[r.id]; });
   render();
 };
 window.ktClearSelection = function(){ state.ktSelectedIds = {}; render(); };
