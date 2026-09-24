@@ -4016,15 +4016,29 @@ function computeDotStats(dotId){
   const nTotal = sc.length, nDone = sc.filter(s=>s.trangThai==='Hoàn thành').length;
   const dot = state.dots.find(d=>d.id===dotId);
   let duKien = null;
-  // Moc tinh toc do: uu tien ngay moi han dau tien (firstWeldTime) — tranh tinh nham nhung ngay dau dot la
-  // cong tac chuan bi, chua co moi han nao, lam sai lech toc do va ngay du kien hoan thanh. Fallback ve
-  // ngay bat dau dot neu chua co moi nao ghi nhan Ngay han (vd du lieu cu chua duoc dien thu cong).
+  // Cach 2 (da thong nhat voi anh): dung TOC DO 7 NGAY GAN NHAT (theo MOI HAN, khong phai hang muc) thay vi
+  // trung binh tu dau den gio — phan anh dung nang suat HIEN TAI cua doi thi cong (neu tang/giam quan so,
+  // doi ngay theo), tranh bi "keo thap" boi giai doan dau moi trien khai con cham/chua on dinh. Moc tinh
+  // ngay bat dau cua so 7 ngay van uu tien firstWeldTime (moi han dau tien), fallback ngay bat dau dot neu
+  // chua co moi nao ghi nhan Ngay han.
   if(dot){
     const basisTime = firstWeldTime!==null ? firstWeldTime : new Date(dot.ngayBatDau+'T00:00:00').getTime();
-    const days = (Date.now() - basisTime)/(1000*60*60*24);
-    if(nTotal>0 && nDone>0 && days>0){
-      if(nDone>=nTotal) duKien = {done:true};
-      else { const speed = nDone/days; const daysLeft=(nTotal-nDone)/speed; duKien = {date:new Date(Date.now()+daysLeft*24*60*60*1000)}; }
+    const daysSinceStart = (Date.now() - basisTime)/(1000*60*60*24);
+    const weldConLai = weldTotal - weldHanDone;
+    if(weldTotal>0){
+      if(weldConLai<=0){
+        duKien = {done:true};
+      } else {
+        const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate()-6);
+        const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0,10);
+        const recentDone = weldRows.filter(r=>r.weld.daHan && r.weld.ngayHan && r.weld.ngayHan>=sevenDaysAgoStr).length;
+        const recentWindowDays = Math.max(1, Math.min(7, daysSinceStart));
+        const speed = recentDone>0 ? recentDone/recentWindowDays : 0;
+        if(speed>0){
+          const daysLeft = weldConLai/speed;
+          duKien = {date:new Date(Date.now()+daysLeft*24*60*60*1000), speed, weldConLai, recentDone, recentWindowDays};
+        }
+      }
     }
   }
   return {uniquePipes, catThay:catThay.length, hanPhu:hanPhu.length, suaOp:suaOp.length,
@@ -4068,11 +4082,12 @@ function renderDotDashboard(dotId){
   const dot = state.dots.find(d=>d.id===dotId); if(!dot) return '';
   const s = computeDotStats(dotId);
   const vtRows = Object.keys(s.vtTotals).map(k=>{ const [ten,dv]=k.split('||'); return `<tr><td>${esc(ten)}</td><td>${s.vtTotals[k]}</td><td>${esc(dv)}</td></tr>`; }).join('');
-  let duKienText = 'Chưa đủ dữ liệu để ước tính (cần ít nhất 1 hạng mục sửa chữa đã hoàn thành).';
+  let duKienText = 'Chưa đủ dữ liệu để ước tính (chưa có mối hàn nào hoàn thành trong 7 ngày gần đây).';
   if(s.duKien){
-    duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ hạng mục đã phát hiện tính đến hiện tại.'
-      : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — ước tính theo tốc độ hoàn thành thực tế, tự cập nhật liên tục, có thể thay đổi nếu phát hiện thêm hư hỏng mới trong quá trình kiểm tra.');
+    duKienText = s.duKien.done ? 'Đã hoàn thành toàn bộ mối hàn đã phát hiện tính đến hiện tại.'
+      : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — dựa trên tốc độ '+s.duKien.speed.toFixed(2)+' mối/ngày trong '+Math.round(s.duKien.recentWindowDays)+' ngày gần nhất ('+s.duKien.recentDone+' mối hàn), còn '+s.duKien.weldConLai+' mối hàn. Tự cập nhật liên tục, có thể thay đổi nếu phát hiện thêm hư hỏng mới hoặc tốc độ thi công thay đổi.');
   }
+  const duKienNote = s.chuaChoPhep>0 ? '<div style="font-size:11px;color:var(--dim);margin-top:6px;">* Chỉ tính trên khối lượng đã được "Cho phép thi công" — chưa gồm '+s.chuaChoPhep+' hạng mục đang chờ duyệt, ngày hoàn thành thực tế có thể muộn hơn khi các hạng mục này được xác nhận.</div>' : '';
   const expandedMetric = state.ovExpandedMetric[dotId];
   const isOneOf = (m1)=> expandedMetric===m1;
   return `<div class="repair-item" style="margin-bottom:18px;">
@@ -4091,7 +4106,7 @@ function renderDotDashboard(dotId){
     <div class="grid-cards">
       ${ovStatCard(dot.id,'welds','','Mối hàn đã hàn/tổng (Cắt thay)', s.weldHanDone+'/'+s.weldTotal)}
       ${ovStatCard(dot.id,'welds','','Mối hàn đã PAUT đạt/Đã hàn', s.weldPautDone+'/'+s.weldHanDone)}
-      <div class="stat-card" style="grid-column:span 2;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div></div>
+      <div class="stat-card" style="grid-column:span 2;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div>${duKienNote}</div>
     </div>
     ${isOneOf('welds') ? renderOvMetricDetail(dot.id, s) : ''}
     <div class="section-label" style="margin-top:16px;">Vật tư đã sử dụng</div>
