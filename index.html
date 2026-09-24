@@ -246,6 +246,13 @@ table.dm tr:last-child td{border-bottom:none;}
 </div>
 <script>
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbySGTzgApl65EoN1dQt66V-ZROzkWGxXB81pgrSnThPzBGDLve6aAkiia-Z8TtG7H5LfA/exec';
+// ================= SUPABASE (thay the Google Sheets tu ban nay cho phan du lieu chinh) =================
+// GIU LAI SHEET_URL (Apps Script/Google Sheets) o tren rieng cho phan ANH Nhat ky thi cong (tai len/doc/
+// xoa) — chua chuyen sang Supabase Storage o dot nay (lam sau, giai doan 2), vi day la phan it thao tac
+// nhat va khong phai nguyen nhan gay cham khi nhieu nguoi cung dung (Kiem tra/Sua chua/Vat tu moi la noi
+// bi ghi lien tuc, da chuyen het sang Supabase de giai quyet dung cho nghen do LockService toan cuc).
+const SUPABASE_URL = 'https://xhwyumxwpptyjceuontv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhod3l1bXh3cHB0eWpjZXVvbnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyMDcyNjAsImV4cCI6MjEwNTc4MzI2MH0.3f79n71g7xBlZi7DlMIDe0oe-sbHwZmHIgJMqHpszBg';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -909,27 +916,161 @@ async function fetchWithTimeout(url, ms){
   try{ return await fetch(url, {signal: ctrl.signal}); }
   finally{ clearTimeout(timer); }
 }
+function sbHeaders(extra){
+  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json' }, extra||{});
+}
+function sbUrl(table, query){ return SUPABASE_URL+'/rest/v1/'+table+(query?('?'+query):''); }
+async function sbSelect(table, query){
+  try{
+    const res = await fetchWithTimeout(sbUrl(table, query), 30000);
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ console.error('Lỗi đọc bảng '+table+' trên Supabase:', e); return null; }
+}
+async function sbErrMsg(res){ try{ const j = await res.json(); return j.message || j.error_description || j.hint || ('HTTP '+res.status); }catch(e){ return 'HTTP '+res.status; } }
+async function sbUpsert(table, row){
+  try{
+    const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(row) });
+    if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
+    return {ok:true};
+  }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
+}
+async function sbUpsertMany(table, rows){
+  if(!rows || !rows.length) return {ok:true};
+  try{
+    const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(rows) });
+    if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
+    return {ok:true};
+  }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
+}
+async function sbDelete(table, filterQuery){
+  try{
+    const res = await fetch(sbUrl(table, filterQuery), { method:'DELETE', headers: sbHeaders() });
+    if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
+    return {ok:true};
+  }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
+}
+// ---------- "Ten loai"/"ten sheet cu" <-> "ten bang Supabase" ----------
+const TYPE_TO_TABLE = {
+  user:'users', dot:'dots', danh_muc:'danh_muc', kiem_tra:'kiem_tra',
+  sua_chua_item:'sua_chua_hang_muc', sua_chua_weld:'sua_chua_weld',
+  vat_tu:'vat_tu', tai_lieu:'tai_lieu', nhat_ky:'nhat_ky_thi_cong'
+};
+const SHEETNAME_TO_TABLE = {
+  Dot:'dots', DanhMuc:'danh_muc', KiemTra:'kiem_tra', SuaChuaHangMuc:'sua_chua_hang_muc',
+  SuaChua:'sua_chua_weld', VatTu:'vat_tu', TaiLieu:'tai_lieu', NhatKyThiCong:'nhat_ky_thi_cong'
+  // HinhAnh KHONG co trong bang nay — van xu ly rieng qua Apps Script/Google Drive (xem postToSheet)
+};
+const NK_JS_TO_SQL = {
+  dieuKienTC:['dieu_kien_tc_nha_thau','dieu_kien_tc_giam_sat'],
+  lucLuong:['luc_luong_tc_nha_thau','luc_luong_tc_giam_sat'],
+  congViecChinh:['cong_viec_chinh_nha_thau','cong_viec_chinh_giam_sat'],
+  anToan:['an_toan_ve_sinh_nha_thau','an_toan_ve_sinh_giam_sat'],
+  nghiemThu:['nghiem_thu_nha_thau','nghiem_thu_giam_sat'],
+  suCo:['su_co_vi_pham_nha_thau','su_co_vi_pham_giam_sat'],
+  phatSinh:['van_de_phat_sinh_nha_thau','van_de_phat_sinh_giam_sat'],
+  ykienKhac:['y_kien_khac_nha_thau','y_kien_khac_giam_sat'],
+  danhGiaChung:['danh_gia_chung_nha_thau','danh_gia_chung_giam_sat']
+};
+// Chuyen 1 ban ghi cua app (dung camelCase nhu tu truoc gio, KHONG doi gi o cac noi tao ban ghi) sang
+// dung ten cot Supabase (snake_case) de ghi len bang tuong ung.
+function recordToRow(type, record){
+  const r = record||{};
+  switch(type){
+    case 'user': return {email:String(r.email||'').toLowerCase(), name:r.name||'', pass_hash:r.passHash||'', role:r.role||'ky_thuat'};
+    case 'dot': return {id:r.id, ten:r.ten||'', to_may:r.toMay||'', ngay_bat_dau:r.ngayBatDau||null, ngay_ket_thuc:r.ngayKetThuc||null, trang_thai:r.trangThai||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', ten_don_vi_thi_cong:r.donViThiCong||''};
+    case 'danh_muc': return {id:r.id, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri_tu:r.viTriTu||'', vi_tri_den:r.viTriDen||'', lop_ong_tu:r.lopOngTu||'', lop_ong_den:r.lopOngDen||'', vung:r.vung||'', duong_kinh:r.duongKinh||'', chieu_day:r.chieuDay||'', vat_lieu:r.vatLieu||'', ghi_chu:r.ghiChu||''};
+    case 'kiem_tra': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vung:r.vung||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', duong_kinh:r.duongKinh||'', chieu_day_tk:r.chieuDayTK||'', chieu_day_do:r.chieuDayDo||'', phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang:r.ngoaiDang||'', ngay:r.ngay||null, nguoi_kiem_tra:r.nguoiKiemTra||''};
+    case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null};
+    case 'sua_chua_weld': { const w=r.weld||{}; return {id:w.id, hang_muc_id:r.itemId, phan_tram_con_lai:r.phanTramConLai||'', trang_thai_hang_muc:r.trangThai||'', loai:w.loai||'chinh_thuc', da_cat:!!w.daCat, da_han:!!w.daHan, paut:w.paut||'Chưa kiểm tra', tho_han:w.thoHan||'', ghi_chu:w.ghiChu||'', nguoi_thuc_hien:w.nguoiThucHien||'', nguoi_xac_nhan_paut:w.nguoiXacNhanPAUT||'', vi_tri_thuc_te:w.viTriThucTe||'', ngay_han:w.ngayHan||null}; }
+    case 'vat_tu': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', muc_dich:r.mucDich||'', ma_vat_tu:r.maVatTu||'', ten_vat_tu:r.tenVatTu||'', don_vi:r.donVi||'', so_luong:(r.soLuong===''||r.soLuong==null||isNaN(parseFloat(r.soLuong)))?null:parseFloat(r.soLuong), ly_do_thay_the:r.lyDoThayThe||'', ghi_chu:r.ghiChu||'', ngay:r.ngay||null};
+    case 'tai_lieu': return {id:r.id, ten_tai_lieu:r.tenTaiLieu||'', so_hieu:r.soHieu||'', he_thong:r.heThong||'', link:r.link||'', ghi_chu:r.ghiChu||''};
+    case 'nhat_ky': {
+      const row = {id:r.id, ngay_thi_cong:r.ngay||null, ca:r.ca||'', gio_bat_dau:r.gioBatDau||'', gio_ket_thuc:r.gioKetThuc||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', don_vi_thi_cong:r.donViThiCong||'', dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', hang_muc_id:r.hangMucId||'', ky_thuat_b:r.kyThuatB||'', can_bo_giam_sat:r.canBoGiamSat||'', trang_thai:r.trangThai||'Chờ duyệt', nguoi_tao:r.nguoiTao||'', nguoi_duyet:r.nguoiDuyet||'', thoi_gian_duyet:r.thoiGianDuyet||null};
+      Object.keys(NK_JS_TO_SQL).forEach(k=>{ const cols=NK_JS_TO_SQL[k]; row[cols[0]]=r[k]||''; row[cols[1]]=r[k+'_yk']||''; });
+      return row;
+    }
+    default: return null;
+  }
+}
+// Chuyen 1 dong du lieu Supabase (snake_case) NGUOC lai thanh dict kieu "ten cot tieng Viet cu" — de cac
+// ham mapSheetX() (viet tu thoi con dung Google Sheets) dung y NGUYEN khong doi mot dong nao ma van doc
+// dung du lieu, giam toi da rui ro khi chuyen sang Supabase (chi doi lop doc/ghi thap nhat, khong dung
+// den toan bo logic nghiep vu ben tren).
+function rowToSheetDict(kind, row){
+  const boolX = v => v ? 'X' : '';
+  switch(kind){
+    case 'users': return {'Email':row.email, 'Họ tên':row.name, 'PassHash':row.pass_hash, 'Vai trò':row.role};
+    case 'dot': return {'Mã đợt':row.id, 'Tên đợt':row.ten, 'Tổ máy':row.to_may, 'Ngày bắt đầu':row.ngay_bat_dau||'', 'Ngày kết thúc':row.ngay_ket_thuc||'', 'Trạng thái':row.trang_thai, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Tên đơn vị thi công':row.ten_don_vi_thi_cong};
+    case 'danh_muc': return {'Mã DM':row.id, 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí từ':row.vi_tri_tu, 'Vị trí đến':row.vi_tri_den, 'Lớp ống từ':row.lop_ong_tu, 'Lớp ống đến':row.lop_ong_den, 'Vùng vật liệu':row.vung, 'Đường kính':row.duong_kinh, 'Chiều dày':row.chieu_day, 'Vật liệu':row.vat_lieu, 'Ghi chú':row.ghi_chu};
+    case 'kiem_tra': return {'Mã KT':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vùng':row.vung, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Đường kính':row.duong_kinh, 'Chiều dày TK':row.chieu_day_tk, 'Chiều dày đo':row.chieu_day_do, '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng':row.ngoai_dang, 'Ngày kiểm tra':row.ngay||'', 'Người kiểm tra':row.nguoi_kiem_tra};
+    case 'sua_chua_item': return {'Mã hạng mục':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Chu kỳ':row.chu_ky, 'Phương án':row.phuong_an, 'Trạng thái':row.trang_thai, 'Ngày hoàn thành':row.ngay_hoan_thanh||'', '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng gần nhất':row.ngoai_dang_gan_nhat, 'Ghi chú xóa mối hàn':row.ghi_chu_xoa_moi_han, 'Cho phép thi công':boolX(row.cho_phep_thi_cong), 'Người cho phép thi công':row.nguoi_cho_phep, 'Thời gian cho phép thi công':row.thoi_gian_cho_phep||''};
+    case 'sua_chua_weld': return {'Mã hạng mục':row.hang_muc_id, 'Mã mối hàn':row.id, 'Loại':row.loai, 'Đã cắt':boolX(row.da_cat), 'Đã hàn':boolX(row.da_han), 'PAUT':row.paut, 'Ngày hàn':row.ngay_han||'', 'Thợ hàn':row.tho_han, 'Ghi chú':row.ghi_chu, 'Người thực hiện':row.nguoi_thuc_hien, 'Người xác nhận PAUT':row.nguoi_xac_nhan_paut, 'Vị trí thực tế':row.vi_tri_thuc_te};
+    case 'vat_tu': return {'Mã':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Mục đích sử dụng':row.muc_dich, 'Mã vật tư':row.ma_vat_tu, 'Tên vật tư':row.ten_vat_tu, 'Đơn vị':row.don_vi, 'Số lượng':row.so_luong, 'Lý do thay thế':row.ly_do_thay_the, 'Ghi chú':row.ghi_chu, 'Ngày':row.ngay||''};
+    case 'tai_lieu': return {'Mã':row.id, 'Tên tài liệu':row.ten_tai_lieu, 'Số hiệu':row.so_hieu, 'Hệ thống':row.he_thong, 'Link':row.link, 'Ghi chú':row.ghi_chu};
+    case 'nhat_ky': {
+      const d = {'Mã nhật ký':row.id, 'Ngày thi công':row.ngay_thi_cong||'', 'Ca':row.ca, 'Giờ bắt đầu':row.gio_bat_dau, 'Giờ kết thúc':row.gio_ket_thuc, 'Đơn vị thi công':row.don_vi_thi_cong, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Mã hạng mục liên quan':row.hang_muc_id, 'Kỹ thuật B':row.ky_thuat_b, 'Cán bộ giám sát':row.can_bo_giam_sat, 'Trạng thái':row.trang_thai, 'Người tạo':row.nguoi_tao, 'Người duyệt':row.nguoi_duyet, 'Thời gian duyệt':row.thoi_gian_duyet||''};
+      NK_SECTIONS.forEach(s=>{ const cols = NK_JS_TO_SQL[s.key]; d[NK_SHEET_KEY_MAP[s.key][0]]=row[cols[0]]; d[NK_SHEET_KEY_MAP[s.key][1]]=row[cols[1]]; });
+      return d;
+    }
+    case 'cau_hinh': return {
+      'Bot Token':row.bot_token, 'Chat ID cảnh báo dưới 70% (nhiều ID cách nhau bằng dấu phẩy)':row.chat_ids_canh_bao,
+      'Chat ID báo cáo tổng hợp (nhiều ID cách nhau bằng dấu phẩy)':row.chat_ids_bao_cao, 'Kiểu lịch báo cáo tổng hợp (GIO hoặc NGAY)':row.kieu_lich,
+      'Số giờ mỗi lần gửi (nếu Kiểu lịch = GIO)':row.tan_suat_gio, 'Giờ gửi cố định hằng ngày HH:MM (nếu Kiểu lịch = NGAY)':row.gio_co_dinh, 'Key':row.key_value
+    };
+    default: return row;
+  }
+}
 async function fetchSheet(type){
   try{
-    const res = await fetchWithTimeout(SHEET_URL+'?type='+type, 30000);
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(!data || !data.ok) return null;
-    return data.rows;
-  }catch(e){ console.error('Không lấy được dữ liệu từ Google Sheet (hoặc quá thời gian chờ):', type, e); return null; }
+    if(type==='hinh_anh'){
+      const res = await fetchWithTimeout(SHEET_URL+'?type='+type, 30000);
+      if(!res.ok) return null;
+      const data = await res.json();
+      if(!data || !data.ok) return null;
+      return data.rows;
+    }
+    const table = TYPE_TO_TABLE[type] || (type==='dot' ? 'dots' : null);
+    if(!table) return null;
+    const rows = await sbSelect(table, 'select=*');
+    if(rows===null) return null;
+    return rows.map(row=>rowToSheetDict(type, row));
+  }catch(e){ console.error('Không lấy được dữ liệu (Supabase):', type, e); return null; }
 }
 let _lastSyncError = '';
+// Tai toan bo du lieu (thay cho ?type=all cua Apps Script cu) — goi song song toi tat ca cac bang Supabase
+// + rieng hinh_anh van goi Apps Script (xem ghi chu o dau file). Tra ve DUNG cau truc {ok, users, dot,
+// danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, hinh_anh, cau_hinh,
+// anhFolderUrl} nhu ban cu, de syncFromSheetInBackground() ben duoi khong phai doi gi.
 async function fetchSheetAll(){
   try{
-    const res = await fetchWithTimeout(SHEET_URL+'?type=all', 30000);
-    if(!res.ok){ _lastSyncError = 'Máy chủ trả về lỗi HTTP '+res.status; return null; }
-    const data = await res.json();
-    if(!data || !data.ok){ _lastSyncError = (data && data.error) ? String(data.error) : 'Phản hồi không đúng định dạng mong đợi (thiếu trường "ok")'; return null; }
+    const [users, dot, danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, cau_hinh, hinhAnhRes] = await Promise.all([
+      sbSelect('users','select=*'), sbSelect('dots','select=*'), sbSelect('danh_muc','select=*'),
+      sbSelect('kiem_tra','select=*'), sbSelect('sua_chua_hang_muc','select=*'), sbSelect('sua_chua_weld','select=*'),
+      sbSelect('vat_tu','select=*'), sbSelect('tai_lieu','select=*'), sbSelect('nhat_ky_thi_cong','select=*'),
+      sbSelect('cau_hinh','select=*'),
+      fetchWithTimeout(SHEET_URL+'?type=all', 30000).then(r=>r.ok?r.json():null).catch(()=>null)
+    ]);
+    if(users===null){ _lastSyncError = 'Không kết nối được tới Supabase (kiểm tra mạng, hoặc URL/API key đã đúng chưa)'; return null; }
     _lastSyncError = '';
-    return data;
+    return {
+      ok:true,
+      users: (users||[]).map(r=>rowToSheetDict('users', r)),
+      dot: (dot||[]).map(r=>rowToSheetDict('dot', r)),
+      danh_muc: (danh_muc||[]).map(r=>rowToSheetDict('danh_muc', r)),
+      kiem_tra: (kiem_tra||[]).map(r=>rowToSheetDict('kiem_tra', r)),
+      sua_chua_item: (sua_chua_item||[]).map(r=>rowToSheetDict('sua_chua_item', r)),
+      sua_chua_weld: (sua_chua_weld||[]).map(r=>rowToSheetDict('sua_chua_weld', r)),
+      vat_tu: (vat_tu||[]).map(r=>rowToSheetDict('vat_tu', r)),
+      tai_lieu: (tai_lieu||[]).map(r=>rowToSheetDict('tai_lieu', r)),
+      nhat_ky: (nhat_ky||[]).map(r=>rowToSheetDict('nhat_ky', r)),
+      cau_hinh: (cau_hinh||[]).map(r=>rowToSheetDict('cau_hinh', r)),
+      hinh_anh: (hinhAnhRes && hinhAnhRes.ok) ? (hinhAnhRes.hinh_anh||[]) : [],
+      anhFolderUrl: (hinhAnhRes && hinhAnhRes.ok) ? (hinhAnhRes.anhFolderUrl||'') : ''
+    };
   }catch(e){
-    _lastSyncError = e.name==='AbortError' ? 'Quá thời gian chờ (30 giây) — Google Apps Script phản hồi quá chậm' : ('Lỗi mạng/CORS: '+(e.message||String(e)));
-    console.error('Không lấy được dữ liệu tổng hợp từ Google Sheet:', e);
+    _lastSyncError = 'Lỗi mạng/CORS: '+(e.message||String(e));
+    console.error('Không lấy được dữ liệu tổng hợp từ Supabase:', e);
     return null;
   }
 }
@@ -1389,13 +1530,10 @@ window.deleteDot = async function(id){
   }
 };
 
-// Ghi len Google Sheet: truoc day dung mode:'no-cors' + Content-Type application/json — cach nay khien trinh duyet
-// KHONG BAO GIO doc duoc phan hoi (fire-and-forget mu), nen moi loi thuc su o phia Apps Script (chua deploy ban moi,
-// thieu quyen Google Drive, loi ghi sheet...) hoan toan vo hinh, khong the biet duoc du lieu co thuc su vao Sheet hay khong.
-// Sua lai: dung Content-Type 'text/plain' (Apps Script van JSON.parse(e.postData.contents) binh thuong du khai bao
-// content-type la gi) de trinh duyet KHONG gui preflight OPTIONS (Apps Script khong xu ly OPTIONS), tu do khong con
-// can no-cors nua va doc duoc phan hoi that — giong het cach fetchSheetAll() da doc duoc GET thanh cong tu truoc.
-async function postToSheet(payload, timeoutMs){
+// Ghi len Google Sheet (Apps Script) — CHI CON dung cho phan Anh Nhat ky thi cong (upload_anh, va xoa/
+// delete_all lien quan sheet HinhAnh). Giu nguyen y het logic cu (Content-Type 'text/plain' de tranh
+// preflight OPTIONS ma Apps Script khong xu ly duoc).
+async function postToLegacyAppsScript(payload, timeoutMs){
   try{
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), timeoutMs || 20000);
@@ -1407,9 +1545,42 @@ async function postToSheet(payload, timeoutMs){
     let data;
     try{ data = await res.json(); }catch(e){ return {ok:false, error:'Phản hồi không đúng định dạng JSON'}; }
     if(!data || !data.ok) return {ok:false, error:(data&&data.error)?String(data.error):'Không rõ nguyên nhân'};
-    return data; // tra ve nguyen data (ok:true + cac truong khac neu co, vd written/skippedDup cua batch)
+    return data;
   }catch(e){
     return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ ('+((timeoutMs||20000)/1000)+' giây)' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
+  }
+}
+// Diem vao ghi du lieu DUY NHAT cua toan bo app (syncToSheet/deleteFromSheet/deleteAllFromSheet/
+// deleteManyFromSheet/hang doi gui lai deu goi qua day) — phan loai theo payload.type roi dieu huong:
+// Anh Nhat ky thi cong (upload_anh) va xoa lien quan HinhAnh -> van qua Apps Script/Google Drive nhu cu;
+// tat ca loai con lai -> ghi thang len Supabase (PostgREST), dung upsert theo khoa chinh (Prefer:
+// resolution=merge-duplicates) nen 1 ham nay xu ly duoc ca "tao moi" lan "cap nhat" giong upsertRow_ cu.
+async function postToSheet(payload, timeoutMs){
+  const type = payload.type;
+  try{
+    if(type==='upload_anh') return await postToLegacyAppsScript(payload, timeoutMs);
+    if(type==='delete' || type==='delete_all' || type==='delete_batch'){
+      const sheetName = payload.record && payload.record.sheet;
+      if(sheetName==='HinhAnh') return await postToLegacyAppsScript(payload, timeoutMs);
+      const table = SHEETNAME_TO_TABLE[sheetName];
+      if(!table) return {ok:false, error:'Không xác định được bảng dữ liệu: '+sheetName};
+      if(type==='delete'){
+        return await sbDelete(table, 'id=eq.'+encodeURIComponent(payload.record.id));
+      } else if(type==='delete_all'){
+        return await sbDelete(table, 'id=not.is.null');
+      } else {
+        const ids = payload.record.ids||[];
+        if(!ids.length) return {ok:true, deleted:0};
+        return await sbDelete(table, 'id=in.('+ids.map(id=>encodeURIComponent(id)).join(',')+')');
+      }
+    }
+    const table = TYPE_TO_TABLE[type];
+    if(!table) return {ok:false, error:'Loại dữ liệu không xác định: '+type};
+    const row = recordToRow(type, payload.record);
+    if(!row || (!row.id && !row.email)) return {ok:false, error:'Thiếu mã định danh (id) khi ghi '+type};
+    return await sbUpsert(table, row);
+  }catch(e){
+    return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
   }
 }
 function reportWriteError(label, error){
@@ -1489,18 +1660,43 @@ async function syncToSheet(type, record){
 // Thiet bi+Vi tri+Lop ong+Ngay) de nhap lai cung 1 file khong bi nhan doi cac dong da nhap thanh cong truoc do.
 async function syncKiemTraBatch(records){
   if(!records || !records.length) return {ok:true, written:0, skippedDup:0, skippedIds:[]};
-  const result = await postToSheet({type:'kiem_tra_batch', records, ts: new Date().toISOString()}, 60000);
-  if(!result.ok) reportWriteError('kiem_tra_batch', result.error);
-  return result;
+  try{
+    // Kiem tra trung theo khoa tu nhien (Dot+To may+He thong+Thiet bi+Vi tri+Lop ong+Ngay) truc tiep tren
+    // Supabase (khong dua vao state cuc bo, vi co the co ban ghi nguoi khac vua them ma may nay chua kip
+    // dong bo ve) — chi truy van theo (cac) dot_id lien quan de nhanh, khong keo toan bo bang KiemTra.
+    const dotIds = Array.from(new Set(records.map(r=>r.dotId).filter(Boolean)));
+    const existingKeys = new Set();
+    await Promise.all(dotIds.map(async (dotId)=>{
+      const existing = await sbSelect('kiem_tra', 'dot_id=eq.'+encodeURIComponent(dotId)+'&select=dot_id,to_may,he_thong,thiet_bi,vi_tri,lop_ong,ngay');
+      (existing||[]).forEach(e=>{ existingKeys.add([e.dot_id,e.to_may,e.he_thong,e.thiet_bi,e.vi_tri,e.lop_ong,e.ngay].join('|')); });
+    }));
+    const rowsToInsert = []; const skippedIds = []; const seenInBatch = new Set();
+    records.forEach(r=>{
+      const key = [r.dotId,r.toMay,r.heThong,r.thietBi,r.viTri,r.lopOng,r.ngay].join('|');
+      if(existingKeys.has(key) || seenInBatch.has(key)){ skippedIds.push(r.id); return; }
+      seenInBatch.add(key);
+      rowsToInsert.push(recordToRow('kiem_tra', r));
+    });
+    if(rowsToInsert.length){
+      const result = await sbUpsertMany('kiem_tra', rowsToInsert);
+      if(!result.ok){ reportWriteError('kiem_tra_batch', result.error); return {ok:false, error:result.error}; }
+    }
+    return {ok:true, written:rowsToInsert.length, skippedDup:skippedIds.length, skippedIds};
+  }catch(e){
+    const error = 'Lỗi mạng/CORS: '+(e.message||String(e));
+    reportWriteError('kiem_tra_batch', error);
+    return {ok:false, error};
+  }
 }
 // Cap nhat nhieu ban ghi Kiem tra DA CO SAN (sua lai so do) trong 1 request duy nhat — dung khi Luu bang
 // ma tran nhap tay co nhieu o da ton tai duoc sua cung luc. Khac voi syncKiemTraBatch (chi dung cho ban
-// ghi MOI, tu bo qua neu trung), ham nay cap nhat DUNG theo ID da biet, khong kiem tra trung khoa tu nhien.
+// ghi MOI, tu bo qua neu trung), ham nay ghi de theo dung ID da biet (upsert theo khoa chinh tren Supabase).
 async function syncKiemTraBatchUpdate(records){
   if(!records || !records.length) return {ok:true, updated:0};
-  const result = await postToSheet({type:'kiem_tra_batch_update', records, ts: new Date().toISOString()}, 60000);
-  if(!result.ok) reportWriteError('kiem_tra_batch_update', result.error);
-  return result;
+  const rows = records.map(r=>recordToRow('kiem_tra', r));
+  const result = await sbUpsertMany('kiem_tra', rows);
+  if(!result.ok){ reportWriteError('kiem_tra_batch_update', result.error); return {ok:false, error:result.error}; }
+  return {ok:true, updated:rows.length};
 }
 async function sendTelegramToMany(chatIds, text){
   if(!state.telegram.botToken || !chatIds || chatIds.length===0){
