@@ -390,6 +390,7 @@ let state = {
   activeCause:CAUSES[0].id,
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
   ktExportDotId:'', // '' = xuat tat ca cac dot (nhu truoc), hoac 1 dotId cu the de chi xuat rieng dot do — tranh tai/xuat toan bo lich su khong can thiet
+  scExportDotId:'', // tuong tu ktExportDotId nhung danh cho xuat Excel modul Sua chua & han
   // Bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) — thay cho form nhập từng dòng cũ khi gõ bàn phím
   ktMatrix:{active:false, mode:'utm', editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
@@ -3203,12 +3204,14 @@ window.setWeldField = async function(itemId, weldId, field, value){
   syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
 };
 // Xuat bao cao dep, theo tung Dot (1 sheet = 1 dot), dung de in/luu tru — thay cho ban bang du lieu tho truoc day
+window.setScExportDot = function(v){ state.scExportDotId = v; render(); };
 window.exportSuaChua = async function(){
   if(!(await withXLSXReady())) return;
-  if(!state.suaChua.length){ alert('Chưa có hạng mục sửa chữa nào để xuất.'); return; }
+  const sourceItems = state.scExportDotId ? state.suaChua.filter(item=>item.dotId===state.scExportDotId) : state.suaChua;
+  if(!sourceItems.length){ alert('Chưa có hạng mục sửa chữa nào để xuất (với đợt đang chọn).'); return; }
   const NCOL = 16;
   const byDot = {};
-  state.suaChua.forEach(item=>{ const k=item.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(item); });
+  sourceItems.forEach(item=>{ const k=item.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(item); });
   const dotIds = Object.keys(byDot).sort((a,b)=>{
     const da=state.dots.find(x=>x.id===a), db=state.dots.find(x=>x.id===b);
     return (da?da.ten:a).localeCompare(db?db.ten:b);
@@ -4637,8 +4640,17 @@ function renderSuaChua(){
     </div>`;
   }).join('');
 
+  const scExportDotOpts = state.dots.slice().sort((a,b)=>(b.ngayBatDau||'').localeCompare(a.ngayBatDau||'')).map(d=>`<option value="${esc(d.id)}" ${state.scExportDotId===d.id?'selected':''}>${esc(d.ten)} (${esc(d.trangThai)})</option>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Danh sách cần xử lý · Quản lý mối hàn</div><div class="page-title">Sửa chữa &amp; hàn</div></div>
-    <button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button></div>
+    <div class="head-actions">
+      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;">Xuất dữ liệu đợt:
+        <select onchange="setScExportDot(this.value)" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;">
+          <option value="" ${!state.scExportDotId?'selected':''}>— Tất cả các đợt —</option>
+          ${scExportDotOpts}
+        </select>
+      </label>
+      <button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>
+    </div></div>
   ${filterBar}
   <div class="settings-note" style="margin:14px 0 16px;">Danh sách tự động tạo từ kết quả kiểm tra ≤ 70% (trong chu kỳ hiện tại), gom theo Hệ thống — bấm vào một Hệ thống để xem chi tiết các hạng mục bên trong. Phương án mặc định "Cắt thay" (2 mối hàn chính thức w1/w2 + có thể thêm mối hàn biện pháp); có thể đổi sang "Hàn phủ"/"Sửa ốp" — khi đó theo dõi bằng 1 trạng thái đơn giản, không có mối hàn. Khi đợt <b>còn đang diễn ra</b>, mọi hạng mục vẫn hiển thị đầy đủ ở đây kể cả đã "Hoàn thành"/PAUT đạt. Chỉ khi <b>đóng đợt</b> (ở tab Đợt kiểm tra/sửa chữa), các hạng mục mới chuyển hẳn sang tab Lịch sử &amp; xu hướng.</div>
   ${groupsHtml || '<div class="empty">Không có hạng mục nào khớp bộ lọc hiện tại.</div>'}`;
