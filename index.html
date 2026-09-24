@@ -1003,7 +1003,7 @@ function recordToRow(type, record){
   const r = record||{};
   switch(type){
     case 'user': return {email:String(r.email||'').toLowerCase(), name:r.name||'', pass_hash:r.passHash||'', role:r.role||'ky_thuat'};
-    case 'dot': return {id:r.id, ten:r.ten||'', to_may:r.toMay||'', ngay_bat_dau:r.ngayBatDau||null, ngay_ket_thuc:r.ngayKetThuc||null, trang_thai:r.trangThai||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', ten_don_vi_thi_cong:r.donViThiCong||''};
+    case 'dot': return {id:r.id, ten:r.ten||'', to_may:r.toMay||'', ngay_bat_dau:r.ngayBatDau||null, ngay_ket_thuc:r.ngayKetThuc||null, han_ke_hoach:r.hanKeHoach||null, trang_thai:r.trangThai||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', ten_don_vi_thi_cong:r.donViThiCong||''};
     case 'danh_muc': return {id:r.id, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri_tu:r.viTriTu||'', vi_tri_den:r.viTriDen||'', lop_ong_tu:r.lopOngTu||'', lop_ong_den:r.lopOngDen||'', vung:r.vung||'', duong_kinh:r.duongKinh||'', chieu_day:r.chieuDay||'', vat_lieu:r.vatLieu||'', ghi_chu:r.ghiChu||''};
     case 'kiem_tra': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vung:r.vung||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', duong_kinh:r.duongKinh||'', chieu_day_tk:r.chieuDayTK||'', chieu_day_do:r.chieuDayDo||'', phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang:r.ngoaiDang||'', ngay:r.ngay||null, nguoi_kiem_tra:r.nguoiKiemTra||''};
     case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null};
@@ -1026,7 +1026,7 @@ function rowToSheetDict(kind, row){
   const boolX = v => v ? 'X' : '';
   switch(kind){
     case 'users': return {'Email':row.email, 'Họ tên':row.name, 'PassHash':row.pass_hash, 'Vai trò':row.role};
-    case 'dot': return {'Mã đợt':row.id, 'Tên đợt':row.ten, 'Tổ máy':row.to_may, 'Ngày bắt đầu':row.ngay_bat_dau||'', 'Ngày kết thúc':row.ngay_ket_thuc||'', 'Trạng thái':row.trang_thai, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Tên đơn vị thi công':row.ten_don_vi_thi_cong};
+    case 'dot': return {'Mã đợt':row.id, 'Tên đợt':row.ten, 'Tổ máy':row.to_may, 'Ngày bắt đầu':row.ngay_bat_dau||'', 'Ngày kết thúc':row.ngay_ket_thuc||'', 'Hạn hoàn thành theo kế hoạch':row.han_ke_hoach||'', 'Trạng thái':row.trang_thai, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Tên đơn vị thi công':row.ten_don_vi_thi_cong};
     case 'danh_muc': return {'Mã DM':row.id, 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí từ':row.vi_tri_tu, 'Vị trí đến':row.vi_tri_den, 'Lớp ống từ':row.lop_ong_tu, 'Lớp ống đến':row.lop_ong_den, 'Vùng vật liệu':row.vung, 'Đường kính':row.duong_kinh, 'Chiều dày':row.chieu_day, 'Vật liệu':row.vat_lieu, 'Ghi chú':row.ghi_chu};
     case 'kiem_tra': return {'Mã KT':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vùng':row.vung, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Đường kính':row.duong_kinh, 'Chiều dày TK':row.chieu_day_tk, 'Chiều dày đo':row.chieu_day_do, '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng':row.ngoai_dang, 'Ngày kiểm tra':row.ngay||'', 'Người kiểm tra':row.nguoi_kiem_tra};
     case 'sua_chua_item': return {'Mã hạng mục':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Chu kỳ':row.chu_ky, 'Phương án':row.phuong_an, 'Trạng thái':row.trang_thai, 'Ngày hoàn thành':row.ngay_hoan_thanh||'', '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng gần nhất':row.ngoai_dang_gan_nhat, 'Ghi chú xóa mối hàn':row.ghi_chu_xoa_moi_han, 'Cho phép thi công':boolX(row.cho_phep_thi_cong), 'Người cho phép thi công':row.nguoi_cho_phep, 'Thời gian cho phép thi công':row.thoi_gian_cho_phep||''};
@@ -1125,7 +1125,7 @@ function mapSheetCauHinh(rows){
 function mapSheetDot(rows){
   return rows.map(r=>({
     id:String(r['Mã đợt']||''), ten:String(r['Tên đợt']||''), toMay:String(r['Tổ máy']||''),
-    ngayBatDau:String(r['Ngày bắt đầu']||''), ngayKetThuc:String(r['Ngày kết thúc']||''), trangThai:String(r['Trạng thái']||''),
+    ngayBatDau:String(r['Ngày bắt đầu']||''), ngayKetThuc:String(r['Ngày kết thúc']||''), hanKeHoach:String(r['Hạn hoàn thành theo kế hoạch']||''), trangThai:String(r['Trạng thái']||''),
     tenHangMucCongTrinh:String(r['Tên hạng mục công trình']||''), tenGoiThau:String(r['Tên gói thầu']||''), donViThiCong:String(r['Tên đơn vị thi công']||'')
   })).filter(d=>d.id);
 }
@@ -1505,8 +1505,9 @@ window.addDot = async function(){
   if(!can('dot')){ noPermAlert(); return; }
   const g=id=>document.getElementById(id).value.trim();
   const ten=g('dot-ten'), toMay=g('dot-tomay'), ngayBatDau=g('dot-batdau')||todayStr();
+  const hanKeHoach=g('dot-hankehoach')||'';
   if(!ten || !toMay){ alert('Vui lòng nhập Tên đợt và Tổ máy.'); return; }
-  const dot = {id:genId('DOT'), ten, toMay, ngayBatDau, ngayKetThuc:'', trangThai:'Đang diễn ra',
+  const dot = {id:genId('DOT'), ten, toMay, ngayBatDau, ngayKetThuc:'', hanKeHoach, trangThai:'Đang diễn ra',
     tenHangMucCongTrinh:g('dot-hangmuc'), tenGoiThau:g('dot-goithau'), donViThiCong:g('dot-donvi')};
   state.dots.unshift(dot);
   await persist('dots', state.dots, true);
@@ -1526,6 +1527,14 @@ window.reopenDot = async function(id){
   if(!can('dot')){ noPermAlert(); return; }
   const d = state.dots.find(x=>x.id===id); if(!d) return;
   d.trangThai='Đang diễn ra'; d.ngayKetThuc='';
+  await persist('dots', state.dots, true);
+  syncToSheet('dot', d);
+  render();
+};
+window.setHanKeHoach = async function(id, value){
+  if(!can('dot')){ noPermAlert(); return; }
+  const d = state.dots.find(x=>x.id===id); if(!d) return;
+  d.hanKeHoach = value||'';
   await persist('dots', state.dots, true);
   syncToSheet('dot', d);
   render();
@@ -3958,6 +3967,7 @@ function dotForm(){
       <datalist id="tomay-list">${toMayOpts.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
     </div>
     <div class="field"><label>Ngày bắt đầu</label><input id="dot-batdau" type="date" value="${todayStr()}"></div>
+    <div class="field"><label>Hạn hoàn thành theo kế hoạch <span style="color:var(--muted);font-weight:400;">(ngày cam kết/hợp đồng — khác với "Ngày kết thúc" chỉ điền khi đóng đợt thực tế)</span></label><input id="dot-hankehoach" type="date"></div>
     <div class="field full"><label>Tên hạng mục công trình <span style="color:var(--muted);font-weight:400;">(dùng chung cho Nhật ký thi công của cả đợt, chỉ nhập 1 lần ở đây)</span></label><input id="dot-hangmuc" placeholder="VD: Sửa chữa ống lò hơi tổ máy 1"></div>
     <div class="field"><label>Tên gói thầu</label><input id="dot-goithau"></div>
     <div class="field"><label>Tên đơn vị thi công</label><input id="dot-donvi"></div>
@@ -3970,6 +3980,12 @@ function renderDots(){
     return `<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(d.id)}</span>${esc(d.ten)} <span style="color:var(--muted);font-weight:400;">· ${esc(d.toMay)}</span></div><span class="status ${st}">${esc(d.trangThai)}</span></div>
     <div class="record-meta"><span>Bắt đầu: ${fmtDate(d.ngayBatDau)}</span>${d.ngayKetThuc?`<span>Kết thúc: ${fmtDate(d.ngayKetThuc)}</span>`:''}<span>${soKT} lượt kiểm tra</span></div>
     ${(d.tenHangMucCongTrinh||d.tenGoiThau||d.donViThiCong)?`<div class="record-meta">${d.tenHangMucCongTrinh?`<span>Hạng mục công trình: ${esc(d.tenHangMucCongTrinh)}</span>`:''}${d.tenGoiThau?`<span>Gói thầu: ${esc(d.tenGoiThau)}</span>`:''}${d.donViThiCong?`<span>Đơn vị thi công: ${esc(d.donViThiCong)}</span>`:''}</div>`:''}
+    <div class="record-meta" style="align-items:center;">
+      <span>Hạn hoàn thành theo kế hoạch:</span>
+      ${can('dot')
+        ? `<input type="date" value="${esc(d.hanKeHoach||'')}" onchange="setHanKeHoach('${d.id}', this.value)" style="padding:2px 6px;font-size:12px;">`
+        : `<span>${d.hanKeHoach?fmtDate(d.hanKeHoach):'Chưa đặt'}</span>`}
+    </div>
     <div class="record-actions">${can('dot') ? (d.trangThai==='Đang diễn ra'?`<button class="mini-btn" onclick="closeDot('${d.id}')">Đóng đợt (chuyển vào lịch sử)</button>`:`<button class="mini-btn" onclick="reopenDot('${d.id}')">Mở lại đợt</button>`) : ''}${can('xoaDot')?`<button class="mini-btn" onclick="deleteDot('${d.id}')">Xóa đợt</button>`:''}</div>
     </div>`;
   }).join('');
@@ -4016,6 +4032,7 @@ function computeDotStats(dotId){
   const nTotal = sc.length, nDone = sc.filter(s=>s.trangThai==='Hoàn thành').length;
   const dot = state.dots.find(d=>d.id===dotId);
   let duKien = null;
+  let yeuCau = null;
   // Cach 2 (da thong nhat voi anh): dung TOC DO 7 NGAY GAN NHAT (theo MOI HAN, khong phai hang muc) thay vi
   // trung binh tu dau den gio — phan anh dung nang suat HIEN TAI cua doi thi cong (neu tang/giam quan so,
   // doi ngay theo), tranh bi "keo thap" boi giai doan dau moi trien khai con cham/chua on dinh. Moc tinh
@@ -4038,14 +4055,31 @@ function computeDotStats(dotId){
           const daysLeft = weldConLai/speed;
           duKien = {date:new Date(Date.now()+daysLeft*24*60*60*1000), speed, weldConLai, recentDone, recentWindowDays};
         }
+        // Huong B: so sanh toc do CAN THIET (de kip Han hoan thanh theo ke hoach, cong dinh) voi toc do
+        // THUC TE 7 ngay gan nhat (dung chung 1 bien recentDone/recentWindowDays voi uoc tinh o tren, dam
+        // bao 2 chi so khong bao gio mau thuan nhau). Chi tinh khi dot co dat "Han hoan thanh theo ke hoach".
+        if(dot.hanKeHoach){
+          const deadlineTime = new Date(dot.hanKeHoach+'T23:59:59').getTime();
+          const daysLeftToDeadline = (deadlineTime - Date.now())/(1000*60*60*24);
+          const speedActual = recentDone>0 ? recentDone/recentWindowDays : 0;
+          if(daysLeftToDeadline<=0){
+            yeuCau = {qua_han:true, weldConLai, speedActual};
+          } else {
+            const requiredSpeed = weldConLai/daysLeftToDeadline;
+            yeuCau = {daysLeftToDeadline, requiredSpeed, speedActual, weldConLai, onTrack: speedActual>=requiredSpeed};
+          }
+        }
       }
+    } else if(dot.hanKeHoach){
+      // Da het moi han (khong con viec) nhung van co han ke hoach -> coi nhu da dat tien do, khong can canh bao.
+      yeuCau = null;
     }
   }
   return {uniquePipes, catThay:catThay.length, hanPhu:hanPhu.length, suaOp:suaOp.length,
     catThayDone:catThay.filter(s=>s.trangThai==='Hoàn thành').length,
     hanPhuDone:hanPhu.filter(s=>s.trangThai==='Hoàn thành').length,
     suaOpDone:suaOp.filter(s=>s.trangThai==='Hoàn thành').length,
-    weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, chuaChoPhep, firstWeldTime,
+    weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, yeuCau, chuaChoPhep, firstWeldTime,
     pipeRows, catThayItems:catThay, hanPhuItems:hanPhu, suaOpItems:suaOp, weldRows};
 }
 function ovStatCard(dotId, metric, cls, label, valHtml){
@@ -4088,6 +4122,17 @@ function renderDotDashboard(dotId){
       : ('Khoảng <b>'+s.duKien.date.toLocaleDateString('vi-VN')+'</b> — dựa trên tốc độ '+s.duKien.speed.toFixed(2)+' mối/ngày trong '+Math.round(s.duKien.recentWindowDays)+' ngày gần nhất ('+s.duKien.recentDone+' mối hàn), còn '+s.duKien.weldConLai+' mối hàn. Tự cập nhật liên tục, có thể thay đổi nếu phát hiện thêm hư hỏng mới hoặc tốc độ thi công thay đổi.');
   }
   const duKienNote = s.chuaChoPhep>0 ? '<div style="font-size:11px;color:var(--dim);margin-top:6px;">* Chỉ tính trên khối lượng đã được "Cho phép thi công" — chưa gồm '+s.chuaChoPhep+' hạng mục đang chờ duyệt, ngày hoàn thành thực tế có thể muộn hơn khi các hạng mục này được xác nhận.</div>' : '';
+  let yeuCauHtml = '';
+  if(dot.hanKeHoach){
+    if(!s.yeuCau){
+      yeuCauHtml = `<div class="stat-card" style="grid-column:span 2;"><div class="lbl">So với hạn hoàn thành theo kế hoạch (${fmtDate(dot.hanKeHoach)})</div><div style="font-size:13.5px;margin-top:7px;">Đã hoàn thành toàn bộ mối hàn — không còn khối lượng cần theo dõi tiến độ.</div></div>`;
+    } else if(s.yeuCau.qua_han){
+      yeuCauHtml = `<div class="stat-card danger" style="grid-column:span 2;"><div class="lbl">So với hạn hoàn thành theo kế hoạch (${fmtDate(dot.hanKeHoach)})</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;"><b>Đã quá hạn kế hoạch</b> nhưng còn <b>${s.yeuCau.weldConLai}</b> mối hàn chưa hàn xong. Tốc độ thực tế hiện nay: ${s.yeuCau.speedActual.toFixed(2)} mối/ngày.</div></div>`;
+    } else {
+      const cls = s.yeuCau.onTrack ? '' : 'danger';
+      yeuCauHtml = `<div class="stat-card ${cls}" style="grid-column:span 2;"><div class="lbl">So với hạn hoàn thành theo kế hoạch (${fmtDate(dot.hanKeHoach)})</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">Còn <b>${Math.ceil(s.yeuCau.daysLeftToDeadline)}</b> ngày, cần tốc độ <b>${s.yeuCau.requiredSpeed.toFixed(2)} mối/ngày</b> để hàn hết ${s.yeuCau.weldConLai} mối hàn còn lại. Tốc độ thực tế 7 ngày gần nhất: <b>${s.yeuCau.speedActual.toFixed(2)} mối/ngày</b> — ${s.yeuCau.onTrack ? 'đang <b>đạt/vượt</b> yêu cầu.' : '<b>chưa đạt</b> yêu cầu, cần đẩy nhanh tiến độ hoặc bổ sung nhân lực.'}</div></div>`;
+    }
+  }
   const expandedMetric = state.ovExpandedMetric[dotId];
   const isOneOf = (m1)=> expandedMetric===m1;
   return `<div class="repair-item" style="margin-bottom:18px;">
@@ -4107,6 +4152,7 @@ function renderDotDashboard(dotId){
       ${ovStatCard(dot.id,'welds','','Mối hàn đã hàn/tổng (Cắt thay)', s.weldHanDone+'/'+s.weldTotal)}
       ${ovStatCard(dot.id,'welds','','Mối hàn đã PAUT đạt/Đã hàn', s.weldPautDone+'/'+s.weldHanDone)}
       <div class="stat-card" style="grid-column:span 2;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div>${duKienNote}</div>
+      ${yeuCauHtml}
     </div>
     ${isOneOf('welds') ? renderOvMetricDetail(dot.id, s) : ''}
     <div class="section-label" style="margin-top:16px;">Vật tư đã sử dụng</div>
