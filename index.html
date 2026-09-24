@@ -930,6 +930,25 @@ async function sbSelect(table, query){
     return await res.json();
   }catch(e){ console.error('Lỗi đọc bảng '+table+' trên Supabase:', e); return null; }
 }
+// Supabase/PostgREST MAC DINH chi tra ve toi da 1000 dong moi lan doc (du khong loi gi, response van
+// "thanh cong" nhung chi co 1000/N dong dau) — cac bang tang truong theo thoi gian (KiemTra, SuaChua weld,
+// NhatKy...) som muon se vuot qua 1000 dong va bi cat mat du lieu ma khong bao loi, day la nguyen nhan
+// gay "thieu du lieu" ngay ca khi da sua het loi 401. Ham nay tu doc theo trang 1000 dong/lan cho toi khi
+// het du lieu (trang cuoi tra ve it hon page size), gop lai thanh 1 mang day du truoc khi tra ve.
+async function sbSelectAll(table, query){
+  const PAGE = 1000;
+  let offset = 0;
+  let all = [];
+  while(true){
+    const pageQuery = (query?query+'&':'')+'limit='+PAGE+'&offset='+offset;
+    const rows = await sbSelect(table, pageQuery);
+    if(rows===null) return offset===0 ? null : all; // loi giua chung: tra ve nhung gi da co thay vi mat het
+    all = all.concat(rows);
+    if(rows.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
+}
 async function sbErrMsg(res){ try{ const j = await res.json(); return j.message || j.error_description || j.hint || ('HTTP '+res.status); }catch(e){ return 'HTTP '+res.status; } }
 async function sbUpsert(table, row){
   try{
@@ -1041,18 +1060,19 @@ async function fetchSheet(type){
   }catch(e){ console.error('Không lấy được dữ liệu (Supabase):', type, e); return null; }
 }
 let _lastSyncError = '';
-// Tai toan bo du lieu (thay cho ?type=all cua Apps Script cu) — goi song song toi tat ca cac bang Supabase
-// + rieng hinh_anh van goi Apps Script (xem ghi chu o dau file). Tra ve DUNG cau truc {ok, users, dot,
-// danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, hinh_anh, cau_hinh,
-// anhFolderUrl} nhu ban cu, de syncFromSheetInBackground() ben duoi khong phai doi gi.
+// Tai toan bo du lieu (thay cho ?type=all cua Apps Script cu) — goi song song toi tat ca cac bang Supabase,
+// dung sbSelectAll (phan trang) de KHONG bi cat mat du lieu voi bang qua 1000 dong (KiemTra, SuaChua weld...).
+// KHONG con goi Apps Script (?type=all) o day nua — truoc day goi kem trong Promise.all nay de lay rieng
+// hinh_anh, nhung Apps Script co the mat 20-30 GIAY (cold start + doc nhieu sheet), khien CA app bi treo
+// theo dung luc do moi lan tai/dong bo, du Supabase chi mat duoi 1 giay. Hinh anh gio duoc tai RIENG, KHONG
+// chan man hinh chinh (xem syncHinhAnhInBackground ben duoi).
 async function fetchSheetAll(){
   try{
-    const [users, dot, danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, cau_hinh, hinhAnhRes] = await Promise.all([
-      sbSelect('users','select=*'), sbSelect('dots','select=*'), sbSelect('danh_muc','select=*'),
-      sbSelect('kiem_tra','select=*'), sbSelect('sua_chua_hang_muc','select=*'), sbSelect('sua_chua_weld','select=*'),
-      sbSelect('vat_tu','select=*'), sbSelect('tai_lieu','select=*'), sbSelect('nhat_ky_thi_cong','select=*'),
-      sbSelect('cau_hinh','select=*'),
-      fetchWithTimeout(SHEET_URL+'?type=all', 30000).then(r=>r.ok?r.json():null).catch(()=>null)
+    const [users, dot, danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, cau_hinh] = await Promise.all([
+      sbSelectAll('users','select=*'), sbSelectAll('dots','select=*'), sbSelectAll('danh_muc','select=*'),
+      sbSelectAll('kiem_tra','select=*'), sbSelectAll('sua_chua_hang_muc','select=*'), sbSelectAll('sua_chua_weld','select=*'),
+      sbSelectAll('vat_tu','select=*'), sbSelectAll('tai_lieu','select=*'), sbSelectAll('nhat_ky_thi_cong','select=*'),
+      sbSelectAll('cau_hinh','select=*')
     ]);
     if(users===null){ _lastSyncError = 'Không kết nối được tới Supabase (kiểm tra mạng, hoặc URL/API key đã đúng chưa)'; return null; }
     _lastSyncError = '';
@@ -1067,9 +1087,7 @@ async function fetchSheetAll(){
       vat_tu: (vat_tu||[]).map(r=>rowToSheetDict('vat_tu', r)),
       tai_lieu: (tai_lieu||[]).map(r=>rowToSheetDict('tai_lieu', r)),
       nhat_ky: (nhat_ky||[]).map(r=>rowToSheetDict('nhat_ky', r)),
-      cau_hinh: (cau_hinh||[]).map(r=>rowToSheetDict('cau_hinh', r)),
-      hinh_anh: (hinhAnhRes && hinhAnhRes.ok) ? (hinhAnhRes.hinh_anh||[]) : [],
-      anhFolderUrl: (hinhAnhRes && hinhAnhRes.ok) ? (hinhAnhRes.anhFolderUrl||'') : ''
+      cau_hinh: (cau_hinh||[]).map(r=>rowToSheetDict('cau_hinh', r))
     };
   }catch(e){
     _lastSyncError = 'Lỗi mạng/CORS: '+(e.message||String(e));
@@ -1346,7 +1364,6 @@ async function syncFromSheetInBackground(){
     return;
   }
   state.syncErrorDetail = '';
-  state.anhFolderUrl = all.anhFolderUrl || '';
   const offlineSheetNames = [];
   const applyDefensive = async (key, sheetRows, mapFn, storageKey, label)=>{
     if(hasPendingOutbox(key)){
@@ -1393,13 +1410,35 @@ async function syncFromSheetInBackground(){
   state.offlineVatTu = await applyDefensive('vatTu', all.vat_tu, mapSheetVatTu, 'vat-tu', 'Vật tư (VatTu)');
   state.offlineTaiLieu = await applyDefensive('taiLieu', all.tai_lieu, mapSheetTaiLieu, 'tai-lieu', 'Tài liệu (TaiLieu)');
   state.offlineNhatKy = await applyDefensive('nhatKy', all.nhat_ky, mapSheetNhatKy, 'nhat-ky', 'Nhật ký thi công (NhatKyThiCong)');
-  state.offlineHinhAnh = await applyDefensive('hinhAnh', all.hinh_anh, mapSheetHinhAnh, 'hinh-anh', 'Hình ảnh (HinhAnh)');
 
   state.telegram = mapSheetCauHinh(all.cau_hinh||[]);
   state.offlineSheetNames = offlineSheetNames;
   state.syncing = false;
   state.lastSyncAt = new Date();
   render();
+  // Anh (Google Drive/Apps Script) tai RIENG, KHONG await o day — Apps Script co the mat 20-30 giay (cold
+  // start + doc nhieu sheet de loc ra hinh_anh), truoc day goi chung trong 1 Promise.all() voi Supabase
+  // khien CA MAN HINH bi treo cho toi khi Apps Script xong, du du lieu Supabase (phan quan trong, hay doi)
+  // da san sang tu rat lau. Goi khong cho (fire-and-forget) de nguoi dung thay du lieu chinh ngay lap tuc,
+  // rieng anh se tu hien ra vai chuc giay sau khi tai xong, khong lam gian doan thao tac dang lam.
+  syncHinhAnhInBackground();
+}
+async function syncHinhAnhInBackground(){
+  if(hasPendingOutbox('hinhAnh')) return; // co anh vua upload chua gui xong — khong ghi de
+  try{
+    const res = await fetchWithTimeout(SHEET_URL+'?type=all', 45000);
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data || !data.ok) return;
+    state.anhFolderUrl = data.anhFolderUrl || '';
+    const mapped = mapSheetHinhAnh(data.hinh_anh||[]);
+    if(mapped.length>0 || state.hinhAnh.length===0){
+      state.hinhAnh = mapped;
+      await persist('hinh-anh', state.hinhAnh, true);
+      state.offlineHinhAnh = false;
+      render();
+    }
+  }catch(e){ console.warn('Không tải được ảnh Nhật ký thi công (Apps Script) lần này:', e); }
 }
 
 function seedDanhMuc(){
