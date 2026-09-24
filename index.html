@@ -394,7 +394,8 @@ let state = {
   // Bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) — thay cho form nhập từng dòng cũ khi gõ bàn phím
   ktMatrix:{active:false, mode:'utm', editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
-  scFilter:{dotId:'',toMay:'',heThong:'',thietBi:'',phuongAn:''},
+  scFilter:{dotId:'',toMay:'',heThong:'',thietBi:'',phuongAn:'',weldStatus:''},
+  scViewMode:'group', // 'group' = xem theo hang muc (nhu cu), 'welds' = danh sach phang theo tung moi han (checklist hien truong)
   ovYear:null, ovDot:null, ovMode:'current',
   expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
   scExpandedHeThong:null, ktExpandedHeThong:null,
@@ -4614,12 +4615,14 @@ function renderSuaChua(){
     (!state.scFilter.thietBi||i.thietBi===state.scFilter.thietBi) &&
     (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn)
   );
+  const weldStatusOpts = [['chua_han','Chưa hàn'],['da_han_chua_paut','Đã hàn — chưa PAUT'],['paut_dat','PAUT đạt']];
   const filterBar = `<div class="form-panel" style="padding:12px 16px;">
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Tổ máy</label><div style="display:flex;gap:6px;align-items:center;"><select style="flex:1;" onchange="setScFilter('toMay', this.value)"><option value="">— Tất cả —</option>${toMayOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.toMay?'selected':''}>${esc(v)}</option>`).join('')}</select>${voiceMicBtnHtml('voiceSearchScToMay(this)','Nói tên tổ máy để lọc')}</div></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Hệ thống</label><select onchange="setScFilter('heThong', this.value); setScFilter('thietBi','')"><option value="">— Tất cả —</option>${heThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Thiết bị</label><select onchange="setScFilter('thietBi', this.value)"><option value="">— Tất cả —</option>${thietBiOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.thietBi?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
       <div class="field" style="min-width:180px;flex:1;"><label>Lọc theo Phương án</label><select onchange="setScFilter('phuongAn', this.value)"><option value="">— Tất cả —</option>${phuongAnOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.phuongAn?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
+      ${state.scViewMode==='welds' ? `<div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Trạng thái mối hàn</label><select onchange="setScFilter('weldStatus', this.value)"><option value="">— Tất cả —</option>${weldStatusOpts.map(([v,l])=>`<option value="${v}" ${v===state.scFilter.weldStatus?'selected':''}>${l}</option>`).join('')}</select></div>` : ''}
     </div>
   </div>`;
 
@@ -4649,12 +4652,100 @@ function renderSuaChua(){
           ${scExportDotOpts}
         </select>
       </label>
-      <button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>
+      <button class="btn-ghost" onclick="toggleScViewMode()">${state.scViewMode==='welds'?'📋 Xem theo hạng mục':'🔩 Xem theo mối hàn (checklist)'}</button>
+      ${state.scViewMode==='welds' ? `<button class="btn-ghost" onclick="exportScWeldList()">Xuất Excel (danh sách mối hàn)</button>` : `<button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>`}
     </div></div>
   ${filterBar}
-  <div class="settings-note" style="margin:14px 0 16px;">Danh sách tự động tạo từ kết quả kiểm tra ≤ 70% (trong chu kỳ hiện tại), gom theo Hệ thống — bấm vào một Hệ thống để xem chi tiết các hạng mục bên trong. Phương án mặc định "Cắt thay" (2 mối hàn chính thức w1/w2 + có thể thêm mối hàn biện pháp); có thể đổi sang "Hàn phủ"/"Sửa ốp" — khi đó theo dõi bằng 1 trạng thái đơn giản, không có mối hàn. Khi đợt <b>còn đang diễn ra</b>, mọi hạng mục vẫn hiển thị đầy đủ ở đây kể cả đã "Hoàn thành"/PAUT đạt. Chỉ khi <b>đóng đợt</b> (ở tab Đợt kiểm tra/sửa chữa), các hạng mục mới chuyển hẳn sang tab Lịch sử &amp; xu hướng.</div>
-  ${groupsHtml || '<div class="empty">Không có hạng mục nào khớp bộ lọc hiện tại.</div>'}`;
+  ${state.scViewMode==='welds'
+    ? `<div class="settings-note" style="margin:14px 0 16px;">Danh sách phẳng theo TỪNG mối hàn (chỉ áp dụng cho hạng mục phương án "Cắt thay") — dùng để đội thi công/PAUT rà theo khu vực xem còn mối nào chưa hàn hoặc đã hàn nhưng chưa nghiệm thu PAUT. Tích chọn trực tiếp ngay tại đây, không cần mở từng hạng mục.</div>${renderScWeldList(filtered)}`
+    : `<div class="settings-note" style="margin:14px 0 16px;">Danh sách tự động tạo từ kết quả kiểm tra ≤ 70% (trong chu kỳ hiện tại), gom theo Hệ thống — bấm vào một Hệ thống để xem chi tiết các hạng mục bên trong. Phương án mặc định "Cắt thay" (2 mối hàn chính thức w1/w2 + có thể thêm mối hàn biện pháp); có thể đổi sang "Hàn phủ"/"Sửa ốp" — khi đó theo dõi bằng 1 trạng thái đơn giản, không có mối hàn. Khi đợt <b>còn đang diễn ra</b>, mọi hạng mục vẫn hiển thị đầy đủ ở đây kể cả đã "Hoàn thành"/PAUT đạt. Chỉ khi <b>đóng đợt</b> (ở tab Đợt kiểm tra/sửa chữa), các hạng mục mới chuyển hẳn sang tab Lịch sử &amp; xu hướng.</div>
+  ${groupsHtml || '<div class="empty">Không có hạng mục nào khớp bộ lọc hiện tại.</div>'}`}`;
 }
+window.toggleScViewMode = function(){ state.scViewMode = state.scViewMode==='welds' ? 'group' : 'welds'; render(); };
+// Gom danh sach moi han PHANG (khong qua buoc mo hang muc) tu cac hang muc da duoc loc (filtered, tinh san
+// o renderSuaChua) — chi lay hang muc phuong an "Cat thay" vi chi phuong an nay co khung moi han. Dung
+// chung logic quyen/khoa thi cong (thiCongLocked) voi the "hang muc" de KHONG cho sua qua checklist nay
+// neu chua duoc "Cho phep thi cong", tranh di vong qua kiem soat da co.
+function scWeldRowsOf(filteredItems){
+  const curRole = state.session ? state.session.role : '';
+  const isContractor = curRole === 'ktv_han_cat';
+  const rows = [];
+  filteredItems.forEach(item=>{
+    if((item.phuongAn||'Cắt thay')!=='Cắt thay') return;
+    const thiCongLocked = isContractor && !item.choPhepThiCong;
+    (item.welds||[]).forEach(w=>{
+      rows.push({item, w, thiCongLocked});
+    });
+  });
+  const status = state.scFilter.weldStatus;
+  const filteredRows = rows.filter(({w})=>{
+    if(status==='chua_han') return !w.daHan;
+    if(status==='da_han_chua_paut') return w.daHan && w.paut!=='Đạt';
+    if(status==='paut_dat') return w.paut==='Đạt';
+    return true;
+  });
+  filteredRows.sort((a,b)=> (a.item.heThong||'').localeCompare(b.item.heThong||'') || (a.item.thietBi||'').localeCompare(b.item.thietBi||'') || String(a.item.viTri||'').localeCompare(String(b.item.viTri||''),'vi',{numeric:true}) || a.w.id.localeCompare(b.w.id));
+  return filteredRows;
+}
+function renderScWeldList(filteredItems){
+  const rows = scWeldRowsOf(filteredItems);
+  if(!rows.length) return '<div class="empty">Không có mối hàn nào khớp bộ lọc hiện tại.</div>';
+  const canPaut = can('paut');
+  const groups = {};
+  rows.forEach(r=>{ const k=r.item.heThong||'(không có hệ thống)'; if(!groups[k]) groups[k]=[]; groups[k].push(r); });
+  const heThongNames = Object.keys(groups).sort((a,b)=>a.localeCompare(b));
+  return heThongNames.map(ht=>{
+    const groupRows = groups[ht];
+    const chuaHan = groupRows.filter(r=>!r.w.daHan).length;
+    const chuaPaut = groupRows.filter(r=>r.w.daHan && r.w.paut!=='Đạt').length;
+    const rowsHtml = groupRows.map(({item, w, thiCongLocked})=>{
+      const canHanCat = can('hanCat') && !thiCongLocked;
+      const disHanCat = canHanCat ? '' : 'disabled';
+      const disPaut = canPaut ? '' : 'disabled';
+      return `<div class="weld-row">
+        <span class="tag-chip" title="Hạng mục">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)}</span>
+        <span class="weld-id">${esc(w.id)}</span>
+        <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
+        <label class="weld-chk"><input type="checkbox" ${disHanCat} ${w.daCat?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daCat')"> Đã cắt</label>
+        <label class="weld-chk"><input type="checkbox" ${disHanCat} ${w.daHan?'checked':''} onchange="toggleWeldFlag('${item.id}','${w.id}','daHan')"> Đã hàn</label>
+        <select ${disPaut} onchange="setWeldPaut('${item.id}','${w.id}', this.value)" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;">
+          <option ${w.paut==='Chưa kiểm tra'?'selected':''}>Chưa kiểm tra</option>
+          <option ${w.paut==='Đạt'?'selected':''}>Đạt</option>
+          <option ${w.paut==='Lỗi'?'selected':''}>Lỗi</option>
+        </select>
+        <input placeholder="Thợ hàn" ${disHanCat} value="${esc(w.thoHan)}" style="width:110px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;" onchange="setWeldField('${item.id}','${w.id}','thoHan', this.value)">
+        ${thiCongLocked?'<span style="font-size:10.5px;color:var(--danger);">⛔ Chưa cho phép thi công</span>':''}
+      </div>`;
+    }).join('');
+    return `<div class="repair-item" style="margin-bottom:10px;">
+      <div class="repair-head" style="cursor:default;">
+        <div><b style="font-size:14px;">${esc(ht)}</b> <span class="progress-mini">· ${groupRows.length} mối hàn · ${chuaHan} chưa hàn · ${chuaPaut} chưa PAUT đạt</span></div>
+      </div>
+      <div style="margin-top:10px;">${rowsHtml}</div>
+    </div>`;
+  }).join('');
+}
+window.exportScWeldList = async function(){
+  if(!(await withXLSXReady())) return;
+  const allActive = state.suaChua.filter(item=>{ const d = state.dots.find(x=>x.id===item.dotId); return !d || d.trangThai==='Đang diễn ra'; });
+  const filtered = allActive.filter(i=>
+    (!state.scFilter.toMay||i.toMay===state.scFilter.toMay) &&
+    (!state.scFilter.heThong||i.heThong===state.scFilter.heThong) &&
+    (!state.scFilter.thietBi||i.thietBi===state.scFilter.thietBi) &&
+    (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn)
+  );
+  const rows = scWeldRowsOf(filtered);
+  if(!rows.length){ alert('Không có mối hàn nào khớp bộ lọc hiện tại để xuất.'); return; }
+  const data = rows.map(({item,w})=>({
+    'Hệ thống': item.heThong, 'Thiết bị': item.thietBi, 'Vị trí': item.viTri, 'Lớp ống': item.lopOng,
+    'Mã hạng mục': item.id, 'Mã mối hàn': w.id, 'Loại': w.loai==='bien_phap'?'Biện pháp':'Chính thức',
+    'Đã cắt': w.daCat?'X':'', 'Đã hàn': w.daHan?'X':'', 'PAUT': w.paut, 'Thợ hàn': w.thoHan,
+    'Ngày hàn': fmtDate(w.ngayHan), 'Ghi chú': w.ghiChu
+  }));
+  const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new();
+  ws['!cols'] = [{wch:16},{wch:14},{wch:8},{wch:8},{wch:26},{wch:14},{wch:11},{wch:8},{wch:8},{wch:12},{wch:14},{wch:12},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws,'MoiHan'); XLSX.writeFile(wb,'danh-sach-moi-han-can-xu-ly.xlsx');
+};
 
 /* ---------- LỊCH SỬ & XU HƯỚNG ---------- */
 function pipeHistoryMap(){
