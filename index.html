@@ -429,7 +429,7 @@ function uniq(arr){ return [...new Set(arr)]; }
 
 /* ---------- GIỌNG NÓI (Web Speech API) — đọc để điền liệu + tra cứu bằng giọng nói ---------- */
 /* Ghi chú: dùng cho môi trường công trường nhiều bụi, tay có thể lấm bẩn/đeo găng, khó gõ phím.
-   Nhận diện giọng nói chạy trên máy chủ của trình duyệt (cần mạng, giống như đồng bộ Google Sheet nên không phát sinh yêu cầu mới).
+   Nhận diện giọng nói chạy trên máy chủ của trình duyệt (cần mạng, giống như đồng bộ Supabase nên không phát sinh yêu cầu mới).
    Độ chính xác với thuật ngữ kỹ thuật/mã số có thể không tuyệt đối — luôn cho xem lại và sửa tay trước khi lưu. */
 function voiceSupported(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
 let voiceRec = null, voiceListening = false;
@@ -694,7 +694,7 @@ function runWizardStep(){
     const timer = setTimeout(()=>{
       if(settled) return; settled=true;
       if(!state.wizard || state.wizard.index!==idxAtStart) return;
-      state.wizard.status='waiting-input'; state.wizard.transcript='Xử lý quá lâu (có thể do mạng chậm/mất kết nối Google Sheet).'; render();
+      state.wizard.status='waiting-input'; state.wizard.transcript='Xử lý quá lâu (có thể do mạng chậm/mất kết nối Supabase).'; render();
     }, timeoutMs);
     Promise.resolve().then(()=>step.compute(w.data)).then(result=>{
       if(settled) return; settled=true; clearTimeout(timer);
@@ -1580,7 +1580,7 @@ window.deleteDot = async function(id){
     deleteManyFromSheet('HinhAnh', haList.map(h=>h.id))
   ]);
   if(delResults.some(ok=>!ok)){
-    alert('Đã xóa xong trên máy này, nhưng MỘT SỐ dữ liệu chưa xóa được trên Google Sheet (lỗi mạng/máy chủ). Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra — nếu vẫn còn sót trên Sheet, hãy thử xóa lại đợt này (hoặc phần còn sót) một lần nữa.');
+    alert('Đã xóa xong trên máy này, nhưng MỘT SỐ dữ liệu chưa xóa được trên Supabase (lỗi mạng/máy chủ). Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra — nếu vẫn còn sót trên Sheet, hãy thử xóa lại đợt này (hoặc phần còn sót) một lần nữa.');
   }
 };
 
@@ -1774,7 +1774,7 @@ async function syncKiemTraBatchUpdate(records){
 }
 async function sendTelegramToMany(chatIds, text){
   if(!state.telegram.botToken || !chatIds || chatIds.length===0){
-    alert('Chưa cấu hình Bot Token hoặc Chat ID cảnh báo trong sheet CauHinh trên Google Sheet.');
+    alert('Chưa cấu hình Bot Token hoặc Chat ID cảnh báo trong sheet CauHinh trên Supabase.');
     return false;
   }
   let anyOk = false, lastErr = '';
@@ -1849,7 +1849,7 @@ window.addDanhMuc = async function(){
 };
 window.deleteDanhMuc = async function(id){
   if(!can('danhMuc')){ noPermAlert(); return; }
-  if(!confirm('Xóa dòng danh mục này? Sẽ xóa cả trên Google Sheet.')) return;
+  if(!confirm('Xóa dòng danh mục này? Sẽ xóa cả trên Supabase.')) return;
   const removed = state.danhMuc.find(r=>r.id===id);
   state.danhMuc = state.danhMuc.filter(r=>r.id!==id);
   await persist('danh-muc', state.danhMuc, true);
@@ -1858,13 +1858,13 @@ window.deleteDanhMuc = async function(id){
   if(!ok && removed){
     state.danhMuc.push(removed);
     await persist('danh-muc', state.danhMuc, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — dòng danh mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — dòng danh mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
 window.deleteAllDanhMuc = async function(){
   if(!can('danhMuc')){ noPermAlert(); return; }
-  if(!confirm('XÓA TOÀN BỘ Danh mục kỹ thuật? Sẽ xóa cả trên Google Sheet và không thể hoàn tác.')) return;
+  if(!confirm('XÓA TOÀN BỘ Danh mục kỹ thuật? Sẽ xóa cả trên Supabase và không thể hoàn tác.')) return;
   if(!confirm('Xác nhận lần 2: chắc chắn xóa toàn bộ Danh mục kỹ thuật?')) return;
   const backup = state.danhMuc;
   state.danhMuc = [];
@@ -1874,7 +1874,7 @@ window.deleteAllDanhMuc = async function(){
   if(!ok){
     state.danhMuc = backup;
     await persist('danh-muc', state.danhMuc, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — dữ liệu Danh mục đã được khôi phục lại, chưa mất. Vui lòng thử lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — dữ liệu Danh mục đã được khôi phục lại, chưa mất. Vui lòng thử lại khi mạng ổn định.');
     render();
   }
 };
@@ -1944,7 +1944,7 @@ window.addTaiLieu = async function(){
 };
 window.deleteTaiLieu = async function(id){
   if(!can('danhMuc')){ noPermAlert(); return; }
-  if(!confirm('Xóa tài liệu này? Sẽ xóa cả trên Google Sheet.')) return;
+  if(!confirm('Xóa tài liệu này? Sẽ xóa cả trên Supabase.')) return;
   const removed = state.taiLieu.find(r=>r.id===id);
   state.taiLieu = state.taiLieu.filter(r=>r.id!==id);
   await persist('tai-lieu', state.taiLieu, true);
@@ -1953,7 +1953,7 @@ window.deleteTaiLieu = async function(id){
   if(!ok && removed){
     state.taiLieu.push(removed);
     await persist('tai-lieu', state.taiLieu, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — tài liệu đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — tài liệu đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
@@ -2321,7 +2321,7 @@ window.ktMatrixSave = async function(){
   render();
   const syncFailed = !createResult.ok || !updateResult.ok;
   const syncNote = syncFailed
-    ? '\n\n⚠️ LỖI: một phần dữ liệu chưa ghi được lên Google Sheet (lỗi mạng/máy chủ) — dữ liệu tạm thời chỉ có trên máy này. Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra, và mở lại bảng để lưu bổ sung phần còn thiếu nếu cần.'
+    ? '\n\n⚠️ LỖI: một phần dữ liệu chưa ghi được lên Supabase (lỗi mạng/máy chủ) — dữ liệu tạm thời chỉ có trên máy này. Vui lòng bấm "Đồng bộ lại" sau ít phút để kiểm tra, và mở lại bảng để lưu bổ sung phần còn thiếu nếu cần.'
     : (createResult.skippedDup ? '\n\nGhi chú: '+createResult.skippedDup+' ô đã có sẵn trên Sheet từ trước (trùng dữ liệu), không bị ghi đè/nhân đôi.' : '');
   alert('Đã lưu bảng kiểm tra: '+created+' bản ghi mới'+(updated?(', cập nhật '+updated+' bản ghi đã có'):'')+'.'+(skipped?(' Bỏ qua '+skipped+' ô không xác định được vùng vật liệu (xung đột/không khớp Danh mục hoặc số liệu không hợp lệ).'):'')+syncNote);
   if(belowThreshold.length && state.telegram.botToken && state.telegram.chatIdsCanhBao && state.telegram.chatIdsCanhBao.length){
@@ -2389,7 +2389,7 @@ window.ktMatrixSaveNgoaiDang = async function(){
   render();
   const syncFailed = !createResult.ok || !updateResult.ok;
   const syncNote = syncFailed
-    ? '\n\n⚠️ LỖI: một phần dữ liệu chưa ghi được lên Google Sheet (lỗi mạng/máy chủ) — dữ liệu tạm thời chỉ có trên máy này. Vui lòng bấm "Đồng bộ lại" sau ít phút, và mở lại bảng để lưu bổ sung phần còn thiếu nếu cần.'
+    ? '\n\n⚠️ LỖI: một phần dữ liệu chưa ghi được lên Supabase (lỗi mạng/máy chủ) — dữ liệu tạm thời chỉ có trên máy này. Vui lòng bấm "Đồng bộ lại" sau ít phút, và mở lại bảng để lưu bổ sung phần còn thiếu nếu cần.'
     : (createResult.skippedDup ? '\n\nGhi chú: '+createResult.skippedDup+' ô đã có sẵn trên Sheet từ trước, không bị ghi đè/nhân đôi.' : '');
   alert('Đã lưu ngoại dạng: '+created+' bản ghi mới'+(updated?(', cập nhật '+updated+' bản ghi đã có hôm nay'):'')+'.'+(skipped?(' Bỏ qua '+skipped+' ô không xác định được vùng vật liệu (xung đột/không khớp Danh mục).'):'')+syncNote);
 };
@@ -2788,7 +2788,7 @@ window.exportKiemTraNgoaiDang = async function(){
 };
 window.deleteKiemTra = async function(id){
   if(!can('kiemTra')){ noPermAlert(); return; }
-  if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Google Sheet (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
+  if(!confirm('Xóa bản ghi kiểm tra này? Sẽ xóa cả trên Supabase (nếu đã có). Chỉ nên xóa các bản ghi tạo lỗi/trùng lặp, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
   const removed = state.kiemTra.find(r=>r.id===id);
   state.kiemTra = state.kiemTra.filter(r=>r.id!==id);
   await persist('kiem-tra', state.kiemTra, true);
@@ -2801,7 +2801,7 @@ window.deleteKiemTra = async function(id){
   if(!ok && removed){
     state.kiemTra.push(removed);
     await persist('kiem-tra', state.kiemTra, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
@@ -3202,7 +3202,7 @@ window.deleteSuaChuaItem = async function(itemId){
   if(delResults.some(ok=>!ok) && !state.suaChua.some(s=>s.id===itemId)){
     state.suaChua.push(item);
     await persist('sua-chua', state.suaChua, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — hạng mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — hạng mục đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
@@ -3530,7 +3530,7 @@ window.addNhatKy = async function(){
 };
 window.deleteNhatKy = async function(id){
   if(!can('nhatKy')){ noPermAlert(); return; }
-  if(!confirm('Xóa nhật ký này? Các ảnh đính kèm cũng sẽ bị xóa khỏi danh sách (kể cả trên Google Sheet).')) return;
+  if(!confirm('Xóa nhật ký này? Các ảnh đính kèm cũng sẽ bị xóa khỏi danh sách (kể cả trên Supabase).')) return;
   const removedNk = state.nhatKy.find(n=>n.id===id);
   const removedPhotos = state.hinhAnh.filter(h=>h.maNhatKy===id);
   state.nhatKy = state.nhatKy.filter(n=>n.id!==id);
@@ -3547,7 +3547,7 @@ window.deleteNhatKy = async function(id){
     state.hinhAnh = state.hinhAnh.concat(removedPhotos);
     await persist('nhat-ky', state.nhatKy, true);
     await persist('hinh-anh', state.hinhAnh, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — nhật ký đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — nhật ký đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
@@ -3562,7 +3562,7 @@ window.deleteAnh = async function(id){
   if(!ok && removed){
     state.hinhAnh.push(removed);
     await persist('hinh-anh', state.hinhAnh, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — ảnh đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — ảnh đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   }
 };
@@ -3924,18 +3924,18 @@ function render(){
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
         <div class="user-pill"><div><div>${esc(state.session.name)}</div><span class="u-role">${roleLabel}</span></div><button class="logout-btn" onclick="doLogout()">Đăng xuất</button></div>
-        <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Google Sheet…':(sheetAllOnline?('Google Sheet đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Google Sheet lỗi — đang dùng dữ liệu offline')}</div>
+        <div class="tg-pill"><span class="dot ${state.syncing?'warn-dot':(sheetAllOnline?'on':'off')}"></span>${state.syncing?'Đang đồng bộ Supabase…':(sheetAllOnline?('Supabase đã kết nối'+(state.lastSyncAt?(' · '+state.lastSyncAt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})):'')):'Supabase lỗi — đang dùng dữ liệu offline')}</div>
         ${(!state.syncing && !sheetAllOnline && state.syncErrorDetail) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">${esc(state.syncErrorDetail)}</div>` : ''}
         ${(!state.syncing && !sheetAllOnline && !state.syncErrorDetail && state.offlineSheetNames && state.offlineSheetNames.length) ? `<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">Không khớp dữ liệu ở: ${esc(state.offlineSheetNames.join('; '))}</div>` : ''}
         ${!state.syncing ? '<button class="mini-btn" style="margin-top:6px;width:100%;" onclick="retrySync()">Đồng bộ lại</button>' : ''}
         ${state.anhFolderUrl ? `<a href="${esc(state.anhFolderUrl)}" target="_blank" class="mini-btn" style="margin-top:6px;width:100%;display:block;text-align:center;box-sizing:border-box;text-decoration:none;">📁 Xem thư mục ảnh trên Drive ↗</a>` : ''}
         ${(state.writeErrors && state.writeErrors.length) ? `<div style="margin-top:8px;padding:8px;border:1px solid var(--danger);border-radius:8px;background:rgba(226,86,79,.08);">
-          <div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:10.5px;color:var(--danger);">Lỗi lưu lên Google Sheet (${state.writeErrors.length})</b><button class="mini-btn" onclick="dismissWriteErrors()">Ẩn</button></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:10.5px;color:var(--danger);">Lỗi lưu lên Supabase (${state.writeErrors.length})</b><button class="mini-btn" onclick="dismissWriteErrors()">Ẩn</button></div>
           ${state.writeErrors.map(w=>`<div style="font-size:10px;color:var(--danger);margin-top:4px;line-height:1.4;">[${esc(w.label)}] ${esc(w.error)}</div>`).join('')}
         </div>` : ''}
         ${(state.outbox && state.outbox.length) ? `<div style="margin-top:8px;padding:8px;border:1px solid var(--warn,orange);border-radius:8px;background:rgba(230,162,60,.10);">
           <div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:10.5px;">⏳ Đang chờ gửi lại (${state.outbox.length})</b><button class="mini-btn" onclick="retryOutboxNow()">Gửi lại ngay</button></div>
-          <div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;">Các thay đổi này đã lưu trên máy anh, đang tự động gửi lên Google Sheet — không mất dữ liệu.</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;">Các thay đổi này đã lưu trên máy anh, đang tự động gửi lên Supabase — không mất dữ liệu.</div>
         </div>` : ''}
         <div class="tg-pill"><span class="dot ${tgOn?'on':'off'}"></span>${tgOn?'Telegram đã kết nối':'Telegram chưa cấu hình'}</div>
         <div style="margin-top:8px;">${themeToggleHtml()}</div>
@@ -4387,7 +4387,7 @@ function renderDanhMuc(){
   const tlRows = state.taiLieu.map(t=>`<div class="record"><div class="record-top"><div class="record-loc">${esc(t.tenTaiLieu)}</div></div><div class="record-meta"><span>${esc(t.soHieu||'—')}</span><span>${esc(t.heThong||'—')}</span>${t.link?`<span><a href="${esc(t.link)}" target="_blank" style="color:#4aa3d6;">Mở tài liệu ↗</a></span>`:''}</div>${t.ghiChu?`<div class="record-note">${esc(t.ghiChu)}</div>`:''}${canDm?`<div class="record-actions"><button class="mini-btn" onclick="deleteTaiLieu('${t.id}')">Xóa</button></div>`:''}</div>`).join('');
   const thongSoOpen = state.dmSectionOpen.thongSo;
   const taiLieuOpen = state.dmSectionOpen.taiLieu;
-  return `<div class="page-head"><div><div class="page-eyebrow">Dữ liệu gốc${state.offlineDanhMuc?' · <span style="color:var(--danger);">offline — chưa kết nối được Google Sheet</span>':''}</div><div class="page-title">Danh mục kỹ thuật ống</div></div></div>
+  return `<div class="page-head"><div><div class="page-eyebrow">Dữ liệu gốc${state.offlineDanhMuc?' · <span style="color:var(--danger);">offline — chưa kết nối được Supabase</span>':''}</div><div class="page-title">Danh mục kỹ thuật ống</div></div></div>
 
   <div class="repair-item" style="margin-bottom:12px;">
     <div class="repair-head" onclick="toggleDmSection('thongSo')">
@@ -4590,7 +4590,7 @@ window.deleteSelectedKiemTra = async function(){
   if(!can('kiemTra')){ noPermAlert(); return; }
   const ids = Object.keys(state.ktSelectedIds);
   if(!ids.length){ alert('Chưa chọn dòng nào — tích vào ô vuông ở đầu mỗi bản ghi (trong từng nhóm Hệ thống đã mở rộng) để chọn.'); return; }
-  if(!confirm('Xóa '+ids.length+' bản ghi Kiểm tra đã chọn? Sẽ xóa cả trên Google Sheet. Chỉ nên dùng khi xóa dữ liệu tạo lỗi/trùng lặp/dữ liệu test, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
+  if(!confirm('Xóa '+ids.length+' bản ghi Kiểm tra đã chọn? Sẽ xóa cả trên Supabase. Chỉ nên dùng khi xóa dữ liệu tạo lỗi/trùng lặp/dữ liệu test, vì dữ liệu đo đạc dùng để tính xu hướng mòn ống.')) return;
   const idSet = new Set(ids);
   const removedRecs = state.kiemTra.filter(r=>idSet.has(r.id));
   state.kiemTra = state.kiemTra.filter(r=>!idSet.has(r.id));
@@ -4601,7 +4601,7 @@ window.deleteSelectedKiemTra = async function(){
   if(!ok){
     state.kiemTra = state.kiemTra.concat(removedRecs);
     await persist('kiem-tra', state.kiemTra, true);
-    alert('Không xóa được trên Google Sheet (lỗi mạng/máy chủ) — toàn bộ '+ids.length+' bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
+    alert('Không xóa được trên Supabase (lỗi mạng/máy chủ) — toàn bộ '+ids.length+' bản ghi đã được khôi phục lại, chưa mất. Vui lòng thử xóa lại khi mạng ổn định.');
     render();
   } else {
     await syncSuaChua();
