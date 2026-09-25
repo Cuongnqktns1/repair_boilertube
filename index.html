@@ -1713,29 +1713,49 @@ async function syncToSheet(type, record){
 // cong). Cho Apps Script tu doc sheet 1 lan, tu bo qua cac dong da trung (theo Dot+To may+He thong+
 // Thiet bi+Vi tri+Lop ong+Ngay) de nhap lai cung 1 file khong bi nhan doi cac dong da nhap thanh cong truoc do.
 async function syncKiemTraBatch(records){
-  if(!records || !records.length) return {ok:true, written:0, skippedDup:0, skippedIds:[]};
+  if(!records || !records.length) return {ok:true, written:0, skippedDup:0, skippedIds:[], updated:0};
   try{
     // Kiem tra trung theo khoa tu nhien (Dot+To may+He thong+Thiet bi+Vi tri+Lop ong+Ngay) truc tiep tren
     // Supabase (khong dua vao state cuc bo, vi co the co ban ghi nguoi khac vua them ma may nay chua kip
     // dong bo ve) — chi truy van theo (cac) dot_id lien quan de nhanh, khong keo toan bo bang KiemTra.
+    // Lay them id+chieu_day_do cua ban ghi da co: neu ban ghi trung khoa nhung dang RONG (chieu_day_do
+    // null — vi du do 1 lan ghi loi/dut mang truoc day chi tao duoc dong rong), thi GHI DE bang gia tri
+    // moi (update theo dung id cu) thay vi bo qua nhu truoc — tranh tinh trang du lieu that bi "khoa cung"
+    // vinh vien boi 1 dong rac rong tao ra tu 1 lan loi truoc do.
     const dotIds = Array.from(new Set(records.map(r=>r.dotId).filter(Boolean)));
-    const existingKeys = new Set();
+    const existingMap = new Map();
     await Promise.all(dotIds.map(async (dotId)=>{
-      const existing = await sbSelect('kiem_tra', 'dot_id=eq.'+encodeURIComponent(dotId)+'&select=dot_id,to_may,he_thong,thiet_bi,vi_tri,lop_ong,ngay');
-      (existing||[]).forEach(e=>{ existingKeys.add([e.dot_id,e.to_may,e.he_thong,e.thiet_bi,e.vi_tri,e.lop_ong,e.ngay].join('|')); });
+      const existing = await sbSelect('kiem_tra', 'dot_id=eq.'+encodeURIComponent(dotId)+'&select=id,dot_id,to_may,he_thong,thiet_bi,vi_tri,lop_ong,ngay,chieu_day_do');
+      (existing||[]).forEach(e=>{ existingMap.set([e.dot_id,e.to_may,e.he_thong,e.thiet_bi,e.vi_tri,e.lop_ong,e.ngay].join('|'), e); });
     }));
-    const rowsToInsert = []; const skippedIds = []; const seenInBatch = new Set();
+    const rowsToInsert = []; const rowsToUpdate = []; const skippedIds = []; const seenInBatch = new Set();
+    const updatedIdMap = []; // [clientId cu, id thuc te da ghi tren Supabase] — de sua lai id trong state cuc bo ngay, khong doi den lan sync sau
     records.forEach(r=>{
       const key = [r.dotId,r.toMay,r.heThong,r.thietBi,r.viTri,r.lopOng,r.ngay].join('|');
-      if(existingKeys.has(key) || seenInBatch.has(key)){ skippedIds.push(r.id); return; }
+      const existing = existingMap.get(key);
+      if(existing){
+        const existingEmpty = existing.chieu_day_do===null || existing.chieu_day_do===undefined || existing.chieu_day_do==='';
+        if(existingEmpty && !seenInBatch.has(key)){
+          seenInBatch.add(key);
+          const row = recordToRow('kiem_tra', r);
+          row.id = existing.id; // ghi de dung vao ban ghi rong cu, khong tao ID moi
+          rowsToUpdate.push(row);
+          updatedIdMap.push([r.id, existing.id]);
+        } else {
+          skippedIds.push(r.id);
+        }
+        return;
+      }
+      if(seenInBatch.has(key)){ skippedIds.push(r.id); return; }
       seenInBatch.add(key);
       rowsToInsert.push(recordToRow('kiem_tra', r));
     });
-    if(rowsToInsert.length){
-      const result = await sbUpsertMany('kiem_tra', rowsToInsert);
+    const allRows = rowsToInsert.concat(rowsToUpdate);
+    if(allRows.length){
+      const result = await sbUpsertMany('kiem_tra', allRows);
       if(!result.ok){ reportWriteError('kiem_tra_batch', result.error); return {ok:false, error:result.error}; }
     }
-    return {ok:true, written:rowsToInsert.length, skippedDup:skippedIds.length, skippedIds};
+    return {ok:true, written:rowsToInsert.length, updated:rowsToUpdate.length, skippedDup:skippedIds.length, skippedIds, updatedIdMap};
   }catch(e){
     const error = 'Lỗi mạng/CORS: '+(e.message||String(e));
     reportWriteError('kiem_tra_batch', error);
@@ -2937,11 +2957,18 @@ window.importKiemTra = function(input){
       if(batchResult.ok && batchResult.skippedIds && batchResult.skippedIds.length){
         const skipSet = new Set(batchResult.skippedIds);
         state.kiemTra = state.kiemTra.filter(k=>!skipSet.has(k.id));
-        await persist('kiem-tra', state.kiemTra, true);
         // Bo nhung ban ghi bi coi la trung (da co san tren Sheet tu truoc) khoi danh sach canh bao —
         // vi day khong phai phat hien MOI, tranh bao dong gia moi lan nhap lai dung 1 file.
         belowThresholdFinal = belowThreshold.filter(r=>!skipSet.has(r.id));
       }
+      if(batchResult.ok && batchResult.updatedIdMap && batchResult.updatedIdMap.length){
+        // Sua lai id trong state cuc bo cho khop voi id thuc su da ghi de tren Supabase (truong hop ghi
+        // de ban ghi rong cu) — tranh state cuc bo tam thoi tro toi 1 id khong ton tai tren server.
+        const idFix = new Map(batchResult.updatedIdMap);
+        state.kiemTra.forEach(k=>{ if(idFix.has(k.id)) k.id = idFix.get(k.id); });
+        belowThresholdFinal.forEach(r=>{ if(idFix.has(r.id)) r.id = idFix.get(r.id); });
+      }
+      if(batchResult.ok){ await persist('kiem-tra', state.kiemTra, true); }
     }
     await syncSuaChua();
     const reasonLines = Object.keys(reasonTally).sort((a,b)=>reasonTally[b].count-reasonTally[a].count)
@@ -2950,9 +2977,11 @@ window.importKiemTra = function(input){
     if(!pendingSync.length){
       syncMsg = '';
     } else if(!batchResult.ok){
-      syncMsg = '\n\n⚠️ LỖI: Không gửi được lên Google Sheet ('+(batchResult.error||'không rõ nguyên nhân')+'). Dữ liệu đang tạm chỉ có trên máy này, CHƯA có trên Sheet — vui lòng thử nhập lại file này khi mạng ổn định (nhập lại sẽ an toàn, không bị nhân đôi các dòng đã lỡ ghi được).';
+      syncMsg = '\n\n⚠️ LỖI: Không ghi được vào hệ thống ('+(batchResult.error||'không rõ nguyên nhân')+'). Dữ liệu đang tạm chỉ có trên máy này, CHƯA có trên hệ thống — vui lòng thử nhập lại file này khi mạng ổn định (nhập lại sẽ an toàn, không bị nhân đôi các dòng đã lỡ ghi được).';
     } else {
-      syncMsg = '\n\nĐã ghi lên Google Sheet: '+batchResult.written+' dòng mới.'+(batchResult.skippedDup?(' Bỏ qua '+batchResult.skippedDup+' dòng đã có sẵn trên Sheet trước đó (trùng Đợt/Hệ thống/Thiết bị/Vị trí/Lớp ống/Ngày) — không ghi đè, không nhân đôi.'):'');
+      syncMsg = '\n\nĐã ghi vào hệ thống: '+batchResult.written+' dòng mới.'
+        +(batchResult.updated?(' Đã cập nhật lại '+batchResult.updated+' dòng trước đó bị bỏ trống giá trị đo (do lỗi ghi lần trước) bằng giá trị đúng lần này.'):'')
+        +(batchResult.skippedDup?(' Bỏ qua '+batchResult.skippedDup+' dòng đã có sẵn dữ liệu hợp lệ trước đó (trùng Đợt/Hệ thống/Thiết bị/Vị trí/Lớp ống/Ngày) — không ghi đè, không nhân đôi.'):'');
     }
     alert('Đã nhập '+added+' bản ghi vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):'')+syncMsg);
     input.value=''; render();
