@@ -1891,24 +1891,54 @@ window.importDanhMuc = function(input){
   reader.onload = async e=>{
     if(!(await withXLSXReady())) return;
     const wb = XLSX.read(e.target.result, {type:'array'});
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-    let added=0, lastHeThong='', lastThietBi='', lastToMay='';
+    // Doc TAT CA cac sheet trong file (khong chi sheet dau tien) — file co the co nhieu sheet, moi sheet
+    // 1 he thong/khu vuc khac nhau (giong file Kiem tra tung gap loi chi doc sheet 1 gay thieu du lieu).
+    let rows = [];
+    let headerOk = false;
+    wb.SheetNames.forEach(sn=>{
+      const sheetRows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:''});
+      if(sheetRows.length){
+        const keys = Object.keys(sheetRows[0]);
+        const hasCoreCols = keys.some(k=>['Hệ thống','He thong','Đường kính','Duong kinh','Chiều dày','Chieu day'].includes(k));
+        if(hasCoreCols){ headerOk = true; rows = rows.concat(sheetRows.map(r=>({...r, __sheet:sn}))); }
+      }
+    });
+    if(!headerOk){
+      alert('LỖI: không đọc được các cột bắt buộc (Hệ thống/Đường kính/Chiều dày) ở bất kỳ sheet nào trong file.\n\nNguyên nhân thường gặp: file có dòng tiêu đề/logo thừa phía trên dòng tên cột, hoặc tên cột bị đổi khác mẫu chuẩn. Vui lòng dùng đúng file mẫu (nút "Xuất Excel" để lấy mẫu đúng cột) và kiểm tra dòng đầu tiên của bảng đúng là dòng tên cột.');
+      input.value=''; return;
+    }
+    // Lay du lieu hien co tren Supabase de chong trung (khong dua vao state cuc bo vi co the chua sync het) —
+    // khoa tu nhien: To may (da chuan hoa)+He thong+Thiet bi+Vi tri tu/den+Lop ong tu/den+Vung. Truong hop
+    // up lai nguyen file da xuat (gom ca du lieu cu + dong moi them vao) se KHONG bi nhan doi cac dong cu.
+    const existingRows = await sbSelectAll('danh_muc', 'select=to_may,he_thong,thiet_bi,vi_tri_tu,vi_tri_den,lop_ong_tu,lop_ong_den,vung');
+    const existingKeys = new Set((existingRows||[]).map(e=>[normTM(e.to_may),e.he_thong,e.thiet_bi,e.vi_tri_tu,e.vi_tri_den,e.lop_ong_tu,e.lop_ong_den,e.vung].join('|')));
+    let added=0, skippedDup=0, skippedMissing=0;
+    let lastHeThong='', lastThietBi='', lastToMay='', lastSheet=null;
     const newlyAdded = [];
+    const seenInFile = new Set();
     rows.forEach(r=>{
+      // Reset ke thua khi sang sheet khac — tranh 1 sheet "ke thua nham" gia tri cua sheet truoc do
+      if(r.__sheet!==lastSheet){ lastSheet=r.__sheet; lastHeThong=''; lastThietBi=''; lastToMay=''; }
       let heThong=String(r['Hệ thống']||r['He thong']||'').trim();
       let thietBi=String(r['Thiết bị']||r['Thiet bi']||'').trim();
       let toMay=String(r['Tổ máy (để trống = dùng chung)']||r['Tổ máy']||r['To may']||'').trim();
       const vung=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'').trim();
       const duongKinh=r['Đường kính']||r['Duong kinh'], chieuDay=r['Chiều dày']||r['Chieu day'];
-      if(!duongKinh||!chieuDay) return;
-      // các dòng gộp ô trong Excel thường để trống Hệ thống/Thiết bị/Tổ máy ở các hàng con — kế thừa từ dòng trước đó
+      if(!duongKinh||!chieuDay){ skippedMissing++; return; }
+      // các dòng gộp ô trong Excel thường để trống Hệ thống/Thiết bị/Tổ máy ở các hàng con — kế thừa từ dòng
+      // trước đó (ca 3 cot, truoc day cot To may bi thieu buoc ke thua nay gay lech du lieu "dung chung" nham)
       if(heThong) lastHeThong=heThong; else heThong=lastHeThong;
       if(thietBi) lastThietBi=thietBi; else thietBi=lastThietBi;
-      if(toMay) lastToMay=toMay;
+      if(toMay) lastToMay=toMay; else toMay=lastToMay;
+      const viTriTu=String(r['Vị trí từ']||r['Vi tri tu']||''), viTriDen=String(r['Vị trí đến']||r['Vi tri den']||'');
+      const lopOngTu=String(r['Lớp ống từ']||r['Lop ong tu']||''), lopOngDen=String(r['Lớp ống đến']||r['Lop ong den']||'');
+      const vungFinal = vung||('#'+pad(state.danhMuc.length+1+added));
+      const key = [normTM(toMay),heThong,thietBi,viTriTu,viTriDen,lopOngTu,lopOngDen,vungFinal].join('|');
+      if(existingKeys.has(key) || seenInFile.has(key)){ skippedDup++; return; }
+      seenInFile.add(key);
       const newRec = {id:genId('DM'), toMay, heThong, thietBi,
-        viTriTu:String(r['Vị trí từ']||r['Vi tri tu']||''), viTriDen:String(r['Vị trí đến']||r['Vi tri den']||''),
-        lopOngTu:String(r['Lớp ống từ']||r['Lop ong tu']||''), lopOngDen:String(r['Lớp ống đến']||r['Lop ong den']||''),
-        vung: vung||('#'+pad(state.danhMuc.length+1)),
+        viTriTu, viTriDen, lopOngTu, lopOngDen,
+        vung: vungFinal,
         duongKinh:String(duongKinh), chieuDay:String(chieuDay),
         vatLieu:String(r['Vật liệu']||r['Vat lieu']||''), ghiChu:String(r['Ghi chú']||r['Ghi chu']||'')};
       state.danhMuc.push(newRec);
@@ -1923,7 +1953,9 @@ window.importDanhMuc = function(input){
       const ov = danhMucOverlaps(rec, rec.id);
       if(ov.length) conflictMsgs.push('Vùng "'+rec.vung+'" ('+rec.heThong+(rec.thietBi?(' - '+rec.thietBi):'')+') chồng lấn với vùng "'+ov[0].vung+'"');
     });
-    let msg = 'Đã nhập '+added+' dòng từ file Excel.';
+    let msg = 'Đã nhập '+added+' dòng mới từ file Excel'+(wb.SheetNames.length>1?(' (đã đọc '+wb.SheetNames.length+' sheet)'):'')+'.';
+    if(skippedDup) msg += ' Bỏ qua '+skippedDup+' dòng đã có sẵn trong Danh mục (trùng Tổ máy/Hệ thống/Thiết bị/Vị trí/Lớp ống/Vùng) — không nhân đôi.';
+    if(skippedMissing) msg += ' Bỏ qua '+skippedMissing+' dòng thiếu Đường kính hoặc Chiều dày.';
     if(conflictMsgs.length){
       msg += '\n\nCẢNH BÁO: phát hiện '+conflictMsgs.length+' dòng có dải Vị trí/Lớp ống chồng lấn với vùng khác — cần sửa lại để Kiểm tra tự nhận diện đúng vùng:\n- '+conflictMsgs.slice(0,10).join('\n- ')+(conflictMsgs.length>10?'\n... và '+(conflictMsgs.length-10)+' dòng khác':'');
     }
