@@ -303,6 +303,7 @@ const NAV = [
   {id:'vattu',    tag:'VT', label:'Vật tư sử dụng'},
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
   {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
+  {id:'auditlog', tag:'NKTT', label:'Nhật ký thao tác', adminOnly:true},
 ];
 // Tren dien thoai, thanh dieu huong duoi cung chi hien Trang chu + 3 module hay dung nhat (tranh 9 muc phai cuon ngang).
 // Cac module con lai truy cap qua luoi module o trang Tong quan (dong vai tro trang chu).
@@ -317,7 +318,8 @@ const NAV_ICONS = {
   nhatky: '<path d="M4 19.5V6a2 2 0 0 1 2-2h11l3 3v12.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 19.5z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   vattu: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
   history: '<path d="M4 19h16"/><path d="M4 15l5-5 4 3 7-8"/><path d="M15 5h5v5"/>',
-  analysis: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-5-5"/>'
+  analysis: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-5-5"/>',
+  auditlog: '<path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9"/><path d="M8 3v4h4"/><path d="M18 2l4 4-9 9H9v-4z"/>'
 };
 function navIconSvg(id){
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(NAV_ICONS[id]||'')+'</svg>';
@@ -391,6 +393,9 @@ let state = {
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
   ktExportDotId:'', // '' = xuat tat ca cac dot (nhu truoc), hoac 1 dotId cu the de chi xuat rieng dot do — tranh tai/xuat toan bo lich su khong can thiet
   scExportDotId:'', // tuong tu ktExportDotId nhung danh cho xuat Excel modul Sua chua & han
+  // Nhat ky thao tac (audit log) — chi admin duoc xem, tai theo yeu cau (khong nam trong fetchSheetAll)
+  auditLog:[], auditLogLoaded:false, auditLogLoading:false, auditLogErr:'', auditLogExpandedId:null,
+  auditLogFilter:{table:'',action:'',from:'',to:'',search:''},
   // Bảng nhập/sửa dạng ma trận (1 dòng = 1 Vị trí, cột = từng Lớp ống) — thay cho form nhập từng dòng cũ khi gõ bàn phím
   ktMatrix:{active:false, mode:'utm', editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
@@ -920,7 +925,12 @@ async function fetchWithTimeout(url, ms, headers){
   finally{ clearTimeout(timer); }
 }
 function sbHeaders(extra){
-  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json' }, extra||{});
+  // 'X-App-User': ten nguoi dang dang nhap (ma hoa URI vi ten co dau/khoang trang, header HTTP chi
+  // nhan ky tu ASCII) — Supabase/PostgREST tu dong dua toan bo header cua request vao bien
+  // "request.headers" (dang JSON) ma cac trigger nhat ky thao tac (audit_log) doc duoc, giup biet
+  // CHINH XAC ai vua Them/Sua/Xoa ma khong can dang nhap rieng qua Supabase Auth.
+  const userHeader = state.session ? encodeURIComponent(state.session.name||state.session.email||'') : '';
+  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader }, extra||{});
 }
 function sbUrl(table, query){ return SUPABASE_URL+'/rest/v1/'+table+(query?('?'+query):''); }
 // QUAN TRONG: PHAI dinh kem header apikey/Authorization khi doc (GET) tu Supabase, neu khong se bi tra ve
@@ -3938,7 +3948,7 @@ function render(){
   if(state.loading){ app.innerHTML='<div class="loading">ĐANG TẢI DỮ LIỆU…</div>'; return; }
   if(!state.session){ app.innerHTML = renderAuth(); return; }
 
-  const navHtml = NAV.map(n=>
+  const navHtml = NAV.filter(n=>!n.adminOnly || state.session.role==='admin').map(n=>
     `<button class="nav-item ${state.tab===n.id?'active':''}" onclick="setTab('${n.id}')"><span class="nav-tag">${navIconSvg(n.id)}</span><span>${n.label}</span></button>`
   ).join('');
   const bottomNavHtml = MOBILE_QUICK_NAV.map(id=>{
@@ -4002,7 +4012,7 @@ function renderAuth(){
       ${state.authErr?`<div class="err-msg">${esc(state.authErr)}</div>`:''}
       <div class="form-actions" style="justify-content:stretch;"><button class="btn" style="width:100%;" onclick="doRegister()">Tạo tài khoản</button></div>
     `}
-    <div class="settings-note">${state.offlineUsers? '<b style="color:var(--danger);">Không kết nối được Google Sheet — đang dùng danh sách tài khoản offline lưu gần nhất trên thiết bị này.</b><br><br>':''}Tài khoản được lưu trên Google Sheet dùng chung cho mọi thiết bị/trình duyệt — đăng nhập lại hoặc đổi máy vẫn dùng được. Đây là cơ chế đăng nhập nội bộ đơn giản để gắn tên người thực hiện vào từng bản ghi, <b>không phải hệ thống bảo mật cấp doanh nghiệp</b>. Không dùng chung mật khẩu với hệ thống email/nội bộ khác của công ty.</div>
+    <div class="settings-note">${state.offlineUsers? '<b style="color:var(--danger);">Không kết nối được Supabase — đang dùng danh sách tài khoản offline lưu gần nhất trên thiết bị này.</b><br><br>':''}Tài khoản được lưu trên Supabase dùng chung cho mọi thiết bị/trình duyệt — đăng nhập lại hoặc đổi máy vẫn dùng được. Đây là cơ chế đăng nhập nội bộ đơn giản để gắn tên người thực hiện vào từng bản ghi, <b>không phải hệ thống bảo mật cấp doanh nghiệp</b>. Không dùng chung mật khẩu với hệ thống email/nội bộ khác của công ty.</div>
   </div></div>`;
 }
 
@@ -4016,6 +4026,128 @@ function renderTab(){
   if(state.tab==='vattu') return renderVatTu();
   if(state.tab==='history') return renderHistory();
   if(state.tab==='analysis') return renderAnalysis();
+  if(state.tab==='auditlog') return renderAuditLog();
+}
+
+/* ---------- NHẬT KÝ THAO TÁC (AUDIT LOG) — chỉ admin xem được ---------- */
+const AUDIT_TABLE_LABELS = {
+  dots:'Đợt kiểm tra/sửa chữa', danh_muc:'Danh mục kỹ thuật', kiem_tra:'Kiểm tra (đo đạc)',
+  sua_chua_hang_muc:'Hạng mục sửa chữa', sua_chua_weld:'Mối hàn', vat_tu:'Vật tư',
+  tai_lieu:'Tài liệu', nhat_ky_thi_cong:'Nhật ký thi công', users:'Người dùng', cau_hinh:'Cấu hình chung'
+};
+const AUDIT_ACTION_LABELS = {INSERT:'Thêm mới', UPDATE:'Cập nhật', DELETE:'Xóa'};
+function auditDecodeUser(u){
+  if(!u) return '—';
+  try{ return decodeURIComponent(u); }catch(e){ return u; }
+}
+window.setAuditLogFilter = function(key, value){ state.auditLogFilter[key] = value; };
+window.applyAuditLogFilter = function(){ state.auditLogLoaded=false; render(); };
+window.resetAuditLogFilter = function(){ state.auditLogFilter = {table:'',action:'',from:'',to:'',search:''}; state.auditLogLoaded=false; render(); };
+window.toggleAuditLogDetail = function(id){ state.auditLogExpandedId = state.auditLogExpandedId===id ? null : id; render(); };
+async function loadAuditLog(){
+  state.auditLogLoading = true; state.auditLogErr='';
+  try{
+    const f = state.auditLogFilter;
+    let q = 'select=*&order=changed_at.desc&limit=300';
+    if(f.table) q += '&table_name=eq.'+encodeURIComponent(f.table);
+    if(f.action) q += '&action=eq.'+encodeURIComponent(f.action);
+    if(f.from) q += '&changed_at=gte.'+encodeURIComponent(f.from+'T00:00:00');
+    if(f.to) q += '&changed_at=lte.'+encodeURIComponent(f.to+'T23:59:59');
+    const rows = await sbSelect('audit_log', q);
+    if(rows===null){ state.auditLogErr = 'Không tải được nhật ký thao tác (bảng audit_log có thể chưa được tạo trên Supabase — cần chạy file supabase-nhat-ky-thao-tac.sql).'; state.auditLog=[]; }
+    else {
+      let filtered = rows;
+      if(f.search){
+        const s = removeDiacritics(f.search).toLowerCase();
+        filtered = rows.filter(r=>removeDiacritics(auditDecodeUser(r.changed_by)).toLowerCase().includes(s));
+      }
+      state.auditLog = filtered;
+    }
+  }catch(e){
+    state.auditLogErr = 'Lỗi mạng: '+(e.message||String(e));
+    state.auditLog = [];
+  }
+  state.auditLogLoading = false; state.auditLogLoaded = true; render();
+}
+function auditDiffRows(rec){
+  // Voi UPDATE: chi liet ke cac truong THAY DOI (bo qua updated_at/id khong can thiet). Voi INSERT chi co
+  // new_data, DELETE chi co old_data.
+  const oldD = rec.old_data||{}, newD = rec.new_data||{};
+  const keys = Array.from(new Set([...Object.keys(oldD), ...Object.keys(newD)])).sort();
+  const rowsOut = [];
+  keys.forEach(k=>{
+    if(k==='updated_at') return;
+    const ov = oldD[k], nv = newD[k];
+    if(rec.action==='UPDATE'){
+      if(JSON.stringify(ov)===JSON.stringify(nv)) return;
+      rowsOut.push({field:k, oldVal:ov, newVal:nv});
+    } else if(rec.action==='INSERT'){
+      rowsOut.push({field:k, oldVal:null, newVal:nv});
+    } else {
+      rowsOut.push({field:k, oldVal:ov, newVal:null});
+    }
+  });
+  return rowsOut;
+}
+function fmtVal(v){
+  if(v===null||v===undefined||v==='') return '<span style="color:var(--muted);">(trống)</span>';
+  if(typeof v==='boolean') return v?'✓':'✗';
+  return esc(String(v));
+}
+function renderAuditLog(){
+  if(!state.session || state.session.role!=='admin'){
+    return `<div class="page-head"><div><div class="page-eyebrow">Không có quyền truy cập</div><div class="page-title">Nhật ký thao tác</div></div></div>
+    <div class="settings-note">Chỉ tài khoản có vai trò <b>Quản trị (admin)</b> mới được xem module này.</div>`;
+  }
+  if(!state.auditLogLoaded && !state.auditLogLoading){ loadAuditLog(); }
+  const f = state.auditLogFilter;
+  const tableOpts = Object.keys(AUDIT_TABLE_LABELS).map(k=>`<option value="${k}" ${f.table===k?'selected':''}>${AUDIT_TABLE_LABELS[k]}</option>`).join('');
+  const filterBar = `<div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;">
+    <select onchange="setAuditLogFilter('table', this.value)"><option value="">Tất cả bảng dữ liệu</option>${tableOpts}</select>
+    <select onchange="setAuditLogFilter('action', this.value)">
+      <option value="">Tất cả hành động</option>
+      <option value="INSERT" ${f.action==='INSERT'?'selected':''}>Thêm mới</option>
+      <option value="UPDATE" ${f.action==='UPDATE'?'selected':''}>Cập nhật</option>
+      <option value="DELETE" ${f.action==='DELETE'?'selected':''}>Xóa</option>
+    </select>
+    <input type="date" value="${esc(f.from)}" onchange="setAuditLogFilter('from', this.value)" title="Từ ngày">
+    <input type="date" value="${esc(f.to)}" onchange="setAuditLogFilter('to', this.value)" title="Đến ngày">
+    <input type="text" placeholder="Tìm theo người thực hiện" value="${esc(f.search)}" oninput="setAuditLogFilter('search', this.value)" style="min-width:180px;">
+    <button class="btn" onclick="applyAuditLogFilter()">Lọc</button>
+    <button class="btn-ghost" onclick="resetAuditLogFilter()">Xóa lọc</button>
+  </div>`;
+
+  let body;
+  if(state.auditLogLoading){
+    body = '<div class="empty">Đang tải nhật ký thao tác…</div>';
+  } else if(state.auditLogErr){
+    body = `<div class="settings-note" style="color:var(--danger);">${esc(state.auditLogErr)}</div>`;
+  } else if(!state.auditLog.length){
+    body = '<div class="empty">Không có bản ghi nhật ký nào khớp bộ lọc.</div>';
+  } else {
+    const actionColor = {INSERT:'good', UPDATE:'warn', DELETE:'danger'};
+    body = state.auditLog.map(r=>{
+      const expanded = state.auditLogExpandedId===r.id;
+      const diffs = expanded ? auditDiffRows(r) : [];
+      return `<div class="record">
+        <div class="record-top" style="cursor:pointer;" onclick="toggleAuditLogDetail(${r.id})">
+          <div class="record-loc"><span class="status ${actionColor[r.action]||''}">${esc(AUDIT_ACTION_LABELS[r.action]||r.action)}</span> ${esc(AUDIT_TABLE_LABELS[r.table_name]||r.table_name)} <span style="color:var(--muted);font-weight:400;">· mã ${esc(r.row_id||'')}</span></div>
+          <span style="color:var(--muted);font-size:12px;">${new Date(r.changed_at).toLocaleString('vi-VN')}</span>
+        </div>
+        <div class="record-meta"><span>Người thực hiện: <b>${esc(auditDecodeUser(r.changed_by))}</b></span><span>${expanded?'▲ Ẩn chi tiết':'▼ Xem chi tiết'}</span></div>
+        ${expanded ? `<table style="width:100%;margin-top:8px;font-size:12.5px;border-collapse:collapse;">
+          <thead><tr><th style="text-align:left;padding:4px;">Trường</th><th style="text-align:left;padding:4px;">Giá trị cũ</th><th style="text-align:left;padding:4px;">Giá trị mới</th></tr></thead>
+          <tbody>${diffs.length? diffs.map(d=>`<tr><td style="padding:4px;color:var(--muted);">${esc(d.field)}</td><td style="padding:4px;">${fmtVal(d.oldVal)}</td><td style="padding:4px;">${fmtVal(d.newVal)}</td></tr>`).join('') : '<tr><td colspan="3" style="padding:4px;color:var(--muted);">Không có thay đổi nội dung.</td></tr>'}</tbody>
+        </table>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  return `<div class="page-head"><div><div class="page-eyebrow">Chỉ dành cho Quản trị</div><div class="page-title">Nhật ký thao tác</div></div>
+    <button class="btn-ghost" onclick="applyAuditLogFilter()">Tải lại</button></div>
+  <div class="settings-note" style="margin-bottom:14px;">Ghi lại tự động mọi lần Thêm/Sửa/Xóa trên các bảng dữ liệu chính (Đợt, Danh mục, Kiểm tra, Sửa chữa, Mối hàn, Vật tư, Tài liệu, Nhật ký thi công, Người dùng, Cấu hình), kèm người thực hiện và thời gian — hiển thị tối đa 300 bản ghi gần nhất khớp bộ lọc.</div>
+  ${filterBar}
+  ${body}`;
 }
 
 function dotForm(){
