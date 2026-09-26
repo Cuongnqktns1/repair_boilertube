@@ -1074,7 +1074,12 @@ async function fetchSheet(type){
     }
     const table = TYPE_TO_TABLE[type] || (type==='dot' ? 'dots' : null);
     if(!table) return null;
-    const rows = await sbSelect(table, 'select=*');
+    // QUAN TRONG: phai dung sbSelectAll (co phan trang), KHONG dung sbSelect don le — vi sbSelect chi doc
+    // 1 lan, bi PostgREST GIOI HAN AM THAM toi da 1000 dong/lan. Bang sua_chua_weld da > 3000 dong nen truoc
+    // day ham nay LUON bi cat mat du lieu (va Postgres khong dam bao thu tu dong khi khong co ORDER BY, nen
+    // 1000 dong duoc tra ve MOI LAN GOI co the KHAC NHAU) — day chinh la nguyen nhan gay hien tuong hien thi
+    // "0/0 moi han" LUC DUOC LUC KHONG moi khi mo 1 hang muc ra xem (refreshSuaChuaFromSheet goi ham nay).
+    const rows = await sbSelectAll(table, 'select=*');
     if(rows===null) return null;
     return rows.map(row=>rowToSheetDict(type, row));
   }catch(e){ console.error('Không lấy được dữ liệu (Supabase):', type, e); return null; }
@@ -3189,7 +3194,13 @@ async function refreshSuaChuaFromSheet(){
   try{
     if(hasPendingOutbox('suaChua')) return; // dang co thay doi chua gui thanh cong len Sheet, khong ghi de
     const [itemRows, weldRows] = await Promise.all([fetchSheet('sua_chua_item'), fetchSheet('sua_chua_weld')]);
-    if(!itemRows && !weldRows) return; // mất mạng — giữ nguyên dữ liệu đang có, không ghi đè bằng rỗng
+    // QUAN TRONG: phai kiem tra RIENG TUNG bang — neu chi 1 trong 2 bang bi loi mang/timeout (vi du
+    // sua_chua_weld tra ve null nhung sua_chua_item van thanh cong), truoc day code chi kiem tra
+    // "ca hai deu null" nen se coi weldRows=null la MANG RONG "[]" va GHI DE state.suaChua bang du
+    // lieu co hang muc nhung KHONG CO MOI HAN nao — day chinh la nguyen nhan gay hien tuong "luc duoc
+    // luc khong": moi lan mo 1 hang muc ra xem (toggleRepairExpand) la 1 lan goi ham nay, chi can 1 lan
+    // sua_chua_weld bi timeout la toan bo state.suaChua cuc bo bi ghi de mat het moi han.
+    if(itemRows===null || weldRows===null) return; // mất mạng ở 1 trong 2 bảng — giữ nguyên dữ liệu đang có
     const fresh = mapSheetSuaChua(itemRows||[], weldRows||[]);
     if(fresh.length){ state.suaChua = fresh; await persist('sua-chua', state.suaChua, true); }
   }catch(e){ console.error('Không tải lại được dữ liệu Sửa chữa mới nhất:', e); }
