@@ -956,7 +956,12 @@ async function sbSelectAll(table, query){
   while(true){
     const pageQuery = (query?query+'&':'')+'limit='+PAGE+'&offset='+offset;
     const rows = await sbSelect(table, pageQuery);
-    if(rows===null) return offset===0 ? null : all; // loi giua chung: tra ve nhung gi da co thay vi mat het
+    // QUAN TRONG: neu loi o BAT KY trang nao (ke ca cac trang sau, offset>0), phai tra ve null (bao that
+    // bai TOAN BO) thay vi tra ve phan da tai duoc — truoc day tra ve "all" (du dang thieu) khien ben goi
+    // (fetchSheetAll/applyDefensive) tuong lam la da tai DAY DU va THANH CONG, roi ghi de len du lieu cuc bo
+    // dang dung bang du lieu THIEU nay — day chinh la nguyen nhan gay hien tuong "mat mối hàn thoáng qua roi
+    // tu het" (1 lan dong bo nen bi trung mang/timeout giua chung, lan sau lai binh thuong).
+    if(rows===null) return null;
     all = all.concat(rows);
     if(rows.length < PAGE) break;
     offset += PAGE;
@@ -1088,7 +1093,14 @@ async function fetchSheetAll(){
       sbSelectAll('vat_tu','select=*'), sbSelectAll('tai_lieu','select=*'), sbSelectAll('nhat_ky_thi_cong','select=*'),
       sbSelectAll('cau_hinh','select=*')
     ]);
-    if(users===null){ _lastSyncError = 'Không kết nối được tới Supabase (kiểm tra mạng, hoặc URL/API key đã đúng chưa)'; return null; }
+    // Truoc day chi kiem tra rieng "users===null" — neu MOT bang khac (vd sua_chua_weld) bi loi giua chung
+    // (mang chap chon/timeout) ma users van tai binh thuong, ham nay van coi la THANH CONG va tra ve mang
+    // rong [] cho bang loi do (do (x||[]) o duoi), khien noi goi tuong lam la "bang do that su rong" roi ghi
+    // de mat du lieu cuc bo dang dung. Phai kiem tra DU CA 10 bang — bat ky bang nao loi thi coi ca lan dong
+    // bo nay la THAT BAI, giu nguyen du lieu cu cho toi lan dong bo sau thanh cong.
+    const results = {users, dot, danh_muc, kiem_tra, sua_chua_item, sua_chua_weld, vat_tu, tai_lieu, nhat_ky, cau_hinh};
+    const failedTable = Object.keys(results).find(k=>results[k]===null);
+    if(failedTable){ _lastSyncError = 'Không tải được đầy đủ dữ liệu từ Supabase (bảng "'+failedTable+'" lỗi mạng/timeout giữa chừng) — giữ nguyên dữ liệu cũ, sẽ tự thử lại.'; return null; }
     _lastSyncError = '';
     return {
       ok:true,
