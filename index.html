@@ -394,6 +394,7 @@ let state = {
   ktExportDotId:'', // '' = xuat tat ca cac dot (nhu truoc), hoac 1 dotId cu the de chi xuat rieng dot do — tranh tai/xuat toan bo lich su khong can thiet
   scExportDotId:'', // tuong tu ktExportDotId nhung danh cho xuat Excel modul Sua chua & han
   scExportHeThong:[], scExportThietBi:[], // mang rong = khong loc theo tieu chi do (xuat full nhu truoc)
+  scExportDropdownOpen:null, // 'heThong' | 'thietBi' | null — dropdown tich chon tu dung nao dang mo
   // Nhat ky thao tac (audit log) — chi admin duoc xem, tai theo yeu cau (khong nam trong fetchSheetAll)
   auditLog:[], auditLogLoaded:false, auditLogLoading:false, auditLogErr:'', auditLogExpandedId:null,
   auditLogFilter:{table:'',action:'',from:'',to:'',search:''},
@@ -3301,8 +3302,32 @@ window.setWeldField = async function(itemId, weldId, field, value){
 window.setScExportDot = function(v){ state.scExportDotId = v; render(); };
 // Loc theo He thong/Thiet bi tich chon (state.scExportHeThong/scExportThietBi) truoc khi xuat — khong tich
 // gi thi coi nhu "tat ca" (giu nguyen hanh vi mac dinh xuat full nhu truoc).
-window.setScExportHeThong = function(selectEl){ state.scExportHeThong = Array.from(selectEl.selectedOptions).map(o=>o.value); render(); };
-window.setScExportThietBi = function(selectEl){ state.scExportThietBi = Array.from(selectEl.selectedOptions).map(o=>o.value); render(); };
+// Dropdown tich chon TU DUNG (khong dung the <select multiple> goc cua trinh duyet) — vi phan popup checkbox
+// cua <select multiple> do CHINH trinh duyet ve, khong ap dung duoc mau giao dien toi cua app (chu xam nhat
+// tren nen trang, gan nhu khong doc duoc) o mot so trinh duyet/he dieu hanh.
+window.toggleScExportDropdown = function(which){ state.scExportDropdownOpen = state.scExportDropdownOpen===which ? null : which; render(); };
+window.toggleScExportHeThong = function(value){
+  const i = state.scExportHeThong.indexOf(value);
+  if(i>=0) state.scExportHeThong.splice(i,1); else state.scExportHeThong.push(value);
+  render();
+};
+window.toggleScExportThietBi = function(value){
+  const i = state.scExportThietBi.indexOf(value);
+  if(i>=0) state.scExportThietBi.splice(i,1); else state.scExportThietBi.push(value);
+  render();
+};
+function scExportCheckboxDropdown(which, label, options, selectedArr, toggleFnName){
+  const open = state.scExportDropdownOpen===which;
+  const summary = selectedArr.length ? (selectedArr.length+' đã chọn') : 'Tất cả';
+  return `<div style="position:relative;display:inline-block;">
+    <button type="button" class="btn-ghost" onclick="toggleScExportDropdown('${which}')" style="min-width:150px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span>${esc(label)}: ${esc(summary)}</span><span>${open?'▲':'▼'}</span>
+    </button>
+    ${open ? `<div style="position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:8px;min-width:210px;max-height:230px;overflow:auto;box-shadow:0 10px 28px rgba(0,0,0,.4);">
+      ${options.length ? options.map(v=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:12.5px;color:var(--text);cursor:pointer;white-space:nowrap;"><input type="checkbox" ${selectedArr.includes(v)?'checked':''} onchange="${toggleFnName}('${esc(v).replace(/'/g,"\\'")}')"> ${esc(v)}</label>`).join('') : '<div style="color:var(--muted);font-size:12px;padding:4px;">Không có dữ liệu</div>'}
+    </div>` : ''}
+  </div>`;
+}
 function scApplyExportFilter(items){
   let out = state.scExportDotId ? items.filter(item=>item.dotId===state.scExportDotId) : items;
   if(state.scExportHeThong.length) out = out.filter(item=>state.scExportHeThong.includes(item.heThong));
@@ -4924,10 +4949,8 @@ function renderSuaChua(){
   // Danh sach He thong/Thiet bi de tich chon khi xuat — lay tu dung pham vi dot dang chon o dropdown tren
   // (neu co) de danh sach goi y sat voi du lieu se xuat, khong tich gi thi mac dinh xuat FULL nhu truoc.
   const scExportScope = state.scExportDotId ? state.suaChua.filter(i=>i.dotId===state.scExportDotId) : state.suaChua;
-  const scExportHeThongOpts = uniq(scExportScope.map(i=>i.heThong).filter(Boolean)).sort((a,b)=>a.localeCompare(b))
-    .map(v=>`<option value="${esc(v)}" ${state.scExportHeThong.includes(v)?'selected':''}>${esc(v)}</option>`).join('');
-  const scExportThietBiOpts = uniq(scExportScope.map(i=>i.thietBi).filter(Boolean)).sort((a,b)=>a.localeCompare(b))
-    .map(v=>`<option value="${esc(v)}" ${state.scExportThietBi.includes(v)?'selected':''}>${esc(v)}</option>`).join('');
+  const scExportHeThongOpts = uniq(scExportScope.map(i=>i.heThong).filter(Boolean)).sort((a,b)=>a.localeCompare(b));
+  const scExportThietBiOpts = uniq(scExportScope.map(i=>i.thietBi).filter(Boolean)).sort((a,b)=>a.localeCompare(b));
   return `<div class="page-head"><div><div class="page-eyebrow">Danh sách cần xử lý · Quản lý mối hàn</div><div class="page-title">Sửa chữa &amp; hàn</div></div>
     <div class="head-actions">
       <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;">Xuất dữ liệu đợt:
@@ -4936,17 +4959,9 @@ function renderSuaChua(){
           ${scExportDotOpts}
         </select>
       </label>
-      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;" title="Giữ Ctrl (hoặc Cmd trên Mac) để tích chọn nhiều Hệ thống — không tích gì thì xuất tất cả">Hệ thống:
-        <select multiple onchange="setScExportHeThong(this)" size="1" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;min-width:140px;">
-          ${scExportHeThongOpts}
-        </select>
-      </label>
-      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;" title="Giữ Ctrl (hoặc Cmd trên Mac) để tích chọn nhiều Thiết bị — không tích gì thì xuất tất cả">Thiết bị:
-        <select multiple onchange="setScExportThietBi(this)" size="1" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;min-width:140px;">
-          ${scExportThietBiOpts}
-        </select>
-      </label>
-      ${(state.scExportHeThong.length || state.scExportThietBi.length) ? `<button class="btn-ghost" onclick="setScExportHeThong({selectedOptions:[]}); setScExportThietBi({selectedOptions:[]})" style="padding:4px 10px;">Xóa lọc xuất</button>` : ''}
+      ${scExportCheckboxDropdown('heThong', 'Hệ thống', scExportHeThongOpts, state.scExportHeThong, 'toggleScExportHeThong')}
+      ${scExportCheckboxDropdown('thietBi', 'Thiết bị', scExportThietBiOpts, state.scExportThietBi, 'toggleScExportThietBi')}
+      ${(state.scExportHeThong.length || state.scExportThietBi.length) ? `<button class="btn-ghost" onclick="state.scExportHeThong=[]; state.scExportThietBi=[]; render();" style="padding:4px 10px;">Xóa lọc xuất</button>` : ''}
       <button class="btn-ghost" onclick="toggleScViewMode()">${state.scViewMode==='welds'?'📋 Xem theo hạng mục':'🔩 Xem theo mối hàn (checklist)'}</button>
       ${state.scViewMode==='welds' ? `<button class="btn-ghost" onclick="exportScWeldList()">Xuất Excel (danh sách mối hàn)</button>` : `<button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>`}
     </div></div>
