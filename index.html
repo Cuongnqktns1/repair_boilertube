@@ -393,6 +393,7 @@ let state = {
   ktSel:{dotId:'',heThong:'',thietBi:'',vung:'',viTri:'',lopOng:''}, ktCandidates:[], ktResolved:null,
   ktExportDotId:'', // '' = xuat tat ca cac dot (nhu truoc), hoac 1 dotId cu the de chi xuat rieng dot do — tranh tai/xuat toan bo lich su khong can thiet
   scExportDotId:'', // tuong tu ktExportDotId nhung danh cho xuat Excel modul Sua chua & han
+  scExportHeThong:[], scExportThietBi:[], // mang rong = khong loc theo tieu chi do (xuat full nhu truoc)
   // Nhat ky thao tac (audit log) — chi admin duoc xem, tai theo yeu cau (khong nam trong fetchSheetAll)
   auditLog:[], auditLogLoaded:false, auditLogLoading:false, auditLogErr:'', auditLogExpandedId:null,
   auditLogFilter:{table:'',action:'',from:'',to:'',search:''},
@@ -3286,10 +3287,20 @@ window.setWeldField = async function(itemId, weldId, field, value){
 };
 // Xuat bao cao dep, theo tung Dot (1 sheet = 1 dot), dung de in/luu tru — thay cho ban bang du lieu tho truoc day
 window.setScExportDot = function(v){ state.scExportDotId = v; render(); };
+// Loc theo He thong/Thiet bi tich chon (state.scExportHeThong/scExportThietBi) truoc khi xuat — khong tich
+// gi thi coi nhu "tat ca" (giu nguyen hanh vi mac dinh xuat full nhu truoc).
+window.setScExportHeThong = function(selectEl){ state.scExportHeThong = Array.from(selectEl.selectedOptions).map(o=>o.value); render(); };
+window.setScExportThietBi = function(selectEl){ state.scExportThietBi = Array.from(selectEl.selectedOptions).map(o=>o.value); render(); };
+function scApplyExportFilter(items){
+  let out = state.scExportDotId ? items.filter(item=>item.dotId===state.scExportDotId) : items;
+  if(state.scExportHeThong.length) out = out.filter(item=>state.scExportHeThong.includes(item.heThong));
+  if(state.scExportThietBi.length) out = out.filter(item=>state.scExportThietBi.includes(item.thietBi));
+  return out;
+}
 window.exportSuaChua = async function(){
   if(!(await withXLSXReady())) return;
-  const sourceItems = state.scExportDotId ? state.suaChua.filter(item=>item.dotId===state.scExportDotId) : state.suaChua;
-  if(!sourceItems.length){ alert('Chưa có hạng mục sửa chữa nào để xuất (với đợt đang chọn).'); return; }
+  const sourceItems = scApplyExportFilter(state.suaChua);
+  if(!sourceItems.length){ alert('Chưa có hạng mục sửa chữa nào để xuất (với bộ lọc đang chọn).'); return; }
   const NCOL = 16;
   const byDot = {};
   sourceItems.forEach(item=>{ const k=item.dotId||'(chưa gán đợt)'; if(!byDot[k]) byDot[k]=[]; byDot[k].push(item); });
@@ -4898,6 +4909,13 @@ function renderSuaChua(){
   }).join('');
 
   const scExportDotOpts = state.dots.slice().sort((a,b)=>(b.ngayBatDau||'').localeCompare(a.ngayBatDau||'')).map(d=>`<option value="${esc(d.id)}" ${state.scExportDotId===d.id?'selected':''}>${esc(d.ten)} (${esc(d.trangThai)})</option>`).join('');
+  // Danh sach He thong/Thiet bi de tich chon khi xuat — lay tu dung pham vi dot dang chon o dropdown tren
+  // (neu co) de danh sach goi y sat voi du lieu se xuat, khong tich gi thi mac dinh xuat FULL nhu truoc.
+  const scExportScope = state.scExportDotId ? state.suaChua.filter(i=>i.dotId===state.scExportDotId) : state.suaChua;
+  const scExportHeThongOpts = uniq(scExportScope.map(i=>i.heThong).filter(Boolean)).sort((a,b)=>a.localeCompare(b))
+    .map(v=>`<option value="${esc(v)}" ${state.scExportHeThong.includes(v)?'selected':''}>${esc(v)}</option>`).join('');
+  const scExportThietBiOpts = uniq(scExportScope.map(i=>i.thietBi).filter(Boolean)).sort((a,b)=>a.localeCompare(b))
+    .map(v=>`<option value="${esc(v)}" ${state.scExportThietBi.includes(v)?'selected':''}>${esc(v)}</option>`).join('');
   return `<div class="page-head"><div><div class="page-eyebrow">Danh sách cần xử lý · Quản lý mối hàn</div><div class="page-title">Sửa chữa &amp; hàn</div></div>
     <div class="head-actions">
       <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;">Xuất dữ liệu đợt:
@@ -4906,6 +4924,17 @@ function renderSuaChua(){
           ${scExportDotOpts}
         </select>
       </label>
+      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;" title="Giữ Ctrl (hoặc Cmd trên Mac) để tích chọn nhiều Hệ thống — không tích gì thì xuất tất cả">Hệ thống:
+        <select multiple onchange="setScExportHeThong(this)" size="1" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;min-width:140px;">
+          ${scExportHeThongOpts}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;" title="Giữ Ctrl (hoặc Cmd trên Mac) để tích chọn nhiều Thiết bị — không tích gì thì xuất tất cả">Thiết bị:
+        <select multiple onchange="setScExportThietBi(this)" size="1" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12.5px;min-width:140px;">
+          ${scExportThietBiOpts}
+        </select>
+      </label>
+      ${(state.scExportHeThong.length || state.scExportThietBi.length) ? `<button class="btn-ghost" onclick="setScExportHeThong({selectedOptions:[]}); setScExportThietBi({selectedOptions:[]})" style="padding:4px 10px;">Xóa lọc xuất</button>` : ''}
       <button class="btn-ghost" onclick="toggleScViewMode()">${state.scViewMode==='welds'?'📋 Xem theo hạng mục':'🔩 Xem theo mối hàn (checklist)'}</button>
       ${state.scViewMode==='welds' ? `<button class="btn-ghost" onclick="exportScWeldList()">Xuất Excel (danh sách mối hàn)</button>` : `<button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>`}
     </div></div>
