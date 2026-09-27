@@ -386,9 +386,14 @@ const NGOAI_DANG_HAN_PHU = ['Mòn cục bộ','Tróc rỗ'];
 // Xac dinh phuong an sua chua MAC DINH dua theo Ngoai dang gan nhat (dung khi TU DONG tao hang muc moi tu
 // Kiem tra) — theo dung yeu cau nghiep vu: Xoay op/Rach op -> Sua op; Mon cuc bo/Troc ro -> Han phu; Nut,
 // gia tri tu dien "Khac", hoac khong co ngoai dang bat thuong (chi trigger boi %<=70) -> Cat thay.
+// Rieng gia tri TU DIEN (khong nam trong NGOAI_DANG_OPTIONS, vd nguoi dung tu go "Bục ốp", "Thủng ốp"...)
+// ma co chua tu khoa "ốp" (khong phan biet hoa/thuong, co/khong dau) thi cung coi la lien quan lop op/boc
+// cach nhiet ben ngoai -> tu dong chon "Sửa ốp", giong nhu 2 gia tri co san Xoay ốp/Rách ốp.
 function phuongAnMacDinhTuNgoaiDang(ngoaiDang){
   if(NGOAI_DANG_OP.includes(ngoaiDang)) return 'Sửa ốp';
   if(NGOAI_DANG_HAN_PHU.includes(ngoaiDang)) return 'Hàn phủ';
+  const isTuDien = ngoaiDang && !NGOAI_DANG_OPTIONS.includes(ngoaiDang);
+  if(isTuDien && removeDiacritics(ngoaiDang).toLowerCase().includes('op')) return 'Sửa ốp';
   return 'Cắt thay';
 }
 // Tao san 2 moi han CHINH THUC (w1, w2) mac dinh cho 1 hang muc Cat thay — dung chung khi TU DONG sinh hang
