@@ -3107,6 +3107,15 @@ async function syncSuaChua(){
                {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''}]};
       state.suaChua.push(activeItem);
       syncToSheet('sua_chua_item', activeItem);
+      // QUAN TRONG: giong het loi da sua o addBienPhapWeld — hang muc TU DONG SINH tu Kiem tra (<=70%) duoc
+      // tao kem san 2 moi han mac dinh (w1, w2), nhung TRUOC DAY code chi luu phan hang muc (sua_chua_item)
+      // ma QUEN luu ca 2 moi han nay len bang RIENG "sua_chua_weld" tren Supabase. Hau qua: MOI hang muc do
+      // he thong tu sinh ra deu hien "0/0 moi han" ngay khi tai lai du lieu tu server (F5, dong bo dinh ky,
+      // mo lai tu may khac...) — day rat co the la nguyen nhan chinh cua phan lon cac truong hop "0/0 moi
+      // han" da gap, khong chi rieng 4 hang muc da phat hien truoc do. Phai luu them ca w1 va w2:
+      activeItem.welds.forEach(w=>{
+        syncToSheet('sua_chua_weld', {itemId:activeItem.id, phanTramConLai:activeItem.phanTramConLai, trangThai:activeItem.trangThai, weld:w});
+      });
     } else {
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
@@ -3220,9 +3229,17 @@ window.addBienPhapWeld = async function(itemId){
   const viTriThucTe = prompt('Bắt buộc nhập Vị trí thực tế của mối hàn biện pháp này (VD: cách mép bích 20cm, giữa đoạn tầng 7-8...):');
   if(!viTriThucTe || !viTriThucTe.trim()){ alert('Chưa nhập vị trí thực tế — không thể tạo mối hàn biện pháp khi chưa xác định rõ vị trí.'); return; }
   const bpCount = item.welds.filter(w=>w.loai==='bien_phap').length;
-  item.welds.push({id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()});
+  const newWeld = {id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()};
+  item.welds.push(newWeld);
   if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
+  // QUAN TRONG: moi han (ke ca bien phap) duoc luu o BANG RIENG "sua_chua_weld" tren Supabase — bang
+  // "sua_chua_item" (recordToRow) KHONG co cot nao chua mang welds ca. Truoc day cho nay CHI goi
+  // syncToSheet('sua_chua_item', item) ma QUEN goi syncToSheet('sua_chua_weld', ...) cho moi han vua tao,
+  // nen moi han bien phap CHI ton tai trong bo nho/IndexedDB cuc bo — hien ra ngay tren man hinh (tuong da
+  // luu) nhung KHONG BAO GIO duoc ghi len Supabase; ngay khi co 1 lan dong bo/tai lai du lieu tu server
+  // (mo lai hang muc, chuyen tab, F5...) la mat ngay vi server khong he co ban ghi nay. Phai goi ca 2:
+  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:newWeld});
   syncToSheet('sua_chua_item', item);
   render();
 };
@@ -3253,6 +3270,15 @@ window.removeWeld = async function(itemId, weldId){
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_item', item);
   render();
+  // QUAN TRONG: moi han nam o bang RIENG "sua_chua_weld" tren Supabase (xem ghi chu trong addBienPhapWeld) —
+  // truoc day cho nay chi xoa khoi mang cuc bo roi goi syncToSheet('sua_chua_item',...) (ban ghi nay KHONG
+  // lien quan gi den bang weld), ma QUEN xoa ban ghi weld tren Supabase. Hau qua NGUOC lai voi loi "them bi
+  // mat": ban ghi weld cu VAN CON tren server, nen lan dong bo/tai lai sau do se lam moi han "da xoa" hien
+  // ra TRO LAI (giong nhu khong xoa duoc). Phai goi xoa dung ban ghi tren bang sua_chua_weld:
+  const delOk = await deleteFromSheet('SuaChua', weldId);
+  if(!delOk){
+    alert('Không xóa được mối hàn "'+weldId+'" trên Supabase (lỗi mạng/máy chủ) — mối hàn có thể hiện lại ở lần đồng bộ sau. Vui lòng thử xóa lại khi mạng ổn định.');
+  }
 };
 window.deleteSuaChuaItem = async function(itemId){
   if(!can('xoaSuaChua')){ noPermAlert(); return; }
