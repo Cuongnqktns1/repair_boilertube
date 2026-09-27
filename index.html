@@ -1769,40 +1769,53 @@ async function syncToSheet(type, record){
 async function syncKiemTraBatch(records){
   if(!records || !records.length) return {ok:true, written:0, skippedDup:0, skippedIds:[], updated:0};
   try{
-    // Kiem tra trung theo khoa tu nhien (Dot+To may+He thong+Thiet bi+Vi tri+Lop ong+Ngay) truc tiep tren
-    // Supabase (khong dua vao state cuc bo, vi co the co ban ghi nguoi khac vua them ma may nay chua kip
-    // dong bo ve) — chi truy van theo (cac) dot_id lien quan de nhanh, khong keo toan bo bang KiemTra.
-    // Lay them id+chieu_day_do cua ban ghi da co: neu ban ghi trung khoa nhung dang RONG (chieu_day_do
-    // null — vi du do 1 lan ghi loi/dut mang truoc day chi tao duoc dong rong), thi GHI DE bang gia tri
-    // moi (update theo dung id cu) thay vi bo qua nhu truoc — tranh tinh trang du lieu that bi "khoa cung"
-    // vinh vien boi 1 dong rac rong tao ra tu 1 lan loi truoc do.
+    // Kiem tra trung theo khoa tu nhien Dot+To may+He thong+Thiet bi+Vi tri+Lop ong truc tiep tren Supabase
+    // (khong dua vao state cuc bo, vi co the co ban ghi nguoi khac vua them ma may nay chua kip dong bo ve)
+    // — chi truy van theo (cac) dot_id lien quan de nhanh, khong keo toan bo bang KiemTra.
+    // QUAN TRONG: TU BO "Ngay" ra khoi khoa nhan dien doi tuong — theo dung nghiep vu "1 dot sua chua chi co
+    // 1 doi tuong duy nhat cho 1 ong, du nhap chieu day o form/ngay nao, nhap ngoai dang o form/ngay nao,
+    // deu phai quy ve DUNG 1 dong du lieu, khong tach thanh nhieu dong roi rac theo ngay nhap". Truoc day
+    // dung ca Ngay lam khoa nen 2 lan nhap khac ngay cho cung 1 ong (vd 1 lan nhap chieu day, 1 lan nhap
+    // ngoai dang) bi hieu la 2 doi tuong khac nhau, gay sai lech du lieu nghiem trong (vd he thong tuong ong
+    // "chua co chieu day" du thuc ra da co, chi la nam o dong khac).
+    // Lay day du cac cot can thiet cua ban ghi da co de GOP (merge) chu khong GHI DE toan bo — truong nao
+    // ban ghi moi (incoming) de trong thi GIU NGUYEN gia tri cu, chi ghi de truong nao incoming THUC SU co
+    // gia tri moi. Vi du: nhap lai chieu day cho ong da co san Ngoai dang "Xoay ốp" tu truoc, ma lan nhap
+    // nay khong dong gi den Ngoai dang (de trong) -> PHAI giu nguyen "Xoay ốp", khong duoc coi la "Binh
+    // thuong" hay xoa mat.
     const dotIds = Array.from(new Set(records.map(r=>r.dotId).filter(Boolean)));
     const existingMap = new Map();
     await Promise.all(dotIds.map(async (dotId)=>{
-      const existing = await sbSelect('kiem_tra', 'dot_id=eq.'+encodeURIComponent(dotId)+'&select=id,dot_id,to_may,he_thong,thiet_bi,vi_tri,lop_ong,ngay,chieu_day_do');
-      (existing||[]).forEach(e=>{ existingMap.set([e.dot_id,e.to_may,e.he_thong,e.thiet_bi,e.vi_tri,e.lop_ong,e.ngay].join('|'), e); });
+      const existing = await sbSelect('kiem_tra', 'dot_id=eq.'+encodeURIComponent(dotId)+'&select=*');
+      (existing||[]).forEach(e=>{ existingMap.set([e.dot_id,e.to_may,e.he_thong,e.thiet_bi,e.vi_tri,e.lop_ong].join('|'), e); });
     }));
     const rowsToInsert = []; const rowsToUpdate = []; const skippedIds = []; const seenInBatch = new Set();
     const updatedIdMap = []; // [clientId cu, id thuc te da ghi tren Supabase] — de sua lai id trong state cuc bo ngay, khong doi den lan sync sau
+    // workingMap: ban sao "existing" CO THE thay doi dan trong luc xu ly batch nay — de neu batch co 2+ dong
+    // cung 1 doi tuong (vd file Excel co dong trung), dong sau van gop dung vao ket qua cua dong truoc trong
+    // CUNG batch nay, khong chi gop voi du lieu cu tren server truoc khi batch bat dau.
+    const workingMap = new Map(existingMap);
     records.forEach(r=>{
-      const key = [r.dotId,r.toMay,r.heThong,r.thietBi,r.viTri,r.lopOng,r.ngay].join('|');
-      const existing = existingMap.get(key);
+      const key = [r.dotId,r.toMay,r.heThong,r.thietBi,r.viTri,r.lopOng].join('|');
+      const existing = workingMap.get(key);
+      const incoming = recordToRow('kiem_tra', r);
       if(existing){
-        const existingEmpty = existing.chieu_day_do===null || existing.chieu_day_do===undefined || existing.chieu_day_do==='';
-        if(existingEmpty && !seenInBatch.has(key)){
-          seenInBatch.add(key);
-          const row = recordToRow('kiem_tra', r);
-          row.id = existing.id; // ghi de dung vao ban ghi rong cu, khong tao ID moi
-          rowsToUpdate.push(row);
-          updatedIdMap.push([r.id, existing.id]);
-        } else {
-          skippedIds.push(r.id);
-        }
+        const merged = Object.assign({}, existing);
+        merged.id = existing.id; // giu dung ID cu tren Supabase, khong tao ID moi
+        ['vung','duong_kinh','chieu_day_tk','chieu_day_do','phan_tram_con_lai','ngoai_dang','nguoi_kiem_tra'].forEach(col=>{
+          if(incoming[col]!==undefined && incoming[col]!==null && incoming[col]!==''){ merged[col] = incoming[col]; }
+        });
+        // Ngay luon cap nhat = lan cham gan nhat vao doi tuong nay (chieu day hoac ngoai dang deu tinh)
+        if(incoming.ngay) merged.ngay = incoming.ngay;
+        rowsToUpdate.push(merged);
+        workingMap.set(key, merged); // cap nhat lai working map cho cac dong sau trong CUNG batch nay
+        if(r.id!==existing.id) updatedIdMap.push([r.id, existing.id]);
+        seenInBatch.add(key);
         return;
       }
-      if(seenInBatch.has(key)){ skippedIds.push(r.id); return; }
       seenInBatch.add(key);
-      rowsToInsert.push(recordToRow('kiem_tra', r));
+      rowsToInsert.push(incoming);
+      workingMap.set(key, incoming); // dong ke tiep trong batch trung doi tuong nay se duoc gop tiep vao day
     });
     const allRows = rowsToInsert.concat(rowsToUpdate);
     if(allRows.length){
@@ -2366,29 +2379,33 @@ window.ktMatrixSave = async function(){
       if(!dm || dm==='conflict' || isNaN(parseFloat(cell.val))){ skipped++; return; }
       const chieuDayDo = String(cell.val).trim();
       const phanTramConLai = (parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-      if(cell.existingId){
-        const rec = state.kiemTra.find(r=>r.id===cell.existingId);
-        if(rec){
-          rec.danhMucId=dm.id; rec.vung=dm.vung; rec.duongKinh=dm.duongKinh; rec.chieuDayTK=dm.chieuDay;
-          rec.chieuDayDo=chieuDayDo; rec.phanTramConLai=phanTramConLai.toFixed(1);
-          // Chỉ ghi đè Ngoại dạng khi có đánh dấu MỚI trong bảng lần này — nếu không, giữ nguyên giá trị
-          // đã lưu trước đó (tránh vô tình xóa mất ghi nhận bất thường cũ khi chỉ sửa lại số đo).
-          if(exceptionMap[key]) rec.ngoaiDang = exceptionMap[key];
-          pendingUpdate.push(rec);
-          updated++;
-          if(phanTramConLai<=70) belowThreshold.push(rec);
-        }
+      // QUAN TRONG: tim ban ghi da co cho DUNG doi tuong ong nay trong DUNG dot dang chon — bang ktFindExisting
+      // (khong con phu thuoc vao cell.existingId, vi gia tri do CHI duoc dien khi bam "Tai du lieu da co", de
+      // nguoi dung QUEN bam nut do van khong bi tao nham thanh doi tuong moi/trung).
+      const rec = state.kiemTra.find(r=>r.id===cell.existingId) || ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, vt, lo);
+      if(rec){
+        rec.danhMucId=dm.id; rec.vung=dm.vung; rec.duongKinh=dm.duongKinh; rec.chieuDayTK=dm.chieuDay;
+        rec.chieuDayDo=chieuDayDo; rec.phanTramConLai=phanTramConLai.toFixed(1); rec.ngay=ngay; rec.nguoiKiemTra=nguoi;
+        // Chỉ ghi đè Ngoại dạng khi có đánh dấu MỚI trong bảng lần này — nếu không, giữ nguyên giá trị
+        // đã lưu trước đó (tránh vô tình xóa mất ghi nhận bất thường cũ khi chỉ sửa lại số đo).
+        if(exceptionMap[key]) rec.ngoaiDang = exceptionMap[key];
+        pendingUpdate.push(rec);
+        updated++;
+        if(phanTramConLai<=70) belowThreshold.push(rec);
       } else {
-        const rec = {
+        const newRec = {
           id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
           heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:vt, lopOng:lo,
           duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo, phanTramConLai:phanTramConLai.toFixed(1),
-          ngoaiDang: exceptionMap[key] || 'Bình thường', ngay, nguoiKiemTra:nguoi
+          // KHONG con mac dinh "Binh thuong" — chua ai nhap Ngoai dang cho ong nay thi de "chua xac dinh"
+          // (rong), tranh hieu nham la DA XAC NHAN binh thuong trong khi thuc ra chi la chua kiem tra ngoai
+          // dang. Chi gan gia tri khi co danh dau ngoai le (exceptionMap) trong chinh bang chieu day nay.
+          ngoaiDang: exceptionMap[key] || '', ngay, nguoiKiemTra:nguoi
         };
-        state.kiemTra.unshift(rec);
-        pendingCreate.push(rec);
+        state.kiemTra.unshift(newRec);
+        pendingCreate.push(newRec);
         created++;
-        if(phanTramConLai<=70) belowThreshold.push(rec);
+        if(phanTramConLai<=70) belowThreshold.push(newRec);
       }
     });
   });
@@ -2416,14 +2433,12 @@ window.ktMatrixSave = async function(){
   }
 };
 // Luu bang "Nhap ngoai dang" (mode='ngoaidang') — GHI DOC LAP, khong bat buoc da co so do UTM truoc do:
-// - Neu Vi tri/Lop ong nay DA CO ban ghi Kiem tra dung NGAY HOM NAY (vd vua nhap UTM xong trong cung phien
-//   lam viec) -> CAP NHAT luon ban ghi hom nay do (khong tao them ban ghi trung ngay, tranh 2 ban ghi cung
-//   pipe cung ngay lam sai lech "lan do gan nhat").
-// - Neu chua co ban ghi nao hom nay nhung DA TUNG co ban ghi cu (ngay truoc) -> TAO ban ghi MOI cho hom nay,
-//   MANG THEO chieu day do/% con lai cua lan do gan nhat do (khong phai do lai, chi la xac nhan lai + bo
-//   sung quan sat ngoai dang moi) — ban ghi cu giu nguyen, khong bi sua.
-// - Neu CHUA TUNG co ban ghi nao (vi tri hoan toan chua ai do UTM) -> TAO ban ghi moi voi Chieu day do/%
-//   con lai de TRONG THAT (khong bia so) — Duong kinh/Chieu day TK van lay du tu Danh muc ky thuat.
+// - Neu Vi tri/Lop ong nay DA CO doi tuong Kiem tra trong DUNG dot dang chon (bat ke duoc tao/cap nhat ngay
+//   nao — theo dung nghiep vu "1 dot chi 1 doi tuong cho 1 ong") -> CAP NHAT thang vao doi tuong do, ghi de
+//   cot Ngoai dang va cap nhat lai Ngay = ngay cham gan nhat, KHONG tao them dong moi.
+// - Neu doi tuong nay CHUA TUNG ton tai trong dot (vi tri hoan toan chua ai do chieu day/nhap ngoai dang) ->
+//   TAO MOI voi Chieu day do/% con lai de TRONG THAT (khong bia so) — Duong kinh/Chieu day TK van lay du tu
+//   Danh muc ky thuat, cho den khi co ai nhap chieu day thi cap nhat bo sung vao dung doi tuong nay.
 window.ktMatrixSaveNgoaiDang = async function(){
   if(!can('kiemTra')){ noPermAlert(); return; }
   const m = state.ktMatrix;
@@ -2442,20 +2457,19 @@ window.ktMatrixSaveNgoaiDang = async function(){
       if(!ngoaiDangVal) return; // o "— Chưa chọn —" thi bo qua, khong dong den
       const dm = m.resolved[key];
       if(!dm || dm==='conflict'){ skipped++; return; }
-      const pKey = (dotObj.toMay||'')+'|'+dm.heThong+'|'+dm.thietBi+'|'+vt+'|'+lo;
-      const history = state.kiemTra.filter(r=>pipeKeyOf(r)===pKey).sort((a,b)=>a.ngay.localeCompare(b.ngay));
-      const todayRec = history.find(r=>r.ngay===ngay);
-      if(todayRec){
-        todayRec.ngoaiDang = ngoaiDangVal;
-        pendingUpdate.push(todayRec);
+      const existingRec = ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, vt, lo);
+      if(existingRec){
+        existingRec.ngoaiDang = ngoaiDangVal;
+        existingRec.ngay = ngay; // cap nhat "ngay cham gan nhat" vao dung doi tuong da co
+        existingRec.nguoiKiemTra = nguoi;
+        pendingUpdate.push(existingRec);
         updated++;
       } else {
-        const lastRec = history.length ? history[history.length-1] : null;
         const rec = {
           id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
           heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:vt, lopOng:lo,
           duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay,
-          chieuDayDo: lastRec ? lastRec.chieuDayDo : '', phanTramConLai: lastRec ? lastRec.phanTramConLai : '',
+          chieuDayDo: '', phanTramConLai: '',
           ngoaiDang: ngoaiDangVal, ngay, nguoiKiemTra:nguoi
         };
         state.kiemTra.unshift(rec);
@@ -2961,9 +2975,10 @@ window.importKiemTra = function(input){
     const wb=XLSX.read(e.target.result,{type:'array'});
     const ws = wb.Sheets[wb.SheetNames[0]];
     const mtx = ktMatrixParseSheet(ws);
-    let added=0, skipped=0, ambiguous=0, missingHeader=0;
+    let added=0, updatedCount=0, skipped=0, ambiguous=0, missingHeader=0;
     const reasonTally = {};
     const pendingSync = []; // gom het lai, gui 1 lan duy nhat len Google Sheet sau khi doc xong file
+    const pendingUpdate = []; // cac doi tuong DA CO tu truoc (cung dot), chi bo sung/cap nhat chu khong tao moi
     const belowThreshold = []; // cac ban ghi <=70% con lai, dung de canh bao Telegram sau khi nhap xong (truoc day ham nay bi thieu, chi ktMatrixSave/them tay/giong noi moi co canh bao)
     if(mtx){
       // ---- Dạng bảng ma trận (tiêu đề 1 hoặc 2 dòng): mỗi dòng dữ liệu = 1 Vị trí, mỗi cột Lớp ống N có số liệu riêng ----
@@ -2994,11 +3009,25 @@ window.importKiemTra = function(input){
             return;
           }
           const phanTramConLai=(parseFloat(cellStr)/parseFloat(dm.chieuDay)*100);
-          const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:viTriVal, lopOng:String(col.n), duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:cellStr, phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:'Bình thường', ngay, nguoiKiemTra: state.session?state.session.name:'—'};
-          state.kiemTra.unshift(newRec);
-          pendingSync.push(newRec);
-          if(phanTramConLai<=70) belowThreshold.push(newRec);
-          added++;
+          // QUAN TRONG: doi tuong co dinh la cho 1 dot, tim ban ghi da co (bat ke ngay nao) truoc khi tao moi
+          // — tranh tach 1 ong thanh nhieu dong chi vi nhap chieu day va ngoai dang o 2 lan/2 file khac nhau.
+          const existing = ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, viTriVal, String(col.n));
+          if(existing){
+            existing.danhMucId=dm.id; existing.vung=dm.vung; existing.duongKinh=dm.duongKinh; existing.chieuDayTK=dm.chieuDay;
+            existing.chieuDayDo=cellStr; existing.phanTramConLai=phanTramConLai.toFixed(1); existing.ngay=ngay;
+            existing.nguoiKiemTra = state.session?state.session.name:(existing.nguoiKiemTra||'—');
+            // File dang bang chi co chieu day, KHONG co cot Ngoai dang -> giu nguyen gia tri Ngoai dang da co
+            // cua doi tuong (neu co), khong ghi de ve rong/Binh thuong.
+            pendingUpdate.push(existing);
+            updatedCount++;
+            if(phanTramConLai<=70) belowThreshold.push(existing);
+          } else {
+            const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:viTriVal, lopOng:String(col.n), duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:cellStr, phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:'', ngay, nguoiKiemTra: state.session?state.session.name:'—'};
+            state.kiemTra.unshift(newRec);
+            pendingSync.push(newRec);
+            if(phanTramConLai<=70) belowThreshold.push(newRec);
+            added++;
+          }
         });
       });
     } else {
@@ -3024,11 +3053,26 @@ window.importKiemTra = function(input){
           return;
         }
         const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
-        const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:String(r['Ngoại dạng']||r['Ngoai dang']||''), ngay:(parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr()), nguoiKiemTra:String(r['Người kiểm tra']||r['Nguoi kiem tra']||(state.session?state.session.name:''))};
-        state.kiemTra.unshift(newRec);
-        pendingSync.push(newRec);
-        if(phanTramConLai<=70) belowThreshold.push(newRec);
-        added++;
+        const ngoaiDangCol = String(r['Ngoại dạng']||r['Ngoai dang']||'').trim();
+        const ngayCol = parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr();
+        const nguoiCol = String(r['Người kiểm tra']||r['Nguoi kiem tra']||'').trim();
+        const existing = ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, viTri, lopOng);
+        if(existing){
+          existing.danhMucId=dm.id; existing.vung=dm.vung; existing.duongKinh=dm.duongKinh; existing.chieuDayTK=dm.chieuDay;
+          existing.chieuDayDo=String(chieuDayDo); existing.phanTramConLai=phanTramConLai.toFixed(1); existing.ngay=ngayCol;
+          // Chi ghi de Ngoai dang khi FILE THUC SU co ghi ro cot nay — de trong thi giu nguyen gia tri cu.
+          if(ngoaiDangCol) existing.ngoaiDang = ngoaiDangCol;
+          if(nguoiCol) existing.nguoiKiemTra = nguoiCol;
+          pendingUpdate.push(existing);
+          updatedCount++;
+          if(phanTramConLai<=70) belowThreshold.push(existing);
+        } else {
+          const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:ngoaiDangCol, ngay:ngayCol, nguoiKiemTra:(nguoiCol||(state.session?state.session.name:''))};
+          state.kiemTra.unshift(newRec);
+          pendingSync.push(newRec);
+          if(phanTramConLai<=70) belowThreshold.push(newRec);
+          added++;
+        }
       });
     }
     await persist('kiem-tra', state.kiemTra, true);
@@ -3037,9 +3081,13 @@ window.importKiemTra = function(input){
     // va rot mat phan lon). Apps Script se tu bo qua cac dong da co san (dung cho truong hop nhap lai
     // dung file sau khi lan truoc bi loi mang chi luu duoc mot phan) nen nhap lai an toan, khong nhan doi.
     let batchResult = {ok:true, written:0, skippedDup:0, skippedIds:[]};
+    let updateBatchResult = {ok:true, updated:0};
     let belowThresholdFinal = belowThreshold;
-    if(pendingSync.length){
-      batchResult = await syncKiemTraBatch(pendingSync);
+    if(pendingSync.length || pendingUpdate.length){
+      [batchResult, updateBatchResult] = await Promise.all([
+        pendingSync.length ? syncKiemTraBatch(pendingSync) : Promise.resolve({ok:true, written:0, skippedDup:0, skippedIds:[]}),
+        pendingUpdate.length ? syncKiemTraBatchUpdate(pendingUpdate) : Promise.resolve({ok:true, updated:0})
+      ]);
       if(batchResult.ok && batchResult.skippedIds && batchResult.skippedIds.length){
         const skipSet = new Set(batchResult.skippedIds);
         state.kiemTra = state.kiemTra.filter(k=>!skipSet.has(k.id));
@@ -3054,22 +3102,22 @@ window.importKiemTra = function(input){
         state.kiemTra.forEach(k=>{ if(idFix.has(k.id)) k.id = idFix.get(k.id); });
         belowThresholdFinal.forEach(r=>{ if(idFix.has(r.id)) r.id = idFix.get(r.id); });
       }
-      if(batchResult.ok){ await persist('kiem-tra', state.kiemTra, true); }
+      if(batchResult.ok && updateBatchResult.ok){ await persist('kiem-tra', state.kiemTra, true); }
     }
     await syncSuaChua();
     const reasonLines = Object.keys(reasonTally).sort((a,b)=>reasonTally[b].count-reasonTally[a].count)
       .map(code=>'• ('+reasonTally[code].count+' ô/dòng) '+reasonTally[code].label).join('\n');
     let syncMsg;
-    if(!pendingSync.length){
+    if(!pendingSync.length && !pendingUpdate.length){
       syncMsg = '';
-    } else if(!batchResult.ok){
-      syncMsg = '\n\n⚠️ LỖI: Không ghi được vào hệ thống ('+(batchResult.error||'không rõ nguyên nhân')+'). Dữ liệu đang tạm chỉ có trên máy này, CHƯA có trên hệ thống — vui lòng thử nhập lại file này khi mạng ổn định (nhập lại sẽ an toàn, không bị nhân đôi các dòng đã lỡ ghi được).';
+    } else if(!batchResult.ok || !updateBatchResult.ok){
+      syncMsg = '\n\n⚠️ LỖI: Không ghi được vào hệ thống ('+(batchResult.error||updateBatchResult.error||'không rõ nguyên nhân')+'). Dữ liệu đang tạm chỉ có trên máy này, CHƯA có trên hệ thống — vui lòng thử nhập lại file này khi mạng ổn định (nhập lại sẽ an toàn, không bị nhân đôi các dòng đã lỡ ghi được).';
     } else {
-      syncMsg = '\n\nĐã ghi vào hệ thống: '+batchResult.written+' dòng mới.'
+      syncMsg = '\n\nĐã ghi vào hệ thống: '+batchResult.written+' dòng mới'+(updatedCount?(', cập nhật bổ sung '+updatedCount+' đối tượng đã có sẵn trong đợt (không tạo dòng mới)'):'')+'.'
         +(batchResult.updated?(' Đã cập nhật lại '+batchResult.updated+' dòng trước đó bị bỏ trống giá trị đo (do lỗi ghi lần trước) bằng giá trị đúng lần này.'):'')
-        +(batchResult.skippedDup?(' Bỏ qua '+batchResult.skippedDup+' dòng đã có sẵn dữ liệu hợp lệ trước đó (trùng Đợt/Hệ thống/Thiết bị/Vị trí/Lớp ống/Ngày) — không ghi đè, không nhân đôi.'):'');
+        +(batchResult.skippedDup?(' Bỏ qua '+batchResult.skippedDup+' dòng đã có sẵn dữ liệu hợp lệ trước đó (trùng đối tượng trong cùng đợt) — không ghi đè, không nhân đôi.'):'');
     }
-    alert('Đã nhập '+added+' bản ghi vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):'')+syncMsg);
+    alert('Đã nhập '+added+' bản ghi mới'+(updatedCount?(', cập nhật '+updatedCount+' đối tượng đã có'):'')+' vào đợt "'+dotObj.ten+'"'+(mtx?(' (nhận diện file dạng bảng ma trận, '+mtx.lopOngCols.length+' cột lớp ống)'):'')+'. Bỏ qua '+skipped+' ô/dòng không khớp Danh mục kỹ thuật hoặc thiếu dữ liệu.'+(ambiguous?(' '+ambiguous+' ô/dòng có nhiều vùng khớp — cần sửa lại Danh mục kỹ thuật cho các dải không chồng lấn.'):'')+(missingHeader?(' '+missingHeader+' dòng bị bỏ qua hoàn toàn vì không đọc được cột "Hệ thống"/"Vị trí" — kiểm tra lại đúng tên cột trong file.'):'')+(reasonLines?('\n\nChi tiết nguyên nhân không khớp Danh mục kỹ thuật:\n'+reasonLines):'')+syncMsg);
     input.value=''; render();
     // Canh bao Telegram cho cac ban ghi <=70% con lai TRUOC DAY BI THIEU o luong Nhap Excel — chi cac form
     // nhap tay (bang ma tran/giong noi) moi co canh bao nay, khien nhap hang loat qua Excel (thuong la
@@ -3085,6 +3133,14 @@ window.importKiemTra = function(input){
 
 /* ---------- SỬA CHỮA & HÀN ---------- */
 function pipeKeyOf(k){ return (k.toMay||'')+'|'+k.heThong+'|'+k.thietBi+'|'+k.viTri+'|'+k.lopOng; }
+// Tim ban ghi Kiem tra DA CO cho DUNG 1 doi tuong ong trong 1 dot cu the (Dot+To may+He thong+Thiet bi+Vi
+// tri+Lop ong) — KHONG con xet Ngay, vi theo dung nghiep vu moi: "doi tuong co dinh la cho 1 dot sua chua,
+// 1 dot chi 1 doi tuong, neu co thay doi du lieu thi cap nhat vao doi tuong do, ko tao them doi tuong". Dung
+// chung o ca 3 noi nhap lieu Kiem tra (nhap chieu day dang bang, nhap ngoai dang dang bang, nhap Excel) de
+// tranh tinh trang 1 ong bi tach thanh nhieu dong rieng le chi vi nhap chieu day va ngoai dang khac ngay nhau.
+function ktFindExisting(dotId, toMay, heThong, thietBi, viTri, lopOng){
+  return state.kiemTra.find(r=>r.dotId===dotId && r.toMay===toMay && r.heThong===heThong && r.thietBi===thietBi && r.viTri===viTri && r.lopOng===lopOng);
+}
 async function syncSuaChua(){
   const byPipe = {};
   state.kiemTra.forEach(k=>{
