@@ -380,6 +380,26 @@ function isNgoaiDangBatThuong(v){ return !!(v && String(v).trim()!=='' && v!=='B
 // Nhom Ngoai dang thuoc lop op/boc cach nhiet ben ngoai — KHONG lien quan chieu day thanh ong, dung de tu
 // dong chon san phuong an Sua chua phu hop (Sua op) thay vi Cat thay mac dinh khi tao moi hang muc.
 const NGOAI_DANG_OP = ['Xoay ốp','Rách ốp'];
+// Nhom Ngoai dang la hu hong be mat nhe/cuc bo (mon khong dong deu, troc ro lop bao ve...) — xu ly bang
+// Han phu (dap vet han bo sung) thay vi cat doan ong, tu dong chon san phuong an nay khi tao moi hang muc.
+const NGOAI_DANG_HAN_PHU = ['Mòn cục bộ','Tróc rỗ'];
+// Xac dinh phuong an sua chua MAC DINH dua theo Ngoai dang gan nhat (dung khi TU DONG tao hang muc moi tu
+// Kiem tra) — theo dung yeu cau nghiep vu: Xoay op/Rach op -> Sua op; Mon cuc bo/Troc ro -> Han phu; Nut,
+// gia tri tu dien "Khac", hoac khong co ngoai dang bat thuong (chi trigger boi %<=70) -> Cat thay.
+function phuongAnMacDinhTuNgoaiDang(ngoaiDang){
+  if(NGOAI_DANG_OP.includes(ngoaiDang)) return 'Sửa ốp';
+  if(NGOAI_DANG_HAN_PHU.includes(ngoaiDang)) return 'Hàn phủ';
+  return 'Cắt thay';
+}
+// Tao san 2 moi han CHINH THUC (w1, w2) mac dinh cho 1 hang muc Cat thay — dung chung khi TU DONG sinh hang
+// muc (syncSuaChua) VA khi nguoi dung TU TAY doi phuong an sang Cat thay (setPhuongAn) — dam bao ca 2 noi
+// deu tao dung 1 kieu du lieu, khong lech nhau.
+function taoMoiHanChinhThucMacDinh(displayId){
+  return [
+    {id:displayId+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''},
+    {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''}
+  ];
+}
 
 let _dataVersion = 0; // tang moi lan du lieu thuc su thay doi qua persist() - dung de cache cac tinh toan nang (vd tab Lich su & xu huong)
 let state = {
@@ -3093,26 +3113,29 @@ async function syncSuaChua(){
       const chuKy = (lastItem ? lastItem.chuKy : 0) + 1;
       const idBase = (latest.toMay?latest.toMay+' · ':'')+latest.heThong+' - '+latest.thietBi+' - '+latest.viTri+' - '+latest.lopOng;
       const displayId = idBase + (chuKy>1 ? (' (Chu kỳ '+chuKy+')') : '');
-      // Ngoai dang thuoc nhom lop op (Xoay op/Rach op) khong lien quan chieu day thanh ong -> tu dong chon
-      // san phuong an "Sua op" thay vi "Cat thay" mac dinh, vi thuc te can xu ly ngay khong phu thuoc chieu
-      // day do — giam sat van hieu chinh lai thu cong duoc binh thuong o modul Sua chua neu can.
-      const phuongAnMacDinh = NGOAI_DANG_OP.includes(latest.ngoaiDang) ? 'Sửa ốp' : 'Cắt thay';
+      // Tu dong chon san phuong an theo dung Ngoai dang gan nhat (xem phuongAnMacDinhTuNgoaiDang): Xoay op/
+      // Rach op -> Sua op; Mon cuc bo/Troc ro -> Han phu; Nut/gia tri tu dien/khong co ngoai dang bat thuong
+      // (chi trigger boi %<=70) -> Cat thay — giam sat van hieu chinh lai thu cong duoc binh thuong sau do.
+      const phuongAnMacDinh = phuongAnMacDinhTuNgoaiDang(latest.ngoaiDang);
+      // Chi tao san 2 moi han CHINH THUC (w1, w2) khi phuong an la Cat thay — Han phu/Sua op khong dung khai
+      // niem moi han (theo doi bang trang thai thu cong), tao san welds cho 2 phuong an nay se gay sai lech
+      // dữ liệu và hiển thị nhầm khung mối hàn không liên quan.
+      const weldsMacDinh = phuongAnMacDinh==='Cắt thay' ? taoMoiHanChinhThucMacDinh(displayId) : [];
       activeItem = {id:displayId, pipeKey:key, chuKy, dotId:latest.dotId, toMay:latest.toMay,
         heThong:latest.heThong, thietBi:latest.thietBi, viTri:latest.viTri, lopOng:latest.lopOng,
         chieuDayTK:latest.chieuDayTK, chieuDayDoGanNhat:latest.chieuDayDo, phanTramConLai:latest.phanTramConLai,
         ngoaiDangGanNhat: latest.ngoaiDang||'', ghiChuXoaMoiHan:'',
         ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:phuongAnMacDinh,
         choPhepThiCong:false, nguoiChoPhep:'', thoiGianChoPhep:'',
-        welds:[{id:displayId+'-w1', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''},
-               {id:displayId+'-w2', loai:'chinh_thuc', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien:'', nguoiXacNhanPAUT:''}]};
+        welds:weldsMacDinh};
       state.suaChua.push(activeItem);
       syncToSheet('sua_chua_item', activeItem);
-      // QUAN TRONG: giong het loi da sua o addBienPhapWeld — hang muc TU DONG SINH tu Kiem tra (<=70%) duoc
-      // tao kem san 2 moi han mac dinh (w1, w2), nhung TRUOC DAY code chi luu phan hang muc (sua_chua_item)
+      // QUAN TRONG: giong het loi da sua o addBienPhapWeld — hang muc TU DONG SINH tu Kiem tra duoc tao kem
+      // san 2 moi han mac dinh (khi la Cat thay), nhung TRUOC DAY code chi luu phan hang muc (sua_chua_item)
       // ma QUEN luu ca 2 moi han nay len bang RIENG "sua_chua_weld" tren Supabase. Hau qua: MOI hang muc do
       // he thong tu sinh ra deu hien "0/0 moi han" ngay khi tai lai du lieu tu server (F5, dong bo dinh ky,
       // mo lai tu may khac...) — day rat co the la nguyen nhan chinh cua phan lon cac truong hop "0/0 moi
-      // han" da gap, khong chi rieng 4 hang muc da phat hien truoc do. Phai luu them ca w1 va w2:
+      // han" da gap, khong chi rieng 4 hang muc da phat hien truoc do. Phai luu them ca w1 va w2 (neu co):
       activeItem.welds.forEach(w=>{
         syncToSheet('sua_chua_weld', {itemId:activeItem.id, phanTramConLai:activeItem.phanTramConLai, trangThai:activeItem.trangThai, weld:w});
       });
@@ -3155,7 +3178,24 @@ window.setPhuongAn = async function(itemId, value){
   if(!can('hanCat')){ noPermAlert(); render(); return; }
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const wasHoanThanh = item.trangThai==='Hoàn thành';
+  const phuongAnCu = item.phuongAn||'Cắt thay';
   item.phuongAn = value;
+  // Nguoi dung TU TAY doi phuong an sang Cat thay (truoc do KHONG phai Cat thay) -> tu dong tao san 2 moi
+  // han chinh thuc (w1, w2), giong het nhu khi he thong tu dong sinh hang muc voi phuong an Cat thay — chi
+  // tao khi hang muc dang chua co moi han nao (tranh tao trung neu vi ly do nao do da co san).
+  const weldsMoiTao = [];
+  if(value==='Cắt thay' && phuongAnCu!=='Cắt thay'){
+    if(!item.welds || item.welds.length===0){
+      const welds = taoMoiHanChinhThucMacDinh(item.id);
+      item.welds = welds;
+      weldsMoiTao.push(...welds);
+    }
+  }
+  // Nguoc lai: doi TU Cat thay SANG phuong an khac (Han phu/Sua op) -> khong con dung khai niem moi han nua,
+  // xoa toan bo moi han hien co (ca chinh thuc lan bien phap, neu co) ca cuc bo lan tren Supabase — tranh de
+  // lai du lieu moi han "mo coi" khong con gan voi phuong an nao dung.
+  const weldIdsCanXoa = (value!=='Cắt thay' && phuongAnCu==='Cắt thay' && item.welds && item.welds.length) ? item.welds.map(w=>w.id) : [];
+  if(weldIdsCanXoa.length) item.welds = [];
   if(value!=='Cắt thay'){
     // phương án Hàn phủ/Sửa ốp theo dõi bằng trạng thái thủ công, không dùng khung mối hàn w1/w2
     if(item.trangThai==='Hoàn thành' && !item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
@@ -3165,6 +3205,10 @@ window.setPhuongAn = async function(itemId, value){
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_item', item);
+  weldsMoiTao.forEach(w=>{
+    syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  });
+  if(weldIdsCanXoa.length) deleteManyFromSheet('SuaChua', weldIdsCanXoa);
   render();
 };
 // Giam sat QC/CV P4/admin xac nhan "Cho phep thi cong" cho 1 hang muc — muc dich de nha thau (ktv_han_cat)
