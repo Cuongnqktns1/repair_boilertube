@@ -389,7 +389,12 @@ const NGOAI_DANG_HAN_PHU = ['Mòn cục bộ','Tróc rỗ'];
 // Rieng gia tri TU DIEN (khong nam trong NGOAI_DANG_OPTIONS, vd nguoi dung tu go "Bục ốp", "Thủng ốp"...)
 // ma co chua tu khoa "ốp" (khong phan biet hoa/thuong, co/khong dau) thi cung coi la lien quan lop op/boc
 // cach nhiet ben ngoai -> tu dong chon "Sửa ốp", giong nhu 2 gia tri co san Xoay ốp/Rách ốp.
-function phuongAnMacDinhTuNgoaiDang(ngoaiDang){
+// pctTrigger: chieu day con lai da roi vao dieu kien phai Cat thay (<=70%, so hop le). Theo yeu cau nghiep
+// vu: CHI CAN 1 TRONG 2 tieu chi (chieu day HOAC ngoai dang) roi vao truong hop Cat thay la tu dong chon
+// Cat thay — kieu du bi op chi Rach op (thuong ra Sua op) nhung chieu day da <=70% thi VAN phai la Cat thay,
+// khong duoc uu tien Sua op/Han phu khi tieu chi chieu day da bao hieu can cat doan ong.
+function phuongAnMacDinhTuNgoaiDang(ngoaiDang, pctTrigger){
+  if(pctTrigger) return 'Cắt thay';
   if(NGOAI_DANG_OP.includes(ngoaiDang)) return 'Sửa ốp';
   if(NGOAI_DANG_HAN_PHU.includes(ngoaiDang)) return 'Hàn phủ';
   const isTuDien = ngoaiDang && !NGOAI_DANG_OPTIONS.includes(ngoaiDang);
@@ -3177,7 +3182,7 @@ async function syncSuaChua(){
       // Tu dong chon san phuong an theo dung Ngoai dang gan nhat (xem phuongAnMacDinhTuNgoaiDang): Xoay op/
       // Rach op -> Sua op; Mon cuc bo/Troc ro -> Han phu; Nut/gia tri tu dien/khong co ngoai dang bat thuong
       // (chi trigger boi %<=70) -> Cat thay — giam sat van hieu chinh lai thu cong duoc binh thuong sau do.
-      const phuongAnMacDinh = phuongAnMacDinhTuNgoaiDang(latest.ngoaiDang);
+      const phuongAnMacDinh = phuongAnMacDinhTuNgoaiDang(latest.ngoaiDang, pctTrigger);
       // Chi tao san 2 moi han CHINH THUC (w1, w2) khi phuong an la Cat thay — Han phu/Sua op khong dung khai
       // niem moi han (theo doi bang trang thai thu cong), tao san welds cho 2 phuong an nay se gay sai lech
       // dữ liệu và hiển thị nhầm khung mối hàn không liên quan.
@@ -3201,8 +3206,14 @@ async function syncSuaChua(){
         syncToSheet('sua_chua_weld', {itemId:activeItem.id, phanTramConLai:activeItem.phanTramConLai, trangThai:activeItem.trangThai, weld:w});
       });
     } else {
+      // LOI DA SUA: truoc day nhanh nay CHI cap nhat activeItem trong bo nho (roi persist('sua-chua',...)
+      // vao 1 key luu tru KHAC, khong phai bang Supabase sua_chua_hang_muc that su) ma QUEN goi syncToSheet
+      // de day % con lai / ngoai dang gan nhat MOI len server — hau qua: hang muc da ton tai se "dung hinh"
+      // o lan do dau tien, khong bao gio cap nhat theo cac lan do chieu day/ngoai dang moi sau do, du du lieu
+      // Kiem tra van dung. Phai goi syncToSheet('sua_chua_item', activeItem) giong het nhanh tao moi ben tren.
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
+      syncToSheet('sua_chua_item', activeItem);
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
