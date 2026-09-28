@@ -432,6 +432,7 @@ let state = {
   ktMatrix:{active:false, mode:'utm', editMode:false, ngay:'', rangeFrom:'', rangeTo:'', viTriList:[], lopOngCols:[], cells:{}, resolved:{}, exceptions:[]},
   vtSel:{dotId:''},
   scFilter:{dotId:'',toMay:'',heThong:'',thietBi:'',phuongAn:'',weldStatus:''},
+  ktFilter:{toMay:'',heThong:'',thietBi:''}, // loc danh sach hien thi o modul Kiem tra (doc dac) — tuong tu scFilter
   scViewMode:'group', // 'group' = xem theo hang muc (nhu cu), 'welds' = danh sach phang theo tung moi han (checklist hien truong)
   ovYear:null, ovDot:null, ovMode:'current',
   expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
@@ -535,6 +536,15 @@ document.addEventListener('focusout', ()=>{
   setTimeout(()=>{ if(!isVoiceEditable(document.activeElement)) hideVoiceFab(); }, 80);
 });
 // Tra cứu bằng giọng nói: đọc ra, dò khớp gần đúng với danh sách lựa chọn có sẵn (bỏ qua dấu/hoa-thường)
+function toNumVN(v){
+  if(v===null||v===undefined) return NaN;
+  let s = String(v).trim();
+  if(s==='') return NaN;
+  if(s.indexOf(',')!==-1){
+    s = s.replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',', '.');
+  }
+  return parseFloat(s);
+}
 function normalizeVN(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim();
 }
@@ -582,6 +592,15 @@ window.voiceSearchScToMay = function(btn){
   startVoiceSearch(btn, txt=>{
     const best = fuzzyPickOption(txt, toMayOpts.map(v=>({value:v, label:v})));
     if(best){ setScFilter('toMay', best.value); } else { alert('Không tìm thấy Tổ máy nào khớp với: "'+txt+'"'); }
+  });
+};
+window.voiceSearchKtToMay = function(btn){
+  const activeDotIdsKt = new Set(state.dots.filter(d=>d.trangThai==='Đang diễn ra').map(d=>d.id));
+  const ktVisible = state.kiemTra.filter(r=>activeDotIdsKt.has(r.dotId));
+  const toMayOpts = uniq(ktVisible.map(r=>r.toMay).filter(Boolean));
+  startVoiceSearch(btn, txt=>{
+    const best = fuzzyPickOption(txt, toMayOpts.map(v=>({value:v, label:v})));
+    if(best){ setKtFilter('toMay', best.value); } else { alert('Không tìm thấy Tổ máy nào khớp với: "'+txt+'"'); }
   });
 };
 window.voiceSearchLsPipe = function(btn){
@@ -2153,7 +2172,7 @@ window.addKiemTra = async function(){
     return;
   }
   if(!chieuDayDo){ alert('Vui lòng nhập chiều dày đo được.'); return; }
-  const phanTramConLai = (parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
+  const phanTramConLai = (toNumVN(chieuDayDo)/toNumVN(dm.chieuDay)*100);
   const rec = {
     id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
     heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng,
@@ -2306,9 +2325,9 @@ window.ktMatrixCellInput = function(viTri, lopOng, el){
   const td = el.closest('td');
   if(td) td.classList.remove('mtx-good','mtx-warn','mtx-danger');
   const pctBox = document.getElementById(mtxKeyId(key));
-  const v = parseFloat(el.value);
+  const v = toNumVN(el.value);
   if(dm && dm!=='conflict' && el.value!=='' && !isNaN(v)){
-    const pct = v/parseFloat(dm.chieuDay)*100;
+    const pct = v/toNumVN(dm.chieuDay)*100;
     if(!isNaN(pct)){
       const cls = pct<=70?'mtx-danger':(pct<=85?'mtx-warn':'mtx-good');
       if(td) td.classList.add(cls);
@@ -2381,9 +2400,9 @@ window.ktMatrixSave = async function(){
       const cell = m.cells[key];
       if(!cell || cell.val===undefined || cell.val===null || String(cell.val).trim()==='') return;
       const dm = m.resolved[key];
-      if(!dm || dm==='conflict' || isNaN(parseFloat(cell.val))){ skipped++; return; }
+      if(!dm || dm==='conflict' || isNaN(toNumVN(cell.val))){ skipped++; return; }
       const chieuDayDo = String(cell.val).trim();
-      const phanTramConLai = (parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
+      const phanTramConLai = (toNumVN(chieuDayDo)/toNumVN(dm.chieuDay)*100);
       // QUAN TRONG: tim ban ghi da co cho DUNG doi tuong ong nay trong DUNG dot dang chon — bang ktFindExisting
       // (khong con phu thuoc vao cell.existingId, vi gia tri do CHI duoc dien khi bam "Tai du lieu da co", de
       // nguoi dung QUEN bam nut do van khong bi tao nham thanh doi tuong moi/trung).
@@ -2536,9 +2555,9 @@ function renderKtMatrix(){
         }
         const val = cellData? (cellData.val||'') : '';
         let cls = '', pctText = '';
-        const pv = parseFloat(val);
+        const pv = toNumVN(val);
         if(val!=='' && !isNaN(pv)){
-          const p = pv/parseFloat(dm.chieuDay)*100;
+          const p = pv/toNumVN(dm.chieuDay)*100;
           if(!isNaN(p)){ cls = p<=70?'mtx-danger':(p<=85?'mtx-warn':'mtx-good'); pctText = p.toFixed(0)+'%'; }
         }
         return `<td class="${cls}"><input class="mtx-input" type="text" inputmode="decimal" value="${esc(val)}" placeholder="${esc(dm.chieuDay)}" oninput="ktMatrixCellInput('${esc(vt)}','${esc(lo)}', this)"><div class="mtx-pct" id="${mtxKeyId(key)}">${esc(pctText)}</div></td>`;
@@ -2649,7 +2668,7 @@ function buildKtWizardSteps(loopMode){
     const dotObj = state.dots.find(d=>d.id===data.dotId);
     const dm = data.__dm;
     if(!dotObj || !dm) return {ok:false, fatal:true, message:'Thiếu thông tin, không thể lưu bản ghi này.'};
-    const phanTramConLai = (parseFloat(data.chieuDayDo)/parseFloat(dm.chieuDay)*100);
+    const phanTramConLai = (toNumVN(data.chieuDayDo)/toNumVN(dm.chieuDay)*100);
     const rec = {
       id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay,
       heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri:String(data.viTri), lopOng:String(data.lopOng),
@@ -2999,7 +3018,7 @@ window.importKiemTra = function(input){
           const raw = row[col.col];
           const cellStr = String(raw===undefined||raw===null?'':raw).trim();
           if(!cellStr || cellStr==='-' || cellStr==='—') return;
-          if(isNaN(parseFloat(cellStr))){ skipped++; return; }
+          if(isNaN(toNumVN(cellStr))){ skipped++; return; }
           const candidates = ktCandidates(dotObj.toMay, heThong, thietBi, viTriVal, String(col.n));
           const dm = candidates.length===1 ? candidates[0] : null;
           if(!dm){
@@ -3013,7 +3032,7 @@ window.importKiemTra = function(input){
             }
             return;
           }
-          const phanTramConLai=(parseFloat(cellStr)/parseFloat(dm.chieuDay)*100);
+          const phanTramConLai=(toNumVN(cellStr)/toNumVN(dm.chieuDay)*100);
           // QUAN TRONG: doi tuong co dinh la cho 1 dot, tim ban ghi da co (bat ke ngay nao) truoc khi tao moi
           // — tranh tach 1 ong thanh nhieu dong chi vi nhap chieu day va ngoai dang o 2 lan/2 file khac nhau.
           const existing = ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, viTriVal, String(col.n));
@@ -3057,7 +3076,7 @@ window.importKiemTra = function(input){
           }
           return;
         }
-        const phanTramConLai=(parseFloat(chieuDayDo)/parseFloat(dm.chieuDay)*100);
+        const phanTramConLai=(toNumVN(chieuDayDo)/toNumVN(dm.chieuDay)*100);
         const ngoaiDangCol = String(r['Ngoại dạng']||r['Ngoai dang']||'').trim();
         const ngayCol = parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr();
         const nguoiCol = String(r['Người kiểm tra']||r['Nguoi kiem tra']||'').trim();
@@ -4801,7 +4820,24 @@ function renderKiemTra(){
   // dong chuyen han sang xem o "Lich su & xu huong"), truoc day modul nay hien TAT CA lich su khong loc,
   // gay nham lan/roi mat khi doi chieu voi Bang dieu khien va lam trang danh sach dai qua muc can thiet.
   const activeDotIdsKt = new Set(activeDots.map(d=>d.id));
-  const ktVisible = state.kiemTra.filter(r=>activeDotIdsKt.has(r.dotId));
+  const ktVisibleAll = state.kiemTra.filter(r=>activeDotIdsKt.has(r.dotId));
+  // Loc theo To may / He thong / Thiet bi — cung 1 kieu voi state.scFilter ben modul Sua chua
+  const ktToMayOpts = uniq(ktVisibleAll.map(r=>r.toMay).filter(Boolean));
+  const ktHeThongOpts = uniq(ktVisibleAll.map(r=>r.heThong).filter(Boolean));
+  const ktThietBiScope = state.ktFilter.heThong ? ktVisibleAll.filter(r=>r.heThong===state.ktFilter.heThong) : ktVisibleAll;
+  const ktThietBiOpts = uniq(ktThietBiScope.map(r=>r.thietBi).filter(Boolean));
+  const ktVisible = ktVisibleAll.filter(r=>
+    (!state.ktFilter.toMay||r.toMay===state.ktFilter.toMay) &&
+    (!state.ktFilter.heThong||r.heThong===state.ktFilter.heThong) &&
+    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi)
+  );
+  const ktFilterBar = `<div class="form-panel" style="padding:12px 16px;">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Tổ máy</label><div style="display:flex;gap:6px;align-items:center;"><select style="flex:1;" onchange="setKtFilter('toMay', this.value)"><option value="">— Tất cả —</option>${ktToMayOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.toMay?'selected':''}>${esc(v)}</option>`).join('')}</select>${voiceMicBtnHtml('voiceSearchKtToMay(this)','Nói tên tổ máy để lọc')}</div></div>
+      <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Hệ thống</label><select onchange="setKtFilter('heThong', this.value); setKtFilter('thietBi','')"><option value="">— Tất cả —</option>${ktHeThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
+      <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Thiết bị</label><select onchange="setKtFilter('thietBi', this.value)"><option value="">— Tất cả —</option>${ktThietBiOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.thietBi?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
+    </div>
+  </div>`;
   const ktGroups = {};
   ktVisible.forEach(r=>{ const k = r.heThong||'(không có hệ thống)'; if(!ktGroups[k]) ktGroups[k]=[]; ktGroups[k].push(r); });
   const ktHeThongNames = Object.keys(ktGroups).sort((a,b)=>a.localeCompare(b));
@@ -4850,8 +4886,8 @@ function renderKiemTra(){
       ${canKt && ktSelectedCount && state.ktViewMode==='list' ? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="deleteSelectedKiemTra()">Xóa ${ktSelectedCount} dòng đã chọn</button><button class="btn-ghost" onclick="ktClearSelection()">Bỏ chọn (${ktSelectedCount})</button>` : ''}
     </div></div>
   ${form}
-  ${state.ktViewMode==='diagram' ? renderKtDiagram() : `${canKt && state.kiemTra.length ? `<div class="settings-note" style="margin-bottom:10px;">Tích chọn ô vuông ở đầu mỗi dòng (mở rộng từng nhóm Hệ thống để thấy) để chọn nhiều bản ghi cùng lúc, rồi bấm "Xóa ... dòng đã chọn" ở trên — tiện dọn dữ liệu test/nhập nhầm hàng loạt.</div>` : ''}
-  ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra. Cần có dữ liệu ở "Danh mục kỹ thuật" trước.</div>'}`}`;
+  ${state.ktViewMode==='diagram' ? renderKtDiagram() : `${ktFilterBar}${canKt && state.kiemTra.length ? `<div class="settings-note" style="margin-bottom:10px;">Tích chọn ô vuông ở đầu mỗi dòng (mở rộng từng nhóm Hệ thống để thấy) để chọn nhiều bản ghi cùng lúc, rồi bấm "Xóa ... dòng đã chọn" ở trên — tiện dọn dữ liệu test/nhập nhầm hàng loạt.</div>` : ''}
+  ${groupsHtml || '<div class="empty">Chưa có bản ghi kiểm tra phù hợp với bộ lọc đã chọn.</div>'}`}`;
 }
 window.toggleKtViewMode = function(){ state.ktViewMode = state.ktViewMode==='diagram' ? 'list' : 'diagram'; render(); };
 // So do truc quan Kiem tra — TU SINH tu Danh muc ky thuat (de biet dai Vi tri thuc te ton tai) + Kiem tra
@@ -4975,6 +5011,7 @@ window.deleteSelectedKiemTra = async function(){
 };
 
 window.setScFilter = function(field, value){ state.scFilter[field]=value; render(); };
+window.setKtFilter = function(field, value){ state.ktFilter[field]=value; render(); };
 window.toggleScHeThong = function(key){ state.scExpandedHeThong = state.scExpandedHeThong===key ? null : key; render(); };
 function renderSuaChuaItemCard(item){
   // "Cho phep thi cong": gate CUNG rieng cho nha thau (role ktv_han_cat) — khi giam sat QC/CV P4 CHUA
@@ -5225,7 +5262,7 @@ function computeTrend(history){
   if(history.length<2) return null;
   const t0 = new Date(history[0].ngay).getTime();
   const xs = history.map(h=>(new Date(h.ngay).getTime()-t0)/(1000*60*60*24*365));
-  const ys = history.map(h=>parseFloat(h.chieuDayDo));
+  const ys = history.map(h=>toNumVN(h.chieuDayDo));
   const n=xs.length, sumX=xs.reduce((a,b)=>a+b,0), sumY=ys.reduce((a,b)=>a+b,0);
   const sumXY=xs.reduce((a,x,i)=>a+x*ys[i],0), sumXX=xs.reduce((a,x)=>a+x*x,0);
   const denom=(n*sumXX-sumX*sumX);
@@ -5243,7 +5280,7 @@ function projectRepairDate(trend, chieuDayTK){
 }
 function historySvg(history, chieuDayTK){
   const w=620,h=130,pad=30;
-  const vals = history.map(h=>parseFloat(h.chieuDayDo));
+  const vals = history.map(h=>toNumVN(h.chieuDayDo));
   const dates = history.map(h=>new Date(h.ngay).getTime());
   const minV = Math.min(...vals, chieuDayTK*0.7)*0.93;
   const maxV = Math.max(...vals, chieuDayTK)*1.05;
@@ -5277,11 +5314,11 @@ function computeHistorySummaries(){
     });
     const currentHist = fullHist.filter(h=> prevBoundary? h.ngay>prevBoundary : true);
     const last = currentHist.length ? currentHist[currentHist.length-1] : fullHist[fullHist.length-1];
-    const chieuDayTK = parseFloat(last.chieuDayTK);
+    const chieuDayTK = toNumVN(last.chieuDayTK);
     // Chi dung cac lan do THAT SU CO chieu day (bo qua ban ghi chi-co-Ngoai-dang, chieu day de trong) de
     // tinh xu huong mon/ve bieu do — 1 gia tri NaN lan trong se lam NaN "lay" toan bo phep tinh tong/trung
     // binh (computeTrend) va Math.min/max (historySvg), sai lech toan bo du bao chu khong chi 1 diem.
-    const currentHistMeasured = currentHist.filter(h=> h.chieuDayDo!=='' && h.chieuDayDo!==undefined && h.chieuDayDo!==null && !isNaN(parseFloat(h.chieuDayDo)));
+    const currentHistMeasured = currentHist.filter(h=> h.chieuDayDo!=='' && h.chieuDayDo!==undefined && h.chieuDayDo!==null && !isNaN(toNumVN(h.chieuDayDo)));
     const trend = currentHistMeasured.length>=2 ? computeTrend(currentHistMeasured) : null;
     const projection = projectRepairDate(trend, chieuDayTK);
     const rateMmYear = trend ? -trend.slope : null;
@@ -5330,7 +5367,7 @@ function renderHistoryDetailCard(s){
       <span class="status ${st}">${pctDisplay(s.last.phanTramConLai)}</span>
     </div>
     <div style="margin-top:12px;">
-      ${s.currentHistMeasured.length ? historySvg(s.currentHistMeasured, parseFloat(s.last.chieuDayTK)) : ''}
+      ${s.currentHistMeasured.length ? historySvg(s.currentHistMeasured, toNumVN(s.last.chieuDayTK)) : ''}
       <div class="settings-note">${projText}</div>
       ${s.currentHist.length ? `<div class="table-wrap" style="margin-top:10px;"><table class="dm"><thead><tr><th>Ngày</th><th>Chiều dày đo (mm)</th><th>% còn lại</th><th>Ngoại dạng</th><th>Người kiểm tra</th></tr></thead><tbody>
       ${s.currentHist.slice().reverse().map(h=>`<tr><td>${fmtDate(h.ngay)}</td><td>${h.chieuDayDo?esc(h.chieuDayDo):'—'}</td><td>${pctValid(h.phanTramConLai)?esc(h.phanTramConLai)+'%':'—'}</td><td>${esc(h.ngoaiDang||'—')}</td><td>${esc(h.nguoiKiemTra)}</td></tr>`).join('')}
