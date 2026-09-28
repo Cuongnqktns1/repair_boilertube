@@ -4973,14 +4973,22 @@ window.toggleKtSelect = function(id){
   render();
 };
 function ktActiveDotIds(){ return new Set(state.dots.filter(d=>d.trangThai==='Đang diễn ra').map(d=>d.id)); }
-window.ktSelectAllInGroup = function(ht){
+// LOI DA SUA: truoc day 2 ham nay chi loc theo heThong tren TOAN BO state.kiemTra, bo qua bo loc
+// To may/Thiet bi (state.ktFilter) dang chon o giao dien — khien "Chon tat ca"/"Xoa cac dong da chon"
+// chon/xoa nham ca cac ban ghi thuoc Thiet bi khac trong cung He thong. Phai loc dung tap ban ghi
+// dang hien thi (giong het dieu kien tinh ktVisible trong renderKiemTra) truoc khi chon/bo chon.
+function ktGroupFilteredRecs(ht){
   const activeIds = ktActiveDotIds();
-  state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
+  return state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht &&
+    (!state.ktFilter.toMay||r.toMay===state.ktFilter.toMay) &&
+    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi));
+}
+window.ktSelectAllInGroup = function(ht){
+  ktGroupFilteredRecs(ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
   render();
 };
 window.ktDeselectAllInGroup = function(ht){
-  const activeIds = ktActiveDotIds();
-  state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht).forEach(r=>{ delete state.ktSelectedIds[r.id]; });
+  ktGroupFilteredRecs(ht).forEach(r=>{ delete state.ktSelectedIds[r.id]; });
   render();
 };
 window.ktClearSelection = function(){ state.ktSelectedIds = {}; render(); };
