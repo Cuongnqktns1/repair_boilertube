@@ -433,6 +433,7 @@ let state = {
   vtSel:{dotId:''},
   scFilter:{dotId:'',toMay:'',heThong:'',thietBi:'',phuongAn:'',weldStatus:''},
   ktFilter:{toMay:'',heThong:'',thietBi:''}, // loc danh sach hien thi o modul Kiem tra (doc dac) — tuong tu scFilter
+  ktSearchQuery:'', scSearchQuery:'', // o tim kiem nhanh rieng cho tung modul, dung chung logic voi o "Tra cuu" Bang dieu khien
   scViewMode:'group', // 'group' = xem theo hang muc (nhu cu), 'welds' = danh sach phang theo tung moi han (checklist hien truong)
   ovYear:null, ovDot:null, ovMode:'current',
   expandedRepair:null, expandedHistory:null, expandedOldCycles:null,
@@ -4607,6 +4608,36 @@ function parseOvQuery(query){
   });
   return {nums, words};
 }
+// Dung lai dung logic tach tu khoa cua o "Tra cuu" Bang dieu khien (so = Vi tri/Lop ong, chu = To may/
+// He thong/Thiet bi) de lam o tim kiem rieng trong tung modul (Kiem tra, Sua chua) — khac voi Bang dieu
+// khien (chi de XEM), o day nguoi dung van thao tac DAY DU tinh nang cua modul dang mo (xoa, chon, sua...)
+// vi ket qua tim kiem chi LOC BOT danh sach dang hien thi san, khong thay doi cach render tung dong/nhom.
+function matchesPipeQuery(query, r){
+  const q = (query||'').trim();
+  if(!q) return true;
+  const {nums, words} = parseOvQuery(q);
+  if(!nums.length && !words.length) return true;
+  if(nums.length>=2){
+    if(parseInt(r.viTri,10)!==parseInt(nums[0],10) || parseInt(r.lopOng,10)!==parseInt(nums[1],10)) return false;
+  } else if(nums.length===1){
+    if(parseInt(r.viTri,10)!==parseInt(nums[0],10)) return false;
+  }
+  if(words.length){
+    const fields = [r.toMay, r.heThong, r.thietBi].map(v=>normalizeVN(v||''));
+    const allWordsMatch = words.every(w=> fields.some(f=>f.includes(w)));
+    if(!allWordsMatch) return false;
+  }
+  return true;
+}
+function searchBarHtml(id, value, onSearchFn, voiceHandlerFn, placeholder){
+  return `<div class="field" style="margin-bottom:0;"><label>Tìm kiếm nhanh (gõ từ khóa bất kỳ: tên hệ thống, chỉ số vị trí, hoặc "vị trí-lớp ống", VD: 12-1)</label>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input id="${id}" placeholder="${esc(placeholder||'VD: hơi chính, hoặc 12, hoặc 12-1')}" value="${esc(value||'')}" onkeydown="if(event.key==='Enter') ${onSearchFn}()" style="flex:1;">
+      ${voiceMicBtnHtml(voiceHandlerFn+'(this)','Nói để tìm kiếm')}
+      <button class="btn" style="flex:none;" onclick="${onSearchFn}()">Tìm kiếm</button>
+    </div>
+  </div>`;
+}
 function ovSearchResults(query){
   const {nums, words} = parseOvQuery(query);
   if(!nums.length && !words.length) return [];
@@ -4660,6 +4691,28 @@ window.toggleOvSearchExpand = function(key){
   }
   render();
 };
+// Danh sach mo han CHI DE XEM (khong co o nhap/checkbox chinh sua) — dung cho hang muc DA HOAN THANH hien
+// trong ket qua Tra cuu o Bang dieu khien, de nguoi dung kiem tra lai xem co mo han nao bi sot (chua cat/
+// chua han/PAUT chua dat) hoac thieu mo han bien phap can thiet hay khong, truoc day phan nay chi hien 1
+// dong tom tat so luong mo han chinh thuc nen khong the biet chi tiet tung mo han.
+function renderWeldListReadOnly(welds){
+  if(!welds || !welds.length) return '<div class="settings-note" style="margin:6px 0 0;">Chưa có mối hàn nào được tạo cho chu kỳ này.</div>';
+  const rows = welds.map(w=>{
+    const paut = w.paut || 'Chưa kiểm tra';
+    const pautColor = paut==='Đạt' ? 'var(--good)' : (paut==='Lỗi' ? 'var(--danger)' : 'var(--warn)');
+    const soTrouble = (!w.daCat || !w.daHan || paut!=='Đạt');
+    return `<div class="weld-row"${soTrouble?' style="border-color:var(--warn);"':''}>
+      <span class="weld-id">${esc(w.id)}</span>
+      <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
+      <span style="font-size:11.5px;color:${w.daCat?'var(--good)':'var(--danger)'};">${w.daCat?'✓ Đã cắt':'✗ Chưa cắt'}</span>
+      <span style="font-size:11.5px;color:${w.daHan?'var(--good)':'var(--danger)'};">${w.daHan?'✓ Đã hàn':'✗ Chưa hàn'}</span>
+      <span style="font-size:11.5px;color:${pautColor};">PAUT: ${esc(paut)}</span>
+      ${w.thoHan?`<span style="font-size:11.5px;color:var(--muted);">Thợ hàn: ${esc(w.thoHan)}</span>`:''}
+    </div>`;
+  }).join('');
+  const soTrouble = welds.filter(w=>!w.daCat||!w.daHan||(w.paut||'Chưa kiểm tra')!=='Đạt').length;
+  return `${soTrouble?`<div class="settings-note" style="border-left:3px solid var(--warn);padding-left:10px;margin-bottom:8px;">⚠️ Có ${soTrouble} mối hàn chưa cắt/chưa hàn/chưa PAUT đạt trong chu kỳ đã đánh dấu "Hoàn thành" này — kiểm tra lại trước khi xác nhận.</div>`:''}${rows}`;
+}
 function renderOvSearch(){
   const q = state.ovSearchQuery||'';
   const hasQuery = q.trim()!=='';
@@ -4678,8 +4731,13 @@ function renderOvSearch(){
       if(r.activeItem){
         detail = renderSuaChuaItemCard(r.activeItem);
       } else if(r.completedItems.length){
-        detail = r.completedItems.map(it=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>Chu kỳ ${esc(it.chuKy)}</div><span class="status good">${esc(it.trangThai)}</span></div>
-          <div class="record-meta"><span>${esc(it.phuongAn||'Cắt thay')}</span><span>Hoàn thành: ${it.ngayHoanThanh?fmtDate(it.ngayHoanThanh):'—'}</span><span>${it.welds.filter(w=>w.loai==='chinh_thuc').length} mối hàn chính thức</span></div></div>`).join('');
+        // LOI DA SUA: truoc day chi hien 1 dong tom tat (so luong mo han chinh thuc), khong the biet duoc
+        // co mo han nao bi sot chua cat/chua han/chua PAUT dat, hay quen tao mo han bien phap hay khong —
+        // nay hien day du danh sach tung mo han (chi de xem) cho moi chu ky da hoan thanh.
+        detail = r.completedItems.map(it=>`<div class="record" style="margin-bottom:8px;"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>Chu kỳ ${esc(it.chuKy)}</div><span class="status good">${esc(it.trangThai)}</span></div>
+          <div class="record-meta"><span>${esc(it.phuongAn||'Cắt thay')}</span><span>Hoàn thành: ${it.ngayHoanThanh?fmtDate(it.ngayHoanThanh):'—'}</span><span>${it.welds.length} mối hàn (${it.welds.filter(w=>w.loai==='chinh_thuc').length} chính thức, ${it.welds.filter(w=>w.loai==='bien_phap').length} biện pháp)</span></div>
+          ${(it.phuongAn||'Cắt thay')==='Cắt thay' ? renderWeldListReadOnly(it.welds) : ''}
+          </div>`).join('');
       } else {
         detail = `<div class="settings-note">Chưa có hạng mục sửa chữa nào cho vị trí này (hệ thống chỉ tự tạo khi kết quả kiểm tra ≤ 70% hoặc ngoại dạng bất thường). Lần ghi nhận gần nhất: ${r.latest.chieuDayDo?esc(r.latest.chieuDayDo)+'mm':'chưa đo chiều dày'} ngày ${fmtDate(r.latest.ngay)}, người kiểm tra: ${esc(r.latest.nguoiKiemTra||'—')}${(r.latest.ngoaiDang && r.latest.ngoaiDang!=='Bình thường')?(', ngoại dạng: '+esc(r.latest.ngoaiDang)):''}.</div>`;
       }
@@ -4829,10 +4887,12 @@ function renderKiemTra(){
   const ktVisible = ktVisibleAll.filter(r=>
     (!state.ktFilter.toMay||r.toMay===state.ktFilter.toMay) &&
     (!state.ktFilter.heThong||r.heThong===state.ktFilter.heThong) &&
-    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi)
+    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi) &&
+    matchesPipeQuery(state.ktSearchQuery, r)
   );
   const ktFilterBar = `<div class="form-panel" style="padding:12px 16px;">
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    ${searchBarHtml('kt-search-input', state.ktSearchQuery, 'runKtSearch', 'voiceSearchKtQuery')}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Tổ máy</label><div style="display:flex;gap:6px;align-items:center;"><select style="flex:1;" onchange="setKtFilter('toMay', this.value)"><option value="">— Tất cả —</option>${ktToMayOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.toMay?'selected':''}>${esc(v)}</option>`).join('')}</select>${voiceMicBtnHtml('voiceSearchKtToMay(this)','Nói tên tổ máy để lọc')}</div></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Hệ thống</label><select onchange="setKtFilter('heThong', this.value); setKtFilter('thietBi','')"><option value="">— Tất cả —</option>${ktHeThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Thiết bị</label><select onchange="setKtFilter('thietBi', this.value)"><option value="">— Tất cả —</option>${ktThietBiOpts.map(v=>`<option value="${esc(v)}" ${v===state.ktFilter.thietBi?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
@@ -4981,7 +5041,8 @@ function ktGroupFilteredRecs(ht){
   const activeIds = ktActiveDotIds();
   return state.kiemTra.filter(r=>activeIds.has(r.dotId) && (r.heThong||'(không có hệ thống)')===ht &&
     (!state.ktFilter.toMay||r.toMay===state.ktFilter.toMay) &&
-    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi));
+    (!state.ktFilter.thietBi||r.thietBi===state.ktFilter.thietBi) &&
+    matchesPipeQuery(state.ktSearchQuery, r));
 }
 window.ktSelectAllInGroup = function(ht){
   ktGroupFilteredRecs(ht).forEach(r=>{ state.ktSelectedIds[r.id]=true; });
@@ -5020,6 +5081,10 @@ window.deleteSelectedKiemTra = async function(){
 
 window.setScFilter = function(field, value){ state.scFilter[field]=value; render(); };
 window.setKtFilter = function(field, value){ state.ktFilter[field]=value; render(); };
+window.runKtSearch = function(){ const el = document.getElementById('kt-search-input'); state.ktSearchQuery = el ? el.value : ''; render(); };
+window.voiceSearchKtQuery = function(btn){ startVoiceSearch(btn, txt=>{ state.ktSearchQuery = txt; render(); }); };
+window.runScSearch = function(){ const el = document.getElementById('sc-search-input'); state.scSearchQuery = el ? el.value : ''; render(); };
+window.voiceSearchScQuery = function(btn){ startVoiceSearch(btn, txt=>{ state.scSearchQuery = txt; render(); }); };
 window.toggleScHeThong = function(key){ state.scExpandedHeThong = state.scExpandedHeThong===key ? null : key; render(); };
 function renderSuaChuaItemCard(item){
   // "Cho phep thi cong": gate CUNG rieng cho nha thau (role ktv_han_cat) — khi giam sat QC/CV P4 CHUA
@@ -5113,11 +5178,13 @@ function renderSuaChua(){
     (!state.scFilter.toMay||i.toMay===state.scFilter.toMay) &&
     (!state.scFilter.heThong||i.heThong===state.scFilter.heThong) &&
     (!state.scFilter.thietBi||i.thietBi===state.scFilter.thietBi) &&
-    (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn)
+    (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn) &&
+    matchesPipeQuery(state.scSearchQuery, i)
   );
   const weldStatusOpts = [['chua_han','Chưa hàn'],['da_han_chua_paut','Đã hàn — chưa PAUT'],['paut_dat','PAUT đạt']];
   const filterBar = `<div class="form-panel" style="padding:12px 16px;">
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    ${searchBarHtml('sc-search-input', state.scSearchQuery, 'runScSearch', 'voiceSearchScQuery')}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Tổ máy</label><div style="display:flex;gap:6px;align-items:center;"><select style="flex:1;" onchange="setScFilter('toMay', this.value)"><option value="">— Tất cả —</option>${toMayOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.toMay?'selected':''}>${esc(v)}</option>`).join('')}</select>${voiceMicBtnHtml('voiceSearchScToMay(this)','Nói tên tổ máy để lọc')}</div></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Hệ thống</label><select onchange="setScFilter('heThong', this.value); setScFilter('thietBi','')"><option value="">— Tất cả —</option>${heThongOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.heThong?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
       <div class="field" style="min-width:200px;flex:1;"><label>Lọc theo Thiết bị</label><select onchange="setScFilter('thietBi', this.value)"><option value="">— Tất cả —</option>${thietBiOpts.map(v=>`<option value="${esc(v)}" ${v===state.scFilter.thietBi?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
@@ -5240,7 +5307,8 @@ window.exportScWeldList = async function(){
     (!state.scFilter.toMay||i.toMay===state.scFilter.toMay) &&
     (!state.scFilter.heThong||i.heThong===state.scFilter.heThong) &&
     (!state.scFilter.thietBi||i.thietBi===state.scFilter.thietBi) &&
-    (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn)
+    (!state.scFilter.phuongAn||(i.phuongAn||'Cắt thay')===state.scFilter.phuongAn) &&
+    matchesPipeQuery(state.scSearchQuery, i)
   );
   const rows = scWeldRowsOf(filtered);
   if(!rows.length){ alert('Không có mối hàn nào khớp bộ lọc hiện tại để xuất.'); return; }
