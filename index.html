@@ -3280,7 +3280,10 @@ async function checkDotHoanThanhAndNotify(dotId){
   if(!items.every(s=>s.trangThai==='Hoàn thành')) return;
   if(!state.telegram.botToken || !state.telegram.chatIdsBaoCao || !state.telegram.chatIdsBaoCao.length) return;
   const dot = state.dots.find(d=>d.id===dotId);
-  sendTelegramToMany(state.telegram.chatIdsBaoCao, '✅ <b>Đã hoàn thành công việc sửa chữa ống Lò'+(dot?(' — '+dot.ten+' ('+dot.toMay+')'):'')+'</b>\nTrưởng ca có thể triển khai công việc tiếp theo.');
+  // Bo sung dong "Doan ong cat thay" (so doan ong THUC TE, co the >1 cho cung 1 vi tri) vao tin nhan hoan
+  // thanh co san — dung lai computeDotStats de dam bao khop chinh xac voi so lieu hien tren Bang dieu khien.
+  const s = computeDotStats(dotId);
+  sendTelegramToMany(state.telegram.chatIdsBaoCao, '✅ <b>Đã hoàn thành công việc sửa chữa ống Lò'+(dot?(' — '+dot.ten+' ('+dot.toMay+')'):'')+'</b>\nVị trí cắt thay: '+s.catThayDone+'/'+s.catThay+'\nĐoạn ống cắt thay: '+s.doanOngDone+'/'+s.doanOngTotal+'\nTrưởng ca có thể triển khai công việc tiếp theo.');
 }
 // So doan ong thuc te can thay cho 1 hang muc (vi tri) Cat thay — 1 vi tri co the phai cat/thay 2-3 doan
 // ong rieng le chu khong luon la 1, nguoi dung tu nhap lai so thuc te (mac dinh san 1 khi tao hang muc).
@@ -4533,6 +4536,12 @@ function computeDotStats(dotId){
     weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, yeuCau, chuaChoPhep, firstWeldTime,
     pipeRows, catThayItems:catThay, hanPhuItems:hanPhu, suaOpItems:suaOp, weldRows};
 }
+// Hien thi "Xong/Tong" voi 2 mau RIENG (xanh la = da lam, do = tong) thay vi 1 mau chung cho ca cum —
+// truoc day dung .stat-card.danger/.warn/.good to mau CA CUM "Xong/Tong" cung 1 mau, co truong hop ca cum
+// khong co mau rieng (mac dinh ke thua mau chu, de bi lan voi nen toi) khien nguoi dung kho doc so lieu.
+function fracValHtml(done, total){
+  return `<span style="color:var(--good);">${done}</span><span style="color:var(--muted);">/</span><span style="color:var(--danger);">${total}</span>`;
+}
 function ovStatCard(dotId, metric, cls, label, valHtml){
   const expanded = state.ovExpandedMetric[dotId]===metric;
   return `<button type="button" class="stat-card clickable ${cls} ${expanded?'expanded':''}" onclick="toggleOvMetric('${dotId}','${metric}')">
@@ -4592,17 +4601,17 @@ function renderDotDashboard(dotId){
       <span class="status ${dot.trangThai==='Đang diễn ra'?'warn':'good'}">${esc(dot.trangThai)}</span>
     </div>
     <div class="grid-cards" style="margin-top:14px;margin-bottom:10px;">
-      ${ovStatCard(dot.id,'pipes','','Ống đã kiểm tra', s.uniquePipes)}
-      ${ovStatCard(dot.id,'catThay',s.catThay>0?'danger':'','Vị trí cắt thay (Xong/Tổng)', s.catThayDone+'/'+s.catThay)}
-      ${ovStatCard(dot.id,'catThay',s.doanOngTotal>0?'danger':'','Đoạn ống cắt thay (Xong/Tổng)', s.doanOngDone+'/'+s.doanOngTotal)}
-      ${ovStatCard(dot.id,'hanPhu',s.hanPhu>0?'warn':'','Hàn phủ (xong/tổng)', s.hanPhuDone+'/'+s.hanPhu)}
-      ${ovStatCard(dot.id,'suaOp',s.suaOp>0?'warn':'','Sửa ốp (xong/tổng)', s.suaOpDone+'/'+s.suaOp)}
+      ${ovStatCard(dot.id,'pipes','','Ống đã kiểm tra', `<span style="color:var(--text);">${s.uniquePipes}</span>`)}
+      ${ovStatCard(dot.id,'catThay','','Vị trí cắt thay (Xong/Tổng)', fracValHtml(s.catThayDone, s.catThay))}
+      ${ovStatCard(dot.id,'catThay','','Đoạn ống cắt thay (Xong/Tổng)', fracValHtml(s.doanOngDone, s.doanOngTotal))}
+      ${ovStatCard(dot.id,'hanPhu','','Hàn phủ (xong/tổng)', fracValHtml(s.hanPhuDone, s.hanPhu))}
+      ${ovStatCard(dot.id,'suaOp','','Sửa ốp (xong/tổng)', fracValHtml(s.suaOpDone, s.suaOp))}
     </div>
     ${s.chuaChoPhep>0?`<div class="settings-note" style="margin-top:-4px;margin-bottom:14px;">Khối lượng ở trên chỉ tính các hạng mục đã được "Cho phép thi công" — còn <b>${s.chuaChoPhep}</b> hạng mục đang chờ giám sát QC/CV P4 xác nhận, chưa tính vào tổng.</div>`:''}
     ${isOneOf('pipes')||isOneOf('catThay')||isOneOf('hanPhu')||isOneOf('suaOp') ? renderOvMetricDetail(dot.id, s) : ''}
     <div class="grid-cards">
-      ${ovStatCard(dot.id,'welds','','Mối hàn đã hàn/tổng (Cắt thay)', s.weldHanDone+'/'+s.weldTotal)}
-      ${ovStatCard(dot.id,'welds','','Mối hàn đã PAUT đạt/Đã hàn', s.weldPautDone+'/'+s.weldHanDone)}
+      ${ovStatCard(dot.id,'welds','','Mối hàn đã hàn/tổng (Cắt thay)', fracValHtml(s.weldHanDone, s.weldTotal))}
+      ${ovStatCard(dot.id,'welds','','Mối hàn đã PAUT đạt/Đã hàn', fracValHtml(s.weldPautDone, s.weldHanDone))}
       <div class="stat-card" style="grid-column:span 2;"><div class="lbl">Thời gian dự kiến hoàn thành</div><div style="font-size:13.5px;margin-top:7px;line-height:1.5;">${duKienText}</div>${duKienNote}</div>
       ${yeuCauHtml}
     </div>
