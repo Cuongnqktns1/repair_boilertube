@@ -1073,7 +1073,7 @@ function recordToRow(type, record){
     case 'dot': return {id:r.id, ten:r.ten||'', to_may:r.toMay||'', ngay_bat_dau:r.ngayBatDau||null, ngay_ket_thuc:r.ngayKetThuc||null, han_ke_hoach:r.hanKeHoach||null, trang_thai:r.trangThai||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', ten_don_vi_thi_cong:r.donViThiCong||''};
     case 'danh_muc': return {id:r.id, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri_tu:r.viTriTu||'', vi_tri_den:r.viTriDen||'', lop_ong_tu:r.lopOngTu||'', lop_ong_den:r.lopOngDen||'', vung:r.vung||'', duong_kinh:r.duongKinh||'', chieu_day:r.chieuDay||'', vat_lieu:r.vatLieu||'', ghi_chu:r.ghiChu||''};
     case 'kiem_tra': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vung:r.vung||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', duong_kinh:r.duongKinh||'', chieu_day_tk:r.chieuDayTK||'', chieu_day_do:r.chieuDayDo||'', phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang:r.ngoaiDang||'', ngay:r.ngay||null, nguoi_kiem_tra:r.nguoiKiemTra||''};
-    case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null};
+    case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null, so_doan_ong:parseInt(r.soDoanOng,10)||((r.phuongAn||'Cắt thay')==='Cắt thay'?1:0)};
     case 'sua_chua_weld': { const w=r.weld||{}; return {id:w.id, hang_muc_id:r.itemId, phan_tram_con_lai:r.phanTramConLai||'', trang_thai_hang_muc:r.trangThai||'', loai:w.loai||'chinh_thuc', da_cat:!!w.daCat, da_han:!!w.daHan, paut:w.paut||'Chưa kiểm tra', tho_han:w.thoHan||'', ghi_chu:w.ghiChu||'', nguoi_thuc_hien:w.nguoiThucHien||'', nguoi_xac_nhan_paut:w.nguoiXacNhanPAUT||'', vi_tri_thuc_te:w.viTriThucTe||'', ngay_han:w.ngayHan||null}; }
     case 'vat_tu': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', muc_dich:r.mucDich||'', ma_vat_tu:r.maVatTu||'', ten_vat_tu:r.tenVatTu||'', don_vi:r.donVi||'', so_luong:(r.soLuong===''||r.soLuong==null||isNaN(parseFloat(r.soLuong)))?null:parseFloat(r.soLuong), ly_do_thay_the:r.lyDoThayThe||'', ghi_chu:r.ghiChu||'', ngay:r.ngay||null};
     case 'tai_lieu': return {id:r.id, ten_tai_lieu:r.tenTaiLieu||'', so_hieu:r.soHieu||'', he_thong:r.heThong||'', link:r.link||'', ghi_chu:r.ghiChu||''};
@@ -1096,7 +1096,7 @@ function rowToSheetDict(kind, row){
     case 'dot': return {'Mã đợt':row.id, 'Tên đợt':row.ten, 'Tổ máy':row.to_may, 'Ngày bắt đầu':row.ngay_bat_dau||'', 'Ngày kết thúc':row.ngay_ket_thuc||'', 'Hạn hoàn thành theo kế hoạch':row.han_ke_hoach||'', 'Trạng thái':row.trang_thai, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Tên đơn vị thi công':row.ten_don_vi_thi_cong};
     case 'danh_muc': return {'Mã DM':row.id, 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí từ':row.vi_tri_tu, 'Vị trí đến':row.vi_tri_den, 'Lớp ống từ':row.lop_ong_tu, 'Lớp ống đến':row.lop_ong_den, 'Vùng vật liệu':row.vung, 'Đường kính':row.duong_kinh, 'Chiều dày':row.chieu_day, 'Vật liệu':row.vat_lieu, 'Ghi chú':row.ghi_chu};
     case 'kiem_tra': return {'Mã KT':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vùng':row.vung, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Đường kính':row.duong_kinh, 'Chiều dày TK':row.chieu_day_tk, 'Chiều dày đo':row.chieu_day_do, '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng':row.ngoai_dang, 'Ngày kiểm tra':row.ngay||'', 'Người kiểm tra':row.nguoi_kiem_tra};
-    case 'sua_chua_item': return {'Mã hạng mục':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Chu kỳ':row.chu_ky, 'Phương án':row.phuong_an, 'Trạng thái':row.trang_thai, 'Ngày hoàn thành':row.ngay_hoan_thanh||'', '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng gần nhất':row.ngoai_dang_gan_nhat, 'Ghi chú xóa mối hàn':row.ghi_chu_xoa_moi_han, 'Cho phép thi công':boolX(row.cho_phep_thi_cong), 'Người cho phép thi công':row.nguoi_cho_phep, 'Thời gian cho phép thi công':row.thoi_gian_cho_phep||''};
+    case 'sua_chua_item': return {'Mã hạng mục':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Chu kỳ':row.chu_ky, 'Phương án':row.phuong_an, 'Trạng thái':row.trang_thai, 'Ngày hoàn thành':row.ngay_hoan_thanh||'', '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng gần nhất':row.ngoai_dang_gan_nhat, 'Ghi chú xóa mối hàn':row.ghi_chu_xoa_moi_han, 'Cho phép thi công':boolX(row.cho_phep_thi_cong), 'Người cho phép thi công':row.nguoi_cho_phep, 'Thời gian cho phép thi công':row.thoi_gian_cho_phep||'', 'Số đoạn ống':row.so_doan_ong};
     case 'sua_chua_weld': return {'Mã hạng mục':row.hang_muc_id, 'Mã mối hàn':row.id, 'Loại':row.loai, 'Đã cắt':boolX(row.da_cat), 'Đã hàn':boolX(row.da_han), 'PAUT':row.paut, 'Ngày hàn':row.ngay_han||'', 'Thợ hàn':row.tho_han, 'Ghi chú':row.ghi_chu, 'Người thực hiện':row.nguoi_thuc_hien, 'Người xác nhận PAUT':row.nguoi_xac_nhan_paut, 'Vị trí thực tế':row.vi_tri_thuc_te};
     case 'vat_tu': return {'Mã':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Mục đích sử dụng':row.muc_dich, 'Mã vật tư':row.ma_vat_tu, 'Tên vật tư':row.ten_vat_tu, 'Đơn vị':row.don_vi, 'Số lượng':row.so_luong, 'Lý do thay thế':row.ly_do_thay_the, 'Ghi chú':row.ghi_chu, 'Ngày':row.ngay||''};
     case 'tai_lieu': return {'Mã':row.id, 'Tên tài liệu':row.ten_tai_lieu, 'Số hiệu':row.so_hieu, 'Hệ thống':row.he_thong, 'Link':row.link, 'Ghi chú':row.ghi_chu};
@@ -1311,15 +1311,21 @@ async function uploadNkPhotosAndSync(photos, maNhatKy){
 function mapSheetSuaChua(itemRows, weldRows){
   const items = itemRows.map(r=>{
     const toMay=String(r['Tổ máy']||''), heThong=String(r['Hệ thống']||''), thietBi=String(r['Thiết bị']||''), viTri=String(r['Vị trí']||''), lopOng=String(r['Lớp ống']||'');
+    const phuongAn=String(r['Phương án']||'Cắt thay');
+    // "So doan ong": 1 vi tri (hang muc) Cat thay co the phai thay 2-3 doan ong rieng le, khong phai luon
+    // dung 1 doan — mac dinh 1 khi la Cat thay va Sheet chua co gia tri (ban ghi cu truoc khi co truong nay),
+    // nguoi dung sua lai so thuc te qua renderSuaChuaItemCard (setSoDoanOng).
+    const soDoanOngRaw = parseInt(r['Số đoạn ống'],10);
     return {
       id:String(r['Mã hạng mục']||''), pipeKey: pipeKeyOf({toMay,heThong,thietBi,viTri,lopOng}),
       chuKy: parseInt(r['Chu kỳ'],10)||1, dotId:String(r['Đợt']||''), toMay, heThong, thietBi, viTri, lopOng,
       chieuDayTK:'', chieuDayDoGanNhat:'', phanTramConLai:String(r['% còn lại']||''), ngayTao:'',
       ngoaiDangGanNhat:String(r['Ngoại dạng gần nhất']||''), ghiChuXoaMoiHan:String(r['Ghi chú xóa mối hàn']||''),
       trangThai:String(r['Trạng thái']||''), ngayHoanThanh:String(r['Ngày hoàn thành']||''),
-      phuongAn:String(r['Phương án']||'Cắt thay'),
+      phuongAn,
       choPhepThiCong:String(r['Cho phép thi công']||'')==='X',
       nguoiChoPhep:String(r['Người cho phép thi công']||''), thoiGianChoPhep:String(r['Thời gian cho phép thi công']||''),
+      soDoanOng: !isNaN(soDoanOngRaw) ? soDoanOngRaw : (phuongAn==='Cắt thay' ? 1 : 0),
       welds:[]
     };
   }).filter(i=>i.id);
@@ -3062,8 +3068,14 @@ window.importKiemTra = function(input){
         const heThong=r['Hệ thống']||r['He thong'], thietBi=r['Thiết bị']||r['Thiet bi']||'';
         const vungCol=String(r['Quy ước vùng vật liệu trên bản vẽ']||r['Vùng']||r['Vung']||'');
         const viTri=String(r['Vị trí']||r['Vi tri']||''), lopOng=String(r['Lớp ống']||r['Lop ong']||'');
-        const chieuDayDo = r['Chiều dày đo (mm)']||r['Chieu day do'];
-        if(!heThong || !viTri || !lopOng || !chieuDayDo){ skipped++; return; }
+        const chieuDayDoRaw = r['Chiều dày đo (mm)']||r['Chieu day do'];
+        const ngoaiDangCol = String(r['Ngoại dạng']||r['Ngoai dang']||'').trim();
+        // LOI DA SUA: truoc day bat buoc PHAI co Chieu day do moi nhan dong, nen file CHI ghi Ngoai dang
+        // (vd bien ban kiem tra ngoai dang rieng, chua co so do UTM) bi bo qua TOAN BO moi dong, ke ca
+        // nhung dong co du lieu Ngoai dang hop le — gio chi can co 1 trong 2 (Chieu day do HOAC Ngoai dang)
+        // la nhan dong, giong dung nguyen tac bang "Nhap ngoai dang" (ktMatrixSaveNgoaiDang) da lam.
+        const hasChieuDay = String(chieuDayDoRaw===undefined||chieuDayDoRaw===null?'':chieuDayDoRaw).trim()!=='';
+        if(!heThong || !viTri || !lopOng || (!hasChieuDay && !ngoaiDangCol)){ skipped++; return; }
         let candidates = ktCandidates(dotObj.toMay, String(heThong), String(thietBi), viTri, lopOng);
         let dm = candidates.length===1 ? candidates[0] : (vungCol ? candidates.find(c=>c.vung===vungCol) : null);
         if(!dm){
@@ -3077,25 +3089,28 @@ window.importKiemTra = function(input){
           }
           return;
         }
-        const phanTramConLai=(toNumVN(chieuDayDo)/toNumVN(dm.chieuDay)*100);
-        const ngoaiDangCol = String(r['Ngoại dạng']||r['Ngoai dang']||'').trim();
+        const phanTramConLai = hasChieuDay ? (toNumVN(chieuDayDoRaw)/toNumVN(dm.chieuDay)*100) : null;
         const ngayCol = parseExcelDateCell(r['Ngày kiểm tra']||r['Ngay kiem tra'])||todayStr();
         const nguoiCol = String(r['Người kiểm tra']||r['Nguoi kiem tra']||'').trim();
         const existing = ktFindExisting(dotObj.id, dotObj.toMay, dm.heThong, dm.thietBi, viTri, lopOng);
         if(existing){
           existing.danhMucId=dm.id; existing.vung=dm.vung; existing.duongKinh=dm.duongKinh; existing.chieuDayTK=dm.chieuDay;
-          existing.chieuDayDo=String(chieuDayDo); existing.phanTramConLai=phanTramConLai.toFixed(1); existing.ngay=ngayCol;
+          // Chi ghi de Chieu day do/% con lai khi FILE LAN NAY THUC SU co so do — o trong trong file thi
+          // GIU NGUYEN gia tri da luu truoc do (khong xoa mat so do da nhap boi lan up khac/nhap tay truoc
+          // day). Tuong tu, lan up sau co so do (hoac nhap tay bo sung) se ghi de binh thuong len cho trong.
+          if(hasChieuDay){ existing.chieuDayDo=String(chieuDayDoRaw); existing.phanTramConLai=phanTramConLai.toFixed(1); }
+          existing.ngay=ngayCol;
           // Chi ghi de Ngoai dang khi FILE THUC SU co ghi ro cot nay — de trong thi giu nguyen gia tri cu.
           if(ngoaiDangCol) existing.ngoaiDang = ngoaiDangCol;
           if(nguoiCol) existing.nguoiKiemTra = nguoiCol;
           pendingUpdate.push(existing);
           updatedCount++;
-          if(phanTramConLai<=70) belowThreshold.push(existing);
+          if(hasChieuDay && phanTramConLai<=70) belowThreshold.push(existing);
         } else {
-          const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:String(chieuDayDo), phanTramConLai:phanTramConLai.toFixed(1), ngoaiDang:ngoaiDangCol, ngay:ngayCol, nguoiKiemTra:(nguoiCol||(state.session?state.session.name:''))};
+          const newRec = {id:genId('KT'), danhMucId:dm.id, dotId:dotObj.id, toMay:dotObj.toMay, heThong:dm.heThong, thietBi:dm.thietBi, vung:dm.vung, viTri, lopOng, duongKinh:dm.duongKinh, chieuDayTK:dm.chieuDay, chieuDayDo:hasChieuDay?String(chieuDayDoRaw):'', phanTramConLai:hasChieuDay?phanTramConLai.toFixed(1):'', ngoaiDang:ngoaiDangCol, ngay:ngayCol, nguoiKiemTra:(nguoiCol||(state.session?state.session.name:''))};
           state.kiemTra.unshift(newRec);
           pendingSync.push(newRec);
-          if(phanTramConLai<=70) belowThreshold.push(newRec);
+          if(hasChieuDay && phanTramConLai<=70) belowThreshold.push(newRec);
           added++;
         }
       });
@@ -3213,6 +3228,7 @@ async function syncSuaChua(){
         ngoaiDangGanNhat: latest.ngoaiDang||'', ghiChuXoaMoiHan:'',
         ngayTao:todayStr(), trangThai:'Chờ xử lý', ngayHoanThanh:'', phuongAn:phuongAnMacDinh,
         choPhepThiCong:false, nguoiChoPhep:'', thoiGianChoPhep:'',
+        soDoanOng: phuongAnMacDinh==='Cắt thay' ? 1 : 0,
         welds:weldsMacDinh};
       state.suaChua.push(activeItem);
       syncToSheet('sua_chua_item', activeItem);
@@ -3266,6 +3282,17 @@ async function checkDotHoanThanhAndNotify(dotId){
   const dot = state.dots.find(d=>d.id===dotId);
   sendTelegramToMany(state.telegram.chatIdsBaoCao, '✅ <b>Đã hoàn thành công việc sửa chữa ống Lò'+(dot?(' — '+dot.ten+' ('+dot.toMay+')'):'')+'</b>\nTrưởng ca có thể triển khai công việc tiếp theo.');
 }
+// So doan ong thuc te can thay cho 1 hang muc (vi tri) Cat thay — 1 vi tri co the phai cat/thay 2-3 doan
+// ong rieng le chu khong luon la 1, nguoi dung tu nhap lai so thuc te (mac dinh san 1 khi tao hang muc).
+window.setSoDoanOng = async function(itemId, value){
+  if(!can('hanCat')){ noPermAlert(); render(); return; }
+  const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
+  const n = parseInt(value,10);
+  item.soDoanOng = (!isNaN(n) && n>0) ? n : 1;
+  await persist('sua-chua', state.suaChua, true);
+  syncToSheet('sua_chua_item', item);
+  render();
+};
 window.setPhuongAn = async function(itemId, value){
   if(!can('hanCat')){ noPermAlert(); render(); return; }
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
@@ -3282,6 +3309,9 @@ window.setPhuongAn = async function(itemId, value){
       item.welds = welds;
       weldsMoiTao.push(...welds);
     }
+    // Mac dinh 1 doan ong khi chuyen sang Cat thay (neu truoc do chua co gia tri nao) — nguoi dung tu sua
+    // lai so thuc te sau neu 1 vi tri can thay nhieu hon 1 doan ong rieng le.
+    if(!item.soDoanOng) item.soDoanOng = 1;
   }
   // Nguoc lai: doi TU Cat thay SANG phuong an khac (Han phu/Sua op) -> khong con dung khai niem moi han nua,
   // xoa toan bo moi han hien co (ca chinh thuc lan bien phap, neu co) ca cuc bo lan tren Supabase — tranh de
@@ -4489,10 +4519,17 @@ function computeDotStats(dotId){
       yeuCau = null;
     }
   }
+  // "Vi tri cat thay" (hang muc/doi tuong) khac voi "Doan ong cat thay" THUC TE — 1 vi tri co the phai
+  // thay 2-3 doan ong rieng le (truong soDoanOng, xem setSoDoanOng), nen tong hop rieng 2 chi so nay de
+  // khong nham lan khi bao cao khoi luong thuc te thi cong.
+  const doanOngOf = s => (parseInt(s.soDoanOng,10)||1);
+  const doanOngTotal = catThay.reduce((sum,s)=>sum+doanOngOf(s), 0);
+  const doanOngDone = catThay.filter(s=>s.trangThai==='Hoàn thành').reduce((sum,s)=>sum+doanOngOf(s), 0);
   return {uniquePipes, catThay:catThay.length, hanPhu:hanPhu.length, suaOp:suaOp.length,
     catThayDone:catThay.filter(s=>s.trangThai==='Hoàn thành').length,
     hanPhuDone:hanPhu.filter(s=>s.trangThai==='Hoàn thành').length,
     suaOpDone:suaOp.filter(s=>s.trangThai==='Hoàn thành').length,
+    doanOngTotal, doanOngDone,
     weldHanDone, weldPautDone, weldTotal, vtTotals, nTotal, nDone, duKien, yeuCau, chuaChoPhep, firstWeldTime,
     pipeRows, catThayItems:catThay, hanPhuItems:hanPhu, suaOpItems:suaOp, weldRows};
 }
@@ -4517,7 +4554,7 @@ function renderOvMetricDetail(dotId, s){
     const items = metric==='catThay'?s.catThayItems:(metric==='hanPhu'?s.hanPhuItems:s.suaOpItems);
     const st = it => it.trangThai==='Hoàn thành'?'good':(it.trangThai==='Đang tiến hành'?'warn':'danger');
     inner = items.length ? items.map(it=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>${esc(it.heThong)} <span style="color:var(--muted);font-weight:400;">· vị trí ${esc(it.viTri)}/${esc(it.lopOng)}</span></div><span class="status ${st(it)}">${esc(it.trangThai)}</span></div>
-      <div class="record-meta"><span>${pctDisplay(it.phanTramConLai)}</span><span>Tạo: ${fmtDate(it.ngayTao)}</span><span>${it.ngayHoanThanh?('Hoàn thành: '+fmtDate(it.ngayHoanThanh)):'Chưa hoàn thành'}</span></div></div>`).join('')
+      <div class="record-meta"><span>${pctDisplay(it.phanTramConLai)}</span>${metric==='catThay'?`<span>${parseInt(it.soDoanOng,10)||1} đoạn ống</span>`:''}<span>Tạo: ${fmtDate(it.ngayTao)}</span><span>${it.ngayHoanThanh?('Hoàn thành: '+fmtDate(it.ngayHoanThanh)):'Chưa hoàn thành'}</span></div></div>`).join('')
       : '<div class="empty">Chưa có hạng mục nào thuộc loại này trong đợt.</div>';
   } else if(metric==='welds'){
     inner = s.weldRows.length ? s.weldRows.map(r=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(r.weld.id)}</span>${r.weld.loai==='chinh_thuc'?'Chính thức':'Biện pháp'} <span style="color:var(--muted);font-weight:400;">· thuộc ${esc(r.item.id)}</span></div><span class="status ${(r.weld.daHan&&r.weld.paut==='Đạt')?'good':'warn'}">${esc(r.weld.paut)}</span></div>
@@ -4556,7 +4593,8 @@ function renderDotDashboard(dotId){
     </div>
     <div class="grid-cards" style="margin-top:14px;margin-bottom:10px;">
       ${ovStatCard(dot.id,'pipes','','Ống đã kiểm tra', s.uniquePipes)}
-      ${ovStatCard(dot.id,'catThay',s.catThay>0?'danger':'','Cắt thay (xong/tổng)', s.catThayDone+'/'+s.catThay)}
+      ${ovStatCard(dot.id,'catThay',s.catThay>0?'danger':'','Vị trí cắt thay (Xong/Tổng)', s.catThayDone+'/'+s.catThay)}
+      ${ovStatCard(dot.id,'catThay',s.doanOngTotal>0?'danger':'','Đoạn ống cắt thay (Xong/Tổng)', s.doanOngDone+'/'+s.doanOngTotal)}
       ${ovStatCard(dot.id,'hanPhu',s.hanPhu>0?'warn':'','Hàn phủ (xong/tổng)', s.hanPhuDone+'/'+s.hanPhu)}
       ${ovStatCard(dot.id,'suaOp',s.suaOp>0?'warn':'','Sửa ốp (xong/tổng)', s.suaOpDone+'/'+s.suaOp)}
     </div>
@@ -5146,7 +5184,11 @@ function renderSuaChuaItemCard(item){
       ${w.viTriThucTe?`<div style="width:100%;font-size:10.5px;color:var(--muted);margin-top:3px;">Vị trí thực tế: ${esc(w.viTriThucTe)}</div>`:''}
       ${(w.nguoiThucHien||w.nguoiXacNhanPAUT)?`<div style="width:100%;font-size:10.5px;color:var(--dim);margin-top:3px;">${w.nguoiThucHien?('Cắt/hàn bởi: '+esc(w.nguoiThucHien)):''}${(w.nguoiThucHien&&w.nguoiXacNhanPAUT)?' · ':''}${w.nguoiXacNhanPAUT?('PAUT xác nhận bởi: '+esc(w.nguoiXacNhanPAUT)):''}</div>`:''}
     </div>`).join('');
-    bodyHtml = `${weldRows}${canHanCat?`<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`:''}
+    // So doan ong THUC TE can thay cho vi tri nay — 1 vi tri co the phai cat/thay 2-3 doan ong rieng le,
+    // khac voi khai niem "mo han" (van chi tu dong 2 moi han chinh, cac doan/moi them vao do nguoi dung tu
+    // tao mo han bien phap) — truong nay CHI dung de tong hop bao cao "Doan ong cat thay (Xong/Tong)".
+    const soDoanOngField = `<div class="field" style="max-width:220px;margin-bottom:10px;"><label>Số đoạn ống thực tế cần thay (vị trí này)</label><input type="number" min="1" step="1" ${disHanCat} value="${esc(item.soDoanOng||1)}" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-size:12.5px;width:100%;" onchange="setSoDoanOng('${item.id}', this.value)"></div>`;
+    bodyHtml = `${soDoanOngField}${weldRows}${canHanCat?`<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`:''}
       ${item.ghiChuXoaMoiHan?`<div style="margin-top:10px;font-size:11px;color:var(--muted);white-space:pre-line;border-top:1px dashed var(--border-soft);padding-top:8px;"><b>Lịch sử xóa mối hàn chính thức:</b>\n${esc(item.ghiChuXoaMoiHan)}</div>`:''}`;
   } else {
     bodyHtml = `<div class="field" style="max-width:260px;"><label>Trạng thái (${esc(phuongAn)})</label><select ${disHanCat} onchange="setManualStatus('${item.id}', this.value)">
@@ -5158,7 +5200,7 @@ function renderSuaChuaItemCard(item){
   const canXoaSc = can('xoaSuaChua');
   return `<div class="repair-item">
     <div class="repair-head" onclick="toggleRepairExpand('${item.id}')">
-      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${phuongAn==='Cắt thay'?(doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${pctDisplay(item.phanTramConLai)}${(item.ngoaiDangGanNhat && item.ngoaiDangGanNhat!=='Bình thường')?(' · Ngoại dạng: '+esc(item.ngoaiDangGanNhat)):''}</span></div>
+      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${phuongAn==='Cắt thay'?((item.soDoanOng>1?(item.soDoanOng+' đoạn ống · '):'')+doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${pctDisplay(item.phanTramConLai)}${(item.ngoaiDangGanNhat && item.ngoaiDangGanNhat!=='Bình thường')?(' · Ngoại dạng: '+esc(item.ngoaiDangGanNhat)):''}</span></div>
       <span class="status ${s}">${esc(item.trangThai)}</span>
     </div>
     ${expanded ? `<div style="margin-top:12px;" onclick="event.stopPropagation()">${choPhepPanel}${bodyHtml}
