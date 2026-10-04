@@ -1073,7 +1073,10 @@ function recordToRow(type, record){
     case 'dot': return {id:r.id, ten:r.ten||'', to_may:r.toMay||'', ngay_bat_dau:r.ngayBatDau||null, ngay_ket_thuc:r.ngayKetThuc||null, han_ke_hoach:r.hanKeHoach||null, trang_thai:r.trangThai||'', ten_hang_muc_cong_trinh:r.tenHangMucCongTrinh||'', ten_goi_thau:r.tenGoiThau||'', ten_don_vi_thi_cong:r.donViThiCong||''};
     case 'danh_muc': return {id:r.id, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri_tu:r.viTriTu||'', vi_tri_den:r.viTriDen||'', lop_ong_tu:r.lopOngTu||'', lop_ong_den:r.lopOngDen||'', vung:r.vung||'', duong_kinh:r.duongKinh||'', chieu_day:r.chieuDay||'', vat_lieu:r.vatLieu||'', ghi_chu:r.ghiChu||''};
     case 'kiem_tra': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vung:r.vung||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', duong_kinh:r.duongKinh||'', chieu_day_tk:r.chieuDayTK||'', chieu_day_do:r.chieuDayDo||'', phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang:r.ngoaiDang||'', ngay:r.ngay||null, nguoi_kiem_tra:r.nguoiKiemTra||''};
-    case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null, so_doan_ong:parseInt(r.soDoanOng,10)||((r.phuongAn||'Cắt thay')==='Cắt thay'?1:0)};
+    // BAO VE co "Cho phep thi cong": 3 cot cho_phep_thi_cong/nguoi_cho_phep/thoi_gian_cho_phep CHI duoc ghi khi record co co _ghiChoPhep
+    // (chi toggleChoPhepThiCong + luc TAO MOI hang muc dat co nay) — moi lan ghi khac (doi trang thai, phuong an, so doan ong...)
+    // KHONG dung toi 3 cot nay, de may giu du lieu cu/hang doi gui lai khong the ghi de mat quyen thi cong da cap.
+    case 'sua_chua_item': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', vi_tri:r.viTri||'', lop_ong:r.lopOng||'', chu_ky:parseInt(r.chuKy,10)||1, phuong_an:r.phuongAn||'Cắt thay', trang_thai:r.trangThai||'', ngay_hoan_thanh:r.ngayHoanThanh||null, phan_tram_con_lai:r.phanTramConLai||'', ngoai_dang_gan_nhat:r.ngoaiDangGanNhat||'', ghi_chu_xoa_moi_han:r.ghiChuXoaMoiHan||'', so_doan_ong:parseInt(r.soDoanOng,10)||((r.phuongAn||'Cắt thay')==='Cắt thay'?1:0), ...(r._ghiChoPhep ? {cho_phep_thi_cong:!!r.choPhepThiCong, nguoi_cho_phep:r.nguoiChoPhep||'', thoi_gian_cho_phep:r.thoiGianChoPhep||null} : {})};
     case 'sua_chua_weld': { const w=r.weld||{}; return {id:w.id, hang_muc_id:r.itemId, phan_tram_con_lai:r.phanTramConLai||'', trang_thai_hang_muc:r.trangThai||'', loai:w.loai||'chinh_thuc', da_cat:!!w.daCat, da_han:!!w.daHan, paut:w.paut||'Chưa kiểm tra', tho_han:w.thoHan||'', ghi_chu:w.ghiChu||'', nguoi_thuc_hien:w.nguoiThucHien||'', nguoi_xac_nhan_paut:w.nguoiXacNhanPAUT||'', vi_tri_thuc_te:w.viTriThucTe||'', ngay_han:w.ngayHan||null}; }
     case 'vat_tu': return {id:r.id, dot_id:r.dotId||null, to_may:r.toMay||'', he_thong:r.heThong||'', thiet_bi:r.thietBi||'', muc_dich:r.mucDich||'', ma_vat_tu:r.maVatTu||'', ten_vat_tu:r.tenVatTu||'', don_vi:r.donVi||'', so_luong:(r.soLuong===''||r.soLuong==null||isNaN(parseFloat(r.soLuong)))?null:parseFloat(r.soLuong), ly_do_thay_the:r.lyDoThayThe||'', ghi_chu:r.ghiChu||'', ngay:r.ngay||null};
     case 'tai_lieu': return {id:r.id, ten_tai_lieu:r.tenTaiLieu||'', so_hieu:r.soHieu||'', he_thong:r.heThong||'', link:r.link||'', ghi_chu:r.ghiChu||''};
@@ -3231,7 +3234,7 @@ async function syncSuaChua(){
         soDoanOng: phuongAnMacDinh==='Cắt thay' ? 1 : 0,
         welds:weldsMacDinh};
       state.suaChua.push(activeItem);
-      syncToSheet('sua_chua_item', activeItem);
+      syncToSheet('sua_chua_item', {...activeItem, _ghiChoPhep:true});
       // QUAN TRONG: giong het loi da sua o addBienPhapWeld — hang muc TU DONG SINH tu Kiem tra duoc tao kem
       // san 2 moi han mac dinh (khi la Cat thay), nhung TRUOC DAY code chi luu phan hang muc (sua_chua_item)
       // ma QUEN luu ca 2 moi han nay len bang RIENG "sua_chua_weld" tren Supabase. Hau qua: MOI hang muc do
@@ -3247,9 +3250,16 @@ async function syncSuaChua(){
       // de day % con lai / ngoai dang gan nhat MOI len server — hau qua: hang muc da ton tai se "dung hinh"
       // o lan do dau tien, khong bao gio cap nhat theo cac lan do chieu day/ngoai dang moi sau do, du du lieu
       // Kiem tra van dung. Phai goi syncToSheet('sua_chua_item', activeItem) giong het nhanh tao moi ben tren.
+      // LOI NGHIEM TRONG DA SUA (lam tut so lieu cho phep thi cong/moi han): ban sua truoc goi
+      // syncToSheet('sua_chua_item', activeItem) cho MOI hang muc moi lan syncSuaChua chay (vd sau nhap Excel) —
+      // syncToSheet day CA DONG (cho_phep_thi_cong, trang_thai, phuong_an, so_doan_ong...) tu bo nho may DANG
+      // CHAY, nen may nao dang giu du lieu cu/chua dong bo se GHI DE ca loat gia tri dung tren server (vd mat
+      // "Cho phep thi cong"). Nay chi cap nhat DUNG 2 cot % con lai + ngoai dang gan nhat, va CHI khi gia tri
+      // thuc su doi — khong dung toi bat ky cot nao khac.
+      const doi = (activeItem.phanTramConLai!==latest.phanTramConLai) || ((activeItem.ngoaiDangGanNhat||'')!==(latest.ngoaiDang||''));
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
-      syncToSheet('sua_chua_item', activeItem);
+      if(doi) sbUpsertMany('sua_chua_hang_muc', [{id:activeItem.id, phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}]);
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
@@ -3351,7 +3361,7 @@ window.toggleChoPhepThiCong = async function(itemId){
   // kiem tra luon o day, khong chi rieng cac ham lien quan cat/han.
   if(item.choPhepThiCong && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _ghiChoPhep:true});
   render();
 };
 window.setManualStatus = async function(itemId, value){
