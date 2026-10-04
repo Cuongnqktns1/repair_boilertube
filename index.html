@@ -976,13 +976,18 @@ async function fetchWithTimeout(url, ms, headers){
   try{ return await fetch(url, Object.assign({signal: ctrl.signal}, headers?{headers}:{})); }
   finally{ clearTimeout(timer); }
 }
+// PHIEN BAN APP — gui kem MOI request ghi qua header 'X-App-Version'. Trigger bao ve tren Supabase
+// (xem bao-ve-chong-ghi-de.sql) chi cho phep "ha cap" du lieu (bo Cho phep thi cong, mat moi han da han,
+// lui trang thai...) khi request den tu ban app co phien ban >= 43. May dang giu ban HTML cu trong trinh
+// duyet khong gui header nay nen khong the ghi de lui du lieu nua, du co mo lai app sau nay.
+const APP_VERSION = 43;
 function sbHeaders(extra){
   // 'X-App-User': ten nguoi dang dang nhap (ma hoa URI vi ten co dau/khoang trang, header HTTP chi
   // nhan ky tu ASCII) — Supabase/PostgREST tu dong dua toan bo header cua request vao bien
   // "request.headers" (dang JSON) ma cac trigger nhat ky thao tac (audit_log) doc duoc, giup biet
   // CHINH XAC ai vua Them/Sua/Xoa ma khong can dang nhap rieng qua Supabase Auth.
   const userHeader = state.session ? encodeURIComponent(state.session.name||state.session.email||'') : '';
-  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader }, extra||{});
+  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader, 'X-App-Version': String(APP_VERSION) }, extra||{});
 }
 function sbUrl(table, query){ return SUPABASE_URL+'/rest/v1/'+table+(query?('?'+query):''); }
 // QUAN TRONG: PHAI dinh kem header apikey/Authorization khi doc (GET) tu Supabase, neu khong se bi tra ve
