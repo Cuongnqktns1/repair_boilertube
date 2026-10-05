@@ -984,6 +984,16 @@ const APP_VERSION = 43;
 // Khi dang GUI LAI hang doi outbox (ban ghi cu luu tu luc loi mang) thi khai bao phien ban 0 de trigger bao ve
 // tren Supabase coi do la du lieu cu va KHONG cho no "ha cap" (bo cho phep, mat moi han da han...) len du lieu moi.
 let _replayStale = false;
+// DU LIEU TREN MAY NAY CO CU KHONG? — app luon nap ban sao cuc bo truoc roi moi dong bo tu server; neu lan dong
+// bo that bai (mang yeu), hoac chua dong bo lan nao trong phien nay, hoac lan dong bo thanh cong gan nhat da
+// qua 30 phut, thi du lieu dang xem/dang sua CO THE da cu so voi server. Trong truong hop do KHONG cho ghi cac
+// thay doi hang muc/moi han Sua chua len server (de khong de len du lieu moi cua nguoi khac) va hien canh bao.
+const GUARDED_WRITE_TYPES = new Set(['sua_chua_item','sua_chua_weld']);
+function isDataStale(){
+  if(!state.lastSyncAt) return true;
+  if(state.offlineSuaChua) return true;
+  return (Date.now() - state.lastSyncAt.getTime()) > 30*60*1000;
+}
 function sbHeaders(extra){
   // 'X-App-User': ten nguoi dang dang nhap (ma hoa URI vi ten co dau/khoang trang, header HTTP chi
   // nhan ky tu ASCII) — Supabase/PostgREST tu dong dua toan bo header cua request vao bien
@@ -1031,6 +1041,16 @@ async function sbErrMsg(res){ try{ const j = await res.json(); return j.message 
 async function sbUpsert(table, row){
   try{
     const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(row) });
+    if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
+    return {ok:true};
+  }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
+}
+// CHI THEM MOI: neu id da ton tai tren server thi BO QUA (ON CONFLICT DO NOTHING), TUYET DOI khong ghi de.
+// Dung cho cac ban ghi "tu dong sinh" (hang muc/moi han tao tu Kiem tra) — may nao tuong minh la "chua co" vi
+// du lieu cuc bo cu cung khong the de len ban ghi that da co tren server.
+async function sbInsertIgnore(table, row){
+  try{
+    const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=ignore-duplicates,return=minimal'}), body: JSON.stringify(row) });
     if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
     return {ok:true};
   }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
@@ -1367,7 +1387,7 @@ function mapSheetSuaChua(itemRows, weldRows){
       const truocTT = item.trangThai, truocNgayHT = item.ngayHoanThanh;
       recomputeStatus(item);
       if(item.trangThai!==truocTT || item.ngayHoanThanh!==truocNgayHT){
-        syncToSheet('sua_chua_item', item);
+        syncToSheet('sua_chua_item', {...item, _cot:['trang_thai','ngay_hoan_thanh']});
       }
     }
   });
@@ -1728,6 +1748,15 @@ async function postToSheet(payload, timeoutMs){
     if(!table) return {ok:false, error:'Loại dữ liệu không xác định: '+type};
     const row = recordToRow(type, payload.record);
     if(!row || (!row.id && !row.email)) return {ok:false, error:'Thiếu mã định danh (id) khi ghi '+type};
+    // GHI THEO COT (_cot): chi gui id + dung nhung cot nguoi dung VUA THAO TAC; cac cot khac KHONG gui nen
+    // khong the de len gia tri hien co tren server. Du lieu khong thao tac se luon lay tu server khi dong bo.
+    if(payload.record && Array.isArray(payload.record._cot)){
+      const keep = new Set(['id'].concat(payload.record._cot));
+      const rowFull = row; const rowPart = {};
+      Object.keys(rowFull).forEach(k=>{ if(keep.has(k)) rowPart[k] = rowFull[k]; });
+      return await sbUpsert(table, rowPart);
+    }
+    if(payload.record && payload.record._chiThem) return await sbInsertIgnore(table, row);
     return await sbUpsert(table, row);
   }catch(e){
     return {ok:false, error: e.name==='AbortError' ? 'Quá thời gian chờ' : ('Lỗi mạng/CORS: '+(e.message||String(e)))};
@@ -1764,7 +1793,13 @@ function hasPendingOutbox(domain){
 async function enqueueOutbox(type, record){
   const key = outboxKeyOf(type, record);
   const existing = state.outbox.find(o=>o.key===key);
-  if(existing){ existing.record = record; existing.ts = new Date().toISOString(); }
+  if(existing){
+    // Cung 1 ban ghi dang cho gui lai ma lai co them thao tac o COT KHAC: gop danh sach cot (_cot) de khong mat
+    // thay doi cua thao tac truoc; neu 1 trong 2 la ghi day du (khong _cot) thi giu ghi day du.
+    const oc = existing.record && existing.record._cot, nc = record && record._cot;
+    existing.record = (oc && nc) ? Object.assign({}, record, {_cot: Array.from(new Set(oc.concat(nc)))}) : record;
+    existing.ts = new Date().toISOString();
+  }
   else { state.outbox.push({key, type, record, ts:new Date().toISOString(), attempts:0}); }
   await persist('outbox', state.outbox, true);
 }
@@ -1779,11 +1814,21 @@ let _outboxFlushing = false;
 // vua co lai (window online), va 1 lan ngay luc mo app (phong truong hop con sot lai tu phien truoc).
 async function flushOutbox(){
   if(_outboxFlushing || !state.outbox.length) return;
+  // Chua dong bo duoc voi server trong phien nay thi KHONG gui lai hang doi — se gui khi da dong bo.
+  if(!state.lastSyncAt) return;
+  // Bo cac thao tac cho gui qua cu (> 24 gio): chung dua tren du lieu da cu, gui len se de len du lieu moi.
+  const _cutoff = Date.now() - 24*3600*1000;
+  const _before = state.outbox.length;
+  state.outbox = state.outbox.filter(o=>!o.ts || new Date(o.ts).getTime() >= _cutoff);
+  if(state.outbox.length!==_before){ await persist('outbox', state.outbox, true); }
+  if(!state.outbox.length){ render(); return; }
   _outboxFlushing = true;
   try{
     const snapshot = state.outbox.slice();
     for(const entry of snapshot){
-      _replayStale = true;
+      // Ban ghi ghi THEO COT (_cot) chi chua dung cot nguoi dung da thao tac that -> la thao tac that, duoc
+      // phep di lui. Chi ban ghi day du cu (khong _cot, luu tu phien ban truoc) moi bi coi la du lieu cu.
+      _replayStale = !(entry.record && Array.isArray(entry.record._cot)) && !(entry.record && entry.record._chiThem);
       let result;
       try{ result = await postToSheet({type:entry.type, record:entry.record, ts:new Date().toISOString()}); }
       finally{ _replayStale = false; }
@@ -1798,6 +1843,8 @@ async function flushOutbox(){
 }
 window.retryOutboxNow = function(){ flushOutbox(); };
 async function syncToSheet(type, record){
+  // (Khong chan thao tac khi du lieu co the cu: viec chong "ha cap" du lieu do trigger tren Supabase dam nhiem,
+  //  de cong viec thuc te khong bi cham.)
   const result = await postToSheet({type, record, ts: new Date().toISOString()});
   if(!result.ok){
     reportWriteError(type, result.error);
@@ -3246,7 +3293,8 @@ async function syncSuaChua(){
         soDoanOng: phuongAnMacDinh==='Cắt thay' ? 1 : 0,
         welds:weldsMacDinh};
       state.suaChua.push(activeItem);
-      syncToSheet('sua_chua_item', {...activeItem, _ghiChoPhep:true});
+      // _chiThem: chi INSERT neu chua co tren server, khong bao gio ghi de len hang muc/moi han da co.
+      syncToSheet('sua_chua_item', {...activeItem, _ghiChoPhep:true, _chiThem:true});
       // QUAN TRONG: giong het loi da sua o addBienPhapWeld — hang muc TU DONG SINH tu Kiem tra duoc tao kem
       // san 2 moi han mac dinh (khi la Cat thay), nhung TRUOC DAY code chi luu phan hang muc (sua_chua_item)
       // ma QUEN luu ca 2 moi han nay len bang RIENG "sua_chua_weld" tren Supabase. Hau qua: MOI hang muc do
@@ -3254,7 +3302,7 @@ async function syncSuaChua(){
       // mo lai tu may khac...) — day rat co the la nguyen nhan chinh cua phan lon cac truong hop "0/0 moi
       // han" da gap, khong chi rieng 4 hang muc da phat hien truoc do. Phai luu them ca w1 va w2 (neu co):
       activeItem.welds.forEach(w=>{
-        syncToSheet('sua_chua_weld', {itemId:activeItem.id, phanTramConLai:activeItem.phanTramConLai, trangThai:activeItem.trangThai, weld:w});
+        syncToSheet('sua_chua_weld', {itemId:activeItem.id, phanTramConLai:activeItem.phanTramConLai, trangThai:activeItem.trangThai, weld:w, _chiThem:true});
       });
     } else {
       // LOI DA SUA: truoc day nhanh nay CHI cap nhat activeItem trong bo nho (roi persist('sua-chua',...)
@@ -3271,7 +3319,7 @@ async function syncSuaChua(){
       const doi = (activeItem.phanTramConLai!==latest.phanTramConLai) || ((activeItem.ngoaiDangGanNhat||'')!==(latest.ngoaiDang||''));
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
-      if(doi) sbUpsertMany('sua_chua_hang_muc', [{id:activeItem.id, phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}]);
+      if(doi && !isDataStale()) sbUpsertMany('sua_chua_hang_muc', [{id:activeItem.id, phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}]);
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
@@ -3315,7 +3363,7 @@ window.setSoDoanOng = async function(itemId, value){
   const n = parseInt(value,10);
   item.soDoanOng = (!isNaN(n) && n>0) ? n : 1;
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _cot:['so_doan_ong']});
   render();
 };
 window.setPhuongAn = async function(itemId, value){
@@ -3351,9 +3399,9 @@ window.setPhuongAn = async function(itemId, value){
   }
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _cot:['phuong_an','trang_thai','ngay_hoan_thanh','so_doan_ong']});
   weldsMoiTao.forEach(w=>{
-    syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+    syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w, _chiThem:true});
   });
   if(weldIdsCanXoa.length) deleteManyFromSheet('SuaChua', weldIdsCanXoa);
   render();
@@ -3373,7 +3421,7 @@ window.toggleChoPhepThiCong = async function(itemId){
   // kiem tra luon o day, khong chi rieng cac ham lien quan cat/han.
   if(item.choPhepThiCong && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', {...item, _ghiChoPhep:true});
+  syncToSheet('sua_chua_item', {...item, _ghiChoPhep:true, _cot:['cho_phep_thi_cong','nguoi_cho_phep','thoi_gian_cho_phep']});
   render();
 };
 window.setManualStatus = async function(itemId, value){
@@ -3384,7 +3432,7 @@ window.setManualStatus = async function(itemId, value){
   item.ngayHoanThanh = value==='Hoàn thành' ? (item.ngayHoanThanh||todayStr()) : '';
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _cot:['trang_thai','ngay_hoan_thanh']});
   render();
 };
 // Tải lại đúng dữ liệu Sửa chữa (SuaChuaHangMuc + SuaChua) ngay khi mở 1 hạng mục ra để xem/sửa — vì có
@@ -3422,9 +3470,11 @@ window.addBienPhapWeld = async function(itemId){
   // Lay SO LON NHAT dang co + 1 (KHONG dung "so luong + 1"): neu truoc do da xoa 1 moi han bien phap giua
   // chung (vd con wbp2..wbp5, thieu wbp1) thi dem so luong ra 4 -> sinh ra wbp5 TRUNG id voi moi han dang co,
   // va khi ghi len Supabase (upsert theo id) se GHI DE LEN moi han cu, mat du lieu cua no.
-  const bpMax = item.welds.reduce((m,w)=>{ const mm = /-wbp(\d+)$/.exec(w.id||''); return mm ? Math.max(m, parseInt(mm[1],10)) : m; }, 0);
-  const bpCount = Math.max(bpMax, item.welds.filter(w=>w.loai==='bien_phap').length);
-  const newWeld = {id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()};
+  // Chon SO NHO NHAT CHUA DUNG (1,2,3...) — nho do neu da xoa wbp1 thi lan tao ke tiep se lay lai dung wbp1
+  // (lap cho trong), con neu khong thieu so nao thi se ra so lon nhat + 1. Khong bao gio trung id dang co.
+  const bpUsed = new Set(item.welds.map(w=>{ const mm = /-wbp(\d+)$/.exec(w.id||''); return mm ? parseInt(mm[1],10) : 0; }));
+  let bpNext = 1; while(bpUsed.has(bpNext)) bpNext++;
+  const newWeld = {id:itemId+'-wbp'+bpNext, loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()};
   item.welds.push(newWeld);
   if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
@@ -3435,7 +3485,7 @@ window.addBienPhapWeld = async function(itemId){
   // luu) nhung KHONG BAO GIO duoc ghi len Supabase; ngay khi co 1 lan dong bo/tai lai du lieu tu server
   // (mo lai hang muc, chuyen tab, F5...) la mat ngay vi server khong he co ban ghi nay. Phai goi ca 2:
   syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:newWeld});
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _cot:['trang_thai','ngay_hoan_thanh']});
   render();
 };
 window.removeWeld = async function(itemId, weldId){
@@ -3463,7 +3513,7 @@ window.removeWeld = async function(itemId, weldId){
   item.welds = item.welds.filter(x=>x.id!==weldId);
   if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_item', {...item, _cot:['ghi_chu_xoa_moi_han','trang_thai','ngay_hoan_thanh']});
   render();
   // QUAN TRONG: moi han nam o bang RIENG "sua_chua_weld" tren Supabase (xem ghi chu trong addBienPhapWeld) —
   // truoc day cho nay chi xoa khoi mang cuc bo roi goi syncToSheet('sua_chua_item',...) (ban ghi nay KHONG
@@ -3505,8 +3555,9 @@ window.toggleWeldFlag = async function(itemId, weldId, field){
   recomputeStatus(item);
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
-  syncToSheet('sua_chua_item', item); // dam bao trang thai/ngay hoan thanh moi tinh lai duoc ghi len sheet SuaChuaHangMuc, tranh bi dong bo nguoc ve trang thai cu
+  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w,
+    _cot: field==='daHan' ? ['da_han','ngay_han','nguoi_thuc_hien'] : ['da_cat','nguoi_thuc_hien']});
+  syncToSheet('sua_chua_item', {...item, _cot:['trang_thai','ngay_hoan_thanh']}); // trang thai/ngay hoan thanh moi tinh lai
   render();
 };
 window.setWeldPaut = async function(itemId, weldId, value){
@@ -3518,8 +3569,9 @@ window.setWeldPaut = async function(itemId, weldId, value){
   recomputeStatus(item);
   if(!wasHoanThanh && item.trangThai==='Hoàn thành') checkDotHoanThanhAndNotify(item.dotId);
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
-  syncToSheet('sua_chua_item', item);
+  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w,
+    _cot:['paut','nguoi_xac_nhan_paut']});
+  syncToSheet('sua_chua_item', {...item, _cot:['trang_thai','ngay_hoan_thanh']});
   render();
 };
 window.setWeldField = async function(itemId, weldId, field, value){
@@ -3528,7 +3580,10 @@ window.setWeldField = async function(itemId, weldId, field, value){
   w[field]=value;
   w.nguoiThucHien = state.session ? state.session.name : (w.nguoiThucHien||'');
   await persist('sua-chua', state.suaChua, true);
-  syncToSheet('sua_chua_weld', {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w});
+  const _colMap = {thoHan:'tho_han', ghiChu:'ghi_chu', viTriThucTe:'vi_tri_thuc_te', ngayHan:'ngay_han', daCat:'da_cat', daHan:'da_han', paut:'paut', nguoiXacNhanPAUT:'nguoi_xac_nhan_paut'};
+  const _rec = {itemId:item.id, phanTramConLai:item.phanTramConLai, trangThai:item.trangThai, weld:w};
+  if(_colMap[field]) _rec._cot = [_colMap[field], 'nguoi_thuc_hien'];
+  syncToSheet('sua_chua_weld', _rec);
 };
 // Xuat bao cao dep, theo tung Dot (1 sheet = 1 dot), dung de in/luu tru — thay cho ban bang du lieu tho truoc day
 window.setScExportDot = function(v){ state.scExportDotId = v; render(); };
@@ -4263,7 +4318,7 @@ function render(){
         <div style="margin-top:8px;">${themeToggleHtml()}</div>
       </div>
     </div>
-    <div class="main">${renderTab()}</div>
+    <div class="main">${(!state.syncing && isDataStale()) ? `<div style="margin:0 0 12px;padding:10px 12px;border:1px solid var(--danger);border-radius:10px;background:rgba(226,86,79,.12);font-size:12.5px;line-height:1.5;"><b style="color:var(--danger);">⚠ Dữ liệu trên máy này CHƯA ĐỒNG BỘ / có thể đã cũ.</b> Bấm đồng bộ để xem số liệu mới nhất của mọi người. <button class="mini-btn" onclick="retrySync()">Đồng bộ lại ngay</button></div>` : ''}${renderTab()}</div>
   </div>
   <div class="bottom-nav">${bottomNavHtml}</div>
   ${state.lightboxImg ? `<div class="lightbox-overlay" onclick="closeLightbox()"><img src="${state.lightboxImg}"></div>` : ''}
