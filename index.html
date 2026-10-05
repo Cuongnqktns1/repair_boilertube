@@ -981,13 +981,16 @@ async function fetchWithTimeout(url, ms, headers){
 // lui trang thai...) khi request den tu ban app co phien ban >= 43. May dang giu ban HTML cu trong trinh
 // duyet khong gui header nay nen khong the ghi de lui du lieu nua, du co mo lai app sau nay.
 const APP_VERSION = 43;
+// Khi dang GUI LAI hang doi outbox (ban ghi cu luu tu luc loi mang) thi khai bao phien ban 0 de trigger bao ve
+// tren Supabase coi do la du lieu cu va KHONG cho no "ha cap" (bo cho phep, mat moi han da han...) len du lieu moi.
+let _replayStale = false;
 function sbHeaders(extra){
   // 'X-App-User': ten nguoi dang dang nhap (ma hoa URI vi ten co dau/khoang trang, header HTTP chi
   // nhan ky tu ASCII) — Supabase/PostgREST tu dong dua toan bo header cua request vao bien
   // "request.headers" (dang JSON) ma cac trigger nhat ky thao tac (audit_log) doc duoc, giup biet
   // CHINH XAC ai vua Them/Sua/Xoa ma khong can dang nhap rieng qua Supabase Auth.
   const userHeader = state.session ? encodeURIComponent(state.session.name||state.session.email||'') : '';
-  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader, 'X-App-Version': String(APP_VERSION) }, extra||{});
+  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader, 'X-App-Version': String(_replayStale ? 0 : APP_VERSION) }, extra||{});
 }
 function sbUrl(table, query){ return SUPABASE_URL+'/rest/v1/'+table+(query?('?'+query):''); }
 // QUAN TRONG: PHAI dinh kem header apikey/Authorization khi doc (GET) tu Supabase, neu khong se bi tra ve
@@ -1780,12 +1783,16 @@ async function flushOutbox(){
   try{
     const snapshot = state.outbox.slice();
     for(const entry of snapshot){
-      const result = await postToSheet({type:entry.type, record:entry.record, ts:new Date().toISOString()});
+      _replayStale = true;
+      let result;
+      try{ result = await postToSheet({type:entry.type, record:entry.record, ts:new Date().toISOString()}); }
+      finally{ _replayStale = false; }
       if(result.ok) await dequeueOutbox(entry.type, entry.record);
       else entry.attempts = (entry.attempts||0)+1;
     }
   } finally {
     _outboxFlushing = false;
+    _replayStale = false;
     render();
   }
 }
@@ -3412,7 +3419,11 @@ window.addBienPhapWeld = async function(itemId){
   // neu khong ghi lai vi tri thi ve sau se khong biet moi han nay nam o dau tren doan ong.
   const viTriThucTe = prompt('Bắt buộc nhập Vị trí thực tế của mối hàn biện pháp này (VD: cách mép bích 20cm, giữa đoạn tầng 7-8...):');
   if(!viTriThucTe || !viTriThucTe.trim()){ alert('Chưa nhập vị trí thực tế — không thể tạo mối hàn biện pháp khi chưa xác định rõ vị trí.'); return; }
-  const bpCount = item.welds.filter(w=>w.loai==='bien_phap').length;
+  // Lay SO LON NHAT dang co + 1 (KHONG dung "so luong + 1"): neu truoc do da xoa 1 moi han bien phap giua
+  // chung (vd con wbp2..wbp5, thieu wbp1) thi dem so luong ra 4 -> sinh ra wbp5 TRUNG id voi moi han dang co,
+  // va khi ghi len Supabase (upsert theo id) se GHI DE LEN moi han cu, mat du lieu cua no.
+  const bpMax = item.welds.reduce((m,w)=>{ const mm = /-wbp(\d+)$/.exec(w.id||''); return mm ? Math.max(m, parseInt(mm[1],10)) : m; }, 0);
+  const bpCount = Math.max(bpMax, item.welds.filter(w=>w.loai==='bien_phap').length);
   const newWeld = {id:itemId+'-wbp'+(bpCount+1), loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()};
   item.welds.push(newWeld);
   if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
