@@ -178,6 +178,12 @@ table.dm tr:last-child td{border-bottom:none;}
 .switch::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#e7eaec;transition:left .15s;}
 .switch.on::after{left:19px;}
 .loading{padding:60px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px;letter-spacing:.08em;}
+.boot-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;}
+.boot-spinner{width:44px;height:44px;border:4px solid var(--border);border-top-color:var(--accent,#e0a030);border-radius:50%;animation:boot-spin 0.9s linear infinite;}
+@keyframes boot-spin{to{transform:rotate(360deg);}}
+.boot-title{font-size:17px;font-weight:600;color:var(--text);}
+.boot-sub{font-size:13px;color:var(--dim);}
+.boot-hint{font-size:12px;color:var(--muted);max-width:340px;line-height:1.5;}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 25% 15%,#16324a 0%,var(--bg) 62%);}
 .login-card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:28px 26px;}
 .login-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px;}
@@ -1464,6 +1470,18 @@ async function loadAll(){
   state.nhatKy = await g('nhat-ky', true, []);
   state.hinhAnh = await g('hinh-anh', true, []);
   state.outbox = await g('outbox', true, []);
+  // MAY LAU KHONG DONG BO (> 24 gio, vd tai khoan bi OFF roi duoc ON lai sau nhieu ngay): bo HANG DOI cho gui
+  // va ban sao du lieu cuc bo cu, bat dau lai tu du lieu TREN SERVER — de du lieu cu cua may nay khong the
+  // quay lai de len du lieu da thay doi trong thoi gian ho vang mat.
+  try{
+    const lastTs = parseInt(await g('last-sync-ts', false, '0'), 10) || 0;
+    if(lastTs && (Date.now() - lastTs) > 24*3600*1000){
+      state.outbox = []; await persist('outbox', [], true);
+      state.kiemTra = []; state.suaChua = []; state.vatTu = []; state.nhatKy = []; state.taiLieu = []; state.dots = [];
+      await persist('kiem-tra', [], true); await persist('sua-chua', [], true); await persist('vat-tu', [], true);
+      await persist('nhat-ky', [], true); await persist('tai-lieu', [], true); await persist('dots', [], true);
+    }
+  }catch(e){ console.warn('Không kiểm tra được mốc đồng bộ cuối:', e); }
   state.telegram = {botToken:'',chatIdsCanhBao:[],chatIdsBaoCao:[],kieuLich:'GIO',tanSuatGio:'',gioCoDinh:''};
   const sess = await g('session', false, null);
   if(sess && state.users.find(u=>u.email===sess)) state.session = state.users.find(u=>u.email===sess);
@@ -1511,7 +1529,7 @@ async function syncFromSheetInBackground(){
   if(!all){
     state.offlineUsers = state.offlineDanhMuc = state.offlineDots = state.offlineKiemTra = state.offlineSuaChua = state.offlineVatTu = true;
     state.syncErrorDetail = _lastSyncError || 'Không rõ nguyên nhân';
-    state.syncing = false; render();
+    state.syncing = false; state.booting = false; render();
     return;
   }
   state.syncErrorDetail = '';
@@ -1543,6 +1561,8 @@ async function syncFromSheetInBackground(){
     if(u && u.active===false){
       // Tai khoan bi quan tri TAT (OFF) -> dang xuat ngay o lan dong bo ke tiep
       state.session = null; persist('session', null, false);
+      // Bo luon hang doi cho gui cua may nay: thao tac chua gui cua tai khoan da bi tat KHONG duoc phep gui sau nay
+      state.outbox = []; persist('outbox', [], true);
       alert('Tài khoản của bạn đã bị TẮT (OFF) bởi Quản trị. Liên hệ Quản trị nếu cần mở lại.');
     }
     else if(u) state.session = u;
@@ -1579,6 +1599,8 @@ async function syncFromSheetInBackground(){
   state.offlineSheetNames = offlineSheetNames;
   state.syncing = false;
   state.lastSyncAt = new Date();
+  try{ await storageSet('last-sync-ts', String(Date.now()), false); }catch(e){}
+  state.booting = false;
   render();
   // Anh (Google Drive/Apps Script) tai RIENG, KHONG await o day — Apps Script co the mat 20-30 giay (cold
   // start + doc nhieu sheet de loc ra hinh_anh), truoc day goi chung trong 1 Promise.all() voi Supabase
@@ -4332,7 +4354,15 @@ function renderNhatKy(){
 /* ---------- RENDER ---------- */
 function render(){
   const app=document.getElementById('app');
-  if(state.loading){ app.innerHTML='<div class="loading">ĐANG TẢI DỮ LIỆU…</div>'; return; }
+  // MAN HINH CHO KHI MO APP: chua cho thao tac gi cho toi khi da kiem tra phien ban + dong bo xong du lieu tu
+  // may chu (lan dau trong phien) — tranh viec nguoi dung sua tren du lieu cu roi ghi de len du lieu chung.
+  if(state.booting || state.loading){
+    app.innerHTML = `<div class="boot-screen"><div class="boot-spinner"></div>
+      <div class="boot-title">Vui lòng chờ đợi, đang đồng bộ dữ liệu…</div>
+      <div class="boot-sub">${esc(state.bootMsg||'Đang khởi động…')}</div>
+      <div class="boot-hint">Xin đừng thao tác cho đến khi màn hình này tự đóng, để dữ liệu của bạn khớp với dữ liệu chung.</div></div>`;
+    return;
+  }
   if(!state.session){ app.innerHTML = renderAuth(); return; }
 
   const navHtml = NAV.filter(n=>!n.adminOnly || state.session.role==='admin').map(n=>
@@ -5857,7 +5887,39 @@ function renderAnalysis(){
 }
 
 document.body.classList.add(voiceSupported() ? 'voice-ok' : 'voice-no');
-loadAll();
+// DONG BO PHIEN BAN: so phien ban (APP_VERSION) cua trang dang chay voi ban moi nhat tren may chu. Neu may chu
+// co ban moi hon (trinh duyet con giu ban cu trong bo nho dem) thi tu tai lai bo qua bo nho dem. Moi phien ban
+// chi thu tai lai 1 lan de khong bi lap vo han neu may chu tra ve cung ban cu (chua cap nhat xong).
+// LUU Y KHI PHAT HANH: moi lan dua file moi len GitHub Pages phai TANG so APP_VERSION (const o tren) len 1.
+async function checkAppVersion(){
+  try{
+    state.bootMsg = 'Đang kiểm tra phiên bản mới nhất…'; render();
+    const base = location.href.split('#')[0].split('?')[0];
+    const res = await fetchWithTimeout(base + '?_v=' + Date.now(), 6000);
+    if(!res.ok) return;
+    const txt = await res.text();
+    const m = /const APP_VERSION = (\d+);/.exec(txt);
+    if(!m) return;
+    const remote = parseInt(m[1], 10);
+    if(remote > APP_VERSION){
+      let tried = ''; try{ tried = sessionStorage.getItem('ver-reload-tried') || ''; }catch(e){}
+      if(tried !== String(remote)){
+        try{ sessionStorage.setItem('ver-reload-tried', String(remote)); }catch(e){}
+        state.bootMsg = 'Đang cập nhật phiên bản mới ('+remote+')… ứng dụng sẽ tự tải lại.'; render();
+        location.replace(base + '?v=' + remote + '&t=' + Date.now());
+        await new Promise(()=>{}); // dung tai day, cho trinh duyet tai lai trang
+      }
+    }
+  }catch(e){ console.warn('Không kiểm tra được phiên bản:', e); }
+}
+state.booting = true; state.bootMsg = 'Đang khởi động…';
+setTimeout(()=>{ if(state.booting){ state.booting = false; render(); } }, 30000); // chot an toan: khong bao gio ket man hinh cho
+(async ()=>{
+  render();
+  await checkAppVersion();
+  state.bootMsg = 'Đang tải và đồng bộ dữ liệu từ máy chủ…';
+  await loadAll();
+})();
 startAutoSync();
 // Hang doi gui lai: thu ngay 1 lan luc mo app (phong con sot lai tu phien truoc do dong/mat mang giua
 // chung), sau do dinh ky 20 giay/lan, va thu ngay khi trinh duyet bao co mang tro lai.
