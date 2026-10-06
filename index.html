@@ -304,6 +304,7 @@ const NAV = [
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
   {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
   {id:'auditlog', tag:'NKTT', label:'Nhật ký thao tác', adminOnly:true},
+  {id:'quantri',  tag:'QT',   label:'Quản trị tài khoản', adminOnly:true},
 ];
 // Tren dien thoai, thanh dieu huong duoi cung chi hien Trang chu + 3 module hay dung nhat (tranh 9 muc phai cuon ngang).
 // Cac module con lai truy cap qua luoi module o trang Tong quan (dong vai tro trang chu).
@@ -319,7 +320,8 @@ const NAV_ICONS = {
   vattu: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
   history: '<path d="M4 19h16"/><path d="M4 15l5-5 4 3 7-8"/><path d="M15 5h5v5"/>',
   analysis: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-5-5"/>',
-  auditlog: '<path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9"/><path d="M8 3v4h4"/><path d="M18 2l4 4-9 9H9v-4z"/>'
+  auditlog: '<path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9"/><path d="M8 3v4h4"/><path d="M18 2l4 4-9 9H9v-4z"/>',
+  quantri: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M17 6v6M14 9h6"/>'
 };
 function navIconSvg(id){
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(NAV_ICONS[id]||'')+'</svg>';
@@ -946,6 +948,7 @@ function renderWizardModal(){
 /* ---------- Phan quyen ---------- */
 const ROLE_LABELS = {
   admin: 'Quản trị',
+  khach: 'Khách (chỉ xem)',
   ktv_han_cat: 'KTV Hàn cắt',
   ktv_ndt: 'KTV NDT',
   giam_sat_qc: 'Giám sát/QC',
@@ -981,6 +984,17 @@ async function fetchWithTimeout(url, ms, headers){
 // lui trang thai...) khi request den tu ban app co phien ban >= 43. May dang giu ban HTML cu trong trinh
 // duyet khong gui header nay nen khong the ghi de lui du lieu nua, du co mo lai app sau nay.
 const APP_VERSION = 43;
+// ---- QUYEN ADMIN CO DINH: CHI DUY NHAT tai khoan nay la admin. Moi tai khoan khac co role 'admin' (du trong
+// du lieu server) deu bi HA xuong '' (chua phan quyen) o phia app; server cung co trigger chan (xem quan-tri-tai-khoan.sql).
+const SUPER_ADMIN_EMAIL = 'nguyencuongbkdn@gmail.com';
+function normRole(email, role){
+  const e = String(email||'').trim().toLowerCase();
+  if(e === SUPER_ADMIN_EMAIL) return 'admin';
+  return role === 'admin' ? '' : (role||'');
+}
+// Tai khoan "Khach": xem duoc moi modul va chi tiet tung muc nhung KHONG thay doi duoc du lieu.
+function isGuest(){ return !!(state.session && state.session.role === 'khach'); }
+const GUEST_MSG = 'Tài khoản Khách chỉ được xem, không thể thay đổi dữ liệu.';
 // Khi dang GUI LAI hang doi outbox (ban ghi cu luu tu luc loi mang) thi khai bao phien ban 0 de trigger bao ve
 // tren Supabase coi do la du lieu cu va KHONG cho no "ha cap" (bo cho phep, mat moi han da han...) len du lieu moi.
 let _replayStale = false;
@@ -1039,6 +1053,7 @@ async function sbSelectAll(table, query){
 }
 async function sbErrMsg(res){ try{ const j = await res.json(); return j.message || j.error_description || j.hint || ('HTTP '+res.status); }catch(e){ return 'HTTP '+res.status; } }
 async function sbUpsert(table, row){
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
   try{
     const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(row) });
     if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
@@ -1048,7 +1063,20 @@ async function sbUpsert(table, row){
 // CHI THEM MOI: neu id da ton tai tren server thi BO QUA (ON CONFLICT DO NOTHING), TUYET DOI khong ghi de.
 // Dung cho cac ban ghi "tu dong sinh" (hang muc/moi han tao tu Kiem tra) — may nao tuong minh la "chua co" vi
 // du lieu cuc bo cu cung khong the de len ban ghi that da co tren server.
+// CAP NHAT THEO COT bang PATCH (UPDATE) — KHONG dung INSERT..ON CONFLICT vi kieu do bi Postgres tu choi khi
+// cac cot NOT NULL khong co trong lenh. Neu khong co dong nao khop (dong chua ton tai) thi moi ghi day du.
+async function sbPatch(table, keyCol, keyVal, cols, fullRow){
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
+  try{
+    const res = await fetch(sbUrl(table, keyCol+'=eq.'+encodeURIComponent(keyVal)), { method:'PATCH', headers: sbHeaders({'Prefer':'return=representation'}), body: JSON.stringify(cols) });
+    if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
+    let arr = []; try{ arr = await res.json(); }catch(e){}
+    if(Array.isArray(arr) && arr.length===0 && fullRow) return await sbUpsert(table, fullRow);
+    return {ok:true};
+  }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
+}
 async function sbInsertIgnore(table, row){
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
   try{
     const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=ignore-duplicates,return=minimal'}), body: JSON.stringify(row) });
     if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
@@ -1057,6 +1085,7 @@ async function sbInsertIgnore(table, row){
 }
 async function sbUpsertMany(table, rows){
   if(!rows || !rows.length) return {ok:true};
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
   try{
     const res = await fetch(sbUrl(table), { method:'POST', headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(rows) });
     if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
@@ -1064,6 +1093,7 @@ async function sbUpsertMany(table, rows){
   }catch(e){ return {ok:false, error:'Lỗi mạng/CORS: '+(e.message||String(e))}; }
 }
 async function sbDelete(table, filterQuery){
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
   try{
     const res = await fetch(sbUrl(table, filterQuery), { method:'DELETE', headers: sbHeaders() });
     if(!res.ok) return {ok:false, error: await sbErrMsg(res)};
@@ -1123,7 +1153,7 @@ function recordToRow(type, record){
 function rowToSheetDict(kind, row){
   const boolX = v => v ? 'X' : '';
   switch(kind){
-    case 'users': return {'Email':row.email, 'Họ tên':row.name, 'PassHash':row.pass_hash, 'Vai trò':row.role};
+    case 'users': return {'Email':row.email, 'Họ tên':row.name, 'PassHash':row.pass_hash, 'Vai trò':row.role, 'Hoạt động': row.active===false ? 'off' : 'on'};
     case 'dot': return {'Mã đợt':row.id, 'Tên đợt':row.ten, 'Tổ máy':row.to_may, 'Ngày bắt đầu':row.ngay_bat_dau||'', 'Ngày kết thúc':row.ngay_ket_thuc||'', 'Hạn hoàn thành theo kế hoạch':row.han_ke_hoach||'', 'Trạng thái':row.trang_thai, 'Tên hạng mục công trình':row.ten_hang_muc_cong_trinh, 'Tên gói thầu':row.ten_goi_thau, 'Tên đơn vị thi công':row.ten_don_vi_thi_cong};
     case 'danh_muc': return {'Mã DM':row.id, 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vị trí từ':row.vi_tri_tu, 'Vị trí đến':row.vi_tri_den, 'Lớp ống từ':row.lop_ong_tu, 'Lớp ống đến':row.lop_ong_den, 'Vùng vật liệu':row.vung, 'Đường kính':row.duong_kinh, 'Chiều dày':row.chieu_day, 'Vật liệu':row.vat_lieu, 'Ghi chú':row.ghi_chu};
     case 'kiem_tra': return {'Mã KT':row.id, 'Đợt':row.dot_id||'', 'Tổ máy':row.to_may, 'Hệ thống':row.he_thong, 'Thiết bị':row.thiet_bi, 'Vùng':row.vung, 'Vị trí':row.vi_tri, 'Lớp ống':row.lop_ong, 'Đường kính':row.duong_kinh, 'Chiều dày TK':row.chieu_day_tk, 'Chiều dày đo':row.chieu_day_do, '% còn lại':row.phan_tram_con_lai, 'Ngoại dạng':row.ngoai_dang, 'Ngày kiểm tra':row.ngay||'', 'Người kiểm tra':row.nguoi_kiem_tra};
@@ -1209,7 +1239,9 @@ async function fetchSheetAll(){
   }
 }
 function mapSheetUsers(rows){
-  return rows.map(r=>({ email:String(r['Email']||'').toLowerCase(), name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:String(r['Vai trò']||'ky_thuat') })).filter(u=>u.email);
+  return rows.map(r=>{ const email = String(r['Email']||'').toLowerCase();
+    return { email, name:String(r['Họ tên']||''), passHash:String(r['PassHash']||''), role:normRole(email, String(r['Vai trò']||'ky_thuat')),
+             active: email===SUPER_ADMIN_EMAIL ? true : String(r['Hoạt động']||'on')!=='off' }; }).filter(u=>u.email);
 }
 function mapSheetDanhMuc(rows){
   return rows.map(r=>({
@@ -1421,7 +1453,7 @@ async function loadAll(){
   // BƯỚC 1 — tải nhanh từ bộ nhớ cục bộ (tức thì, không chờ mạng) để hiện giao diện ngay lập tức
   state.theme = await g('theme', false, 'dark');
   applyTheme(state.theme);
-  state.users = await g('users', true, []);
+  state.users = (await g('users', true, [])).map(u=>Object.assign({}, u, {role: normRole(u.email, u.role)}));
   state.dots = await g('dots', true, []);
   state.danhMuc = await g('danh-muc', true, []);
   if(state.danhMuc.length===0) state.danhMuc = seedDanhMuc();
@@ -1506,7 +1538,20 @@ async function syncFromSheetInBackground(){
   };
 
   state.offlineUsers = await applyDefensive('users', all.users, mapSheetUsers, 'users', 'Tài khoản (Users)');
-  if(state.session){ const u = state.users.find(x=>x.email===state.session.email); if(u) state.session = u; }
+  if(state.session){
+    const u = state.users.find(x=>x.email===state.session.email);
+    if(u && u.active===false){
+      // Tai khoan bi quan tri TAT (OFF) -> dang xuat ngay o lan dong bo ke tiep
+      state.session = null; persist('session', null, false);
+      alert('Tài khoản của bạn đã bị TẮT (OFF) bởi Quản trị. Liên hệ Quản trị nếu cần mở lại.');
+    }
+    else if(u) state.session = u;
+    else if(!state.offlineUsers && state.users.length){
+      // Tai khoan da bi quan tri xoa tren server -> dang xuat ngay, khong cho tiep tuc dung phien cu
+      state.session = null; persist('session', null, false);
+      alert('Tài khoản của bạn đã bị xóa hoặc không còn tồn tại. Vui lòng liên hệ Quản trị.');
+    }
+  }
   state.offlineDots = await applyDefensive('dots', all.dot, mapSheetDot, 'dots', 'Đợt (Dot)');
   state.offlineDanhMuc = await applyDefensive('danhMuc', all.danh_muc, mapSheetDanhMuc, 'danh-muc', 'Danh mục kỹ thuật (DanhMuc)');
   state.offlineKiemTra = await applyDefensive('kiemTra', all.kiem_tra, mapSheetKiemTra, 'kiem-tra', 'Kiểm tra (KiemTra)');
@@ -1727,6 +1772,7 @@ async function postToLegacyAppsScript(payload, timeoutMs){
 // resolution=merge-duplicates) nen 1 ham nay xu ly duoc ca "tao moi" lan "cap nhat" giong upsertRow_ cu.
 async function postToSheet(payload, timeoutMs){
   const type = payload.type;
+  if(isGuest()) return {ok:false, error:GUEST_MSG};
   try{
     if(type==='upload_anh') return await postToLegacyAppsScript(payload, timeoutMs);
     if(type==='delete' || type==='delete_all' || type==='delete_batch'){
@@ -1751,10 +1797,11 @@ async function postToSheet(payload, timeoutMs){
     // GHI THEO COT (_cot): chi gui id + dung nhung cot nguoi dung VUA THAO TAC; cac cot khac KHONG gui nen
     // khong the de len gia tri hien co tren server. Du lieu khong thao tac se luon lay tu server khi dong bo.
     if(payload.record && Array.isArray(payload.record._cot)){
-      const keep = new Set(['id'].concat(payload.record._cot));
-      const rowFull = row; const rowPart = {};
-      Object.keys(rowFull).forEach(k=>{ if(keep.has(k)) rowPart[k] = rowFull[k]; });
-      return await sbUpsert(table, rowPart);
+      const keyCol = (row.id !== undefined && row.id !== null) ? 'id' : 'email';
+      const rowPart = {};
+      payload.record._cot.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(row,k)) rowPart[k] = row[k]; });
+      if(!Object.keys(rowPart).length) return {ok:true};
+      return await sbPatch(table, keyCol, row[keyCol], rowPart, row);
     }
     if(payload.record && payload.record._chiThem) return await sbInsertIgnore(table, row);
     return await sbUpsert(table, row);
@@ -1843,6 +1890,7 @@ async function flushOutbox(){
 }
 window.retryOutboxNow = function(){ flushOutbox(); };
 async function syncToSheet(type, record){
+  if(isGuest()) return false; // Khach chi xem: khong ghi, khong dua vao hang doi
   // (Khong chan thao tac khi du lieu co the cu: viec chong "ha cap" du lieu do trigger tren Supabase dam nhiem,
   //  de cong viec thuc te khong bi cham.)
   const result = await postToSheet({type, record, ts: new Date().toISOString()});
@@ -1959,7 +2007,10 @@ async function doRegister(){
   const pass=document.getElementById('reg-pass').value;
   if(!name||!email||!pass){ state.authErr='Vui lòng nhập đầy đủ họ tên, email và mật khẩu.'; render(); return; }
   if(state.users.find(u=>u.email===email)){ state.authErr='Email này đã được đăng ký.'; render(); return; }
-  const role = state.users.length===0 ? 'admin' : ''; // '' = chua duoc Quan tri phan quyen, se sua truc tiep cot Vai tro tren sheet Users
+  // Dang ky moi LUON o trang thai chua phan quyen (''); chi email admin co dinh (SUPER_ADMIN_EMAIL) la admin.
+  // (Truoc day "danh sach cuc bo rong" duoc coi la nguoi dau tien -> bi cap admin nham.) Admin phan quyen sau
+  // trong modul Quan tri tai khoan.
+  const role = normRole(email, '');
   const user = {name, email, passHash: await sha256Hex(pass), role};
   state.users.push(user);
   await persist('users', state.users, true);
@@ -1973,6 +2024,7 @@ async function doLogin(){
   const pass=document.getElementById('log-pass').value;
   const user = state.users.find(u=>u.email===email);
   if(!user){ state.authErr='Email hoặc mật khẩu không đúng.'; render(); return; }
+  if(user.active===false){ state.authErr='Tài khoản đang bị TẮT (OFF) — liên hệ Quản trị để được mở lại.'; render(); return; }
   const newHash = await sha256Hex(pass);
   let ok = user.passHash === newHash;
   if(!ok && user.passHash === simpleHash(pass)){
@@ -3319,7 +3371,7 @@ async function syncSuaChua(){
       const doi = (activeItem.phanTramConLai!==latest.phanTramConLai) || ((activeItem.ngoaiDangGanNhat||'')!==(latest.ngoaiDang||''));
       activeItem.chieuDayDoGanNhat = latest.chieuDayDo; activeItem.phanTramConLai = latest.phanTramConLai;
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
-      if(doi && !isDataStale()) sbUpsertMany('sua_chua_hang_muc', [{id:activeItem.id, phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}]);
+      if(doi && !isDataStale()) sbPatch('sua_chua_hang_muc', 'id', activeItem.id, {phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}, null);
     }
     if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
   });
@@ -4318,7 +4370,7 @@ function render(){
         <div style="margin-top:8px;">${themeToggleHtml()}</div>
       </div>
     </div>
-    <div class="main">${(!state.syncing && isDataStale()) ? `<div style="margin:0 0 12px;padding:10px 12px;border:1px solid var(--danger);border-radius:10px;background:rgba(226,86,79,.12);font-size:12.5px;line-height:1.5;"><b style="color:var(--danger);">⚠ Dữ liệu trên máy này CHƯA ĐỒNG BỘ / có thể đã cũ.</b> Bấm đồng bộ để xem số liệu mới nhất của mọi người. <button class="mini-btn" onclick="retrySync()">Đồng bộ lại ngay</button></div>` : ''}${renderTab()}</div>
+    <div class="main">${isGuest() ? `<div style="margin:0 0 12px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:12.5px;color:var(--muted);">👁 Bạn đang dùng tài khoản <b>Khách</b> — chỉ xem, không thể thay đổi dữ liệu.</div>` : ''}${(!state.syncing && isDataStale()) ? `<div style="margin:0 0 12px;padding:10px 12px;border:1px solid var(--danger);border-radius:10px;background:rgba(226,86,79,.12);font-size:12.5px;line-height:1.5;"><b style="color:var(--danger);">⚠ Dữ liệu trên máy này CHƯA ĐỒNG BỘ / có thể đã cũ.</b> Bấm đồng bộ để xem số liệu mới nhất của mọi người. <button class="mini-btn" onclick="retrySync()">Đồng bộ lại ngay</button></div>` : ''}${renderTab()}</div>
   </div>
   <div class="bottom-nav">${bottomNavHtml}</div>
   ${state.lightboxImg ? `<div class="lightbox-overlay" onclick="closeLightbox()"><img src="${state.lightboxImg}"></div>` : ''}
@@ -4362,6 +4414,7 @@ function renderTab(){
   if(state.tab==='history') return renderHistory();
   if(state.tab==='analysis') return renderAnalysis();
   if(state.tab==='auditlog') return renderAuditLog();
+  if(state.tab==='quantri') return renderQuanTri();
 }
 
 /* ---------- NHẬT KÝ THAO TÁC (AUDIT LOG) — chỉ admin xem được ---------- */
@@ -4482,6 +4535,109 @@ function renderAuditLog(){
     <button class="btn-ghost" onclick="applyAuditLogFilter()">Tải lại</button></div>
   <div class="settings-note" style="margin-bottom:14px;">Ghi lại tự động mọi lần Thêm/Sửa/Xóa trên các bảng dữ liệu chính (Đợt, Danh mục, Kiểm tra, Sửa chữa, Mối hàn, Vật tư, Tài liệu, Nhật ký thi công, Người dùng, Cấu hình), kèm người thực hiện và thời gian — hiển thị tối đa 300 bản ghi gần nhất khớp bộ lọc.</div>
   ${filterBar}
+  ${body}`;
+}
+
+/* ---------- QUẢN TRỊ TÀI KHOẢN — chỉ tài khoản admin cố định (SUPER_ADMIN_EMAIL) ---------- */
+const QT_ROLE_OPTIONS = ['', 'khach', 'ktv_han_cat', 'ktv_ndt', 'giam_sat_qc', 'cv_p4'];
+function isAdminUser(){ return !!(state.session && state.session.role==='admin' && state.session.email===SUPER_ADMIN_EMAIL); }
+function qtState(){ if(!state.quanTri) state.quanTri = {loading:false, loaded:false, users:[], err:''}; return state.quanTri; }
+async function loadQuanTri(){
+  const q = qtState(); if(q.loading) return;
+  q.loading = true; q.err = ''; render();
+  try{
+    const res = await fetch(sbUrl('users','select=*&order=created_at.asc'), {headers: sbHeaders()});
+    if(!res.ok) throw new Error(await sbErrMsg(res));
+    q.users = await res.json(); q.loaded = true;
+  }catch(e){ q.err = 'Không tải được danh sách tài khoản: '+(e.message||e); }
+  q.loading = false; render();
+}
+window.qtReload = function(){ loadQuanTri(); };
+window.qtSetRole = async function(email, role){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  if(email===SUPER_ADMIN_EMAIL){ alert('Tài khoản admin cố định, không thể đổi quyền.'); render(); return; }
+  if(role==='admin'){ alert('Chỉ duy nhất tài khoản '+SUPER_ADMIN_EMAIL+' là admin.'); render(); return; }
+  const r = await sbPatch('users','email',email,{role}, null);
+  if(!r.ok){ alert('Không đổi được quyền: '+r.error); loadQuanTri(); return; }
+  const u = state.users.find(x=>x.email===email); if(u) u.role = role;
+  await persist('users', state.users, true);
+  const qu = qtState().users.find(x=>x.email===email); if(qu) qu.role = role;
+  render();
+};
+// Bat/tat (ON/OFF) tai khoan: tai khoan OFF khong dang nhap duoc va bi dang xuat o lan dong bo ke tiep.
+// Dung khi nha thau ket thuc cong viec (khoa tam, mo lai khi can) ma khong phai xoa tai khoan.
+window.qtSetActive = async function(email, name, active){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  if(email===SUPER_ADMIN_EMAIL || email===state.session.email){ alert('Không thể tắt tài khoản admin hoặc tài khoản đang đăng nhập.'); return; }
+  if(!active && !confirm('TẮT (OFF) tài khoản "'+name+'" ('+email+')?\n\nNgười này sẽ bị đăng xuất ở lần đồng bộ kế tiếp và không đăng nhập lại được cho đến khi bạn BẬT (ON) lại.')) return;
+  const r = await sbPatch('users','email',email,{active:!!active}, null);
+  if(!r.ok){ alert('Không đổi được trạng thái (đã chạy quan-tri-tai-khoan.sql để thêm cột active chưa?): '+r.error); return; }
+  const u = state.users.find(x=>x.email===email); if(u) u.active = !!active;
+  await persist('users', state.users, true);
+  const qu = qtState().users.find(x=>x.email===email); if(qu) qu.active = !!active;
+  render();
+};
+window.qtResetPass = async function(email, name){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  const np = prompt('Nhập mật khẩu MỚI cho "'+name+'" ('+email+') — tối thiểu 6 ký tự:');
+  if(np===null) return;
+  if(np.length<6){ alert('Mật khẩu phải có tối thiểu 6 ký tự.'); return; }
+  const h = await sha256Hex(np);
+  const r = await sbPatch('users','email',email,{pass_hash:h}, null);
+  if(!r.ok){ alert('Không đổi được mật khẩu: '+r.error); return; }
+  const u = state.users.find(x=>x.email===email); if(u) u.passHash = h;
+  await persist('users', state.users, true);
+  alert('Đã đổi mật khẩu cho '+name+'. Hãy báo mật khẩu mới cho người dùng (qua kênh riêng).');
+};
+window.qtDeleteUser = async function(email, name){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  if(email===SUPER_ADMIN_EMAIL || email===state.session.email){ alert('Không thể xóa tài khoản admin hoặc tài khoản đang đăng nhập.'); return; }
+  if(!confirm('XÓA tài khoản "'+name+'" ('+email+')?\n\nNgười này sẽ không đăng nhập được nữa. Dữ liệu họ đã nhập vẫn được giữ.\nKhông thể hoàn tác.')) return;
+  const r = await sbDelete('users', 'email=eq.'+encodeURIComponent(email));
+  if(!r.ok){ alert('Không xóa được: '+r.error); return; }
+  state.users = state.users.filter(u=>u.email!==email);
+  await persist('users', state.users, true);
+  loadQuanTri();
+};
+function renderQuanTri(){
+  if(!isAdminUser()){
+    return `<div class="page-head"><div><div class="page-eyebrow">Không có quyền truy cập</div><div class="page-title">Quản trị tài khoản</div></div></div>
+    <div class="settings-note">Chỉ tài khoản quản trị mới được xem module này.</div>`;
+  }
+  const q = qtState();
+  if(!q.loaded && !q.loading && !q.err){ setTimeout(loadQuanTri, 0); }
+  let body;
+  if(q.loading && !q.loaded) body = '<div class="empty">Đang tải danh sách tài khoản…</div>';
+  else if(q.err) body = `<div class="settings-note" style="color:var(--danger);">${esc(q.err)}</div>`;
+  else if(!q.users.length) body = '<div class="empty">Chưa có tài khoản nào.</div>';
+  else body = q.users.map(u=>{
+    const isSuper = (u.email||'').toLowerCase()===SUPER_ADMIN_EMAIL;
+    const badAdmin = !isSuper && u.role==='admin';
+    const optVals = isSuper ? ['admin'] : QT_ROLE_OPTIONS;
+    const selectedRole = isSuper ? 'admin' : (badAdmin ? '' : (u.role||''));
+    const opts = optVals.map(v=>`<option value="${esc(v)}" ${selectedRole===v?'selected':''}>${esc(v===''?'Chưa phân quyền':(ROLE_LABELS[v]||v))}</option>`).join('');
+    return `<div class="record">
+      <div class="record-top">
+        <div class="record-loc">${esc(u.name||'(chưa có tên)')} <span style="color:var(--muted);font-weight:400;">· ${esc(u.email)}</span></div>
+        ${isSuper ? '<span class="status good">Admin cố định</span>' : (badAdmin ? '<span class="status danger">⚠ admin không hợp lệ</span>' : '')}
+        ${(!isSuper && u.active===false) ? '<span class="status danger">OFF — đang bị khóa</span>' : (!isSuper ? '<span class="status good">ON — đang hoạt động</span>' : '')}
+      </div>
+      <div class="record-meta">
+        <span>Tạo lúc: ${u.created_at ? new Date(u.created_at).toLocaleString('vi-VN') : '—'}</span>
+        <span>Quyền: <select ${isSuper?'disabled':''} onchange="qtSetRole('${esc(u.email)}', this.value)">${opts}</select></span>
+      </div>
+      <div class="record-meta" style="gap:8px;">
+        ${isSuper ? '' : (u.active===false
+          ? `<button class="mini-btn" style="color:var(--good,#3fb27f);" onclick="qtSetActive('${esc(u.email)}','${esc((u.name||'').replace(/'/g,'’'))}', true)">Bật (ON)</button>`
+          : `<button class="mini-btn" style="color:var(--danger);" onclick="qtSetActive('${esc(u.email)}','${esc((u.name||'').replace(/'/g,'’'))}', false)">Tắt (OFF)</button>`)}
+        <button class="mini-btn" onclick="qtResetPass('${esc(u.email)}','${esc((u.name||'').replace(/'/g,'’'))}')">Đổi mật khẩu</button>
+        ${isSuper ? '' : `<button class="mini-btn" style="color:var(--danger);" onclick="qtDeleteUser('${esc(u.email)}','${esc((u.name||'').replace(/'/g,'’'))}')">Xóa tài khoản</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="page-head"><div><div class="page-eyebrow">Chỉ dành cho Quản trị</div><div class="page-title">Quản trị tài khoản</div></div>
+    <button class="btn-ghost" onclick="qtReload()">Tải lại</button></div>
+  <div class="settings-note" style="margin-bottom:14px;">Tổng ${q.users.length} tài khoản. Chỉ tài khoản <b>${esc(SUPER_ADMIN_EMAIL)}</b> là admin. Vai trò <b>Khách</b> được xem mọi module nhưng không thay đổi được dữ liệu. Thay đổi quyền có hiệu lực ở lần đồng bộ kế tiếp của người dùng (tối đa vài chục giây, hoặc khi họ tải lại trang).</div>
   ${body}`;
 }
 
