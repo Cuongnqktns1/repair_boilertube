@@ -1001,6 +1001,11 @@ function normRole(email, role){
 // Tai khoan "Khach": xem duoc moi modul va chi tiet tung muc nhung KHONG thay doi duoc du lieu.
 function isGuest(){ return !!(state.session && state.session.role === 'khach'); }
 const GUEST_MSG = 'Tài khoản Khách chỉ được xem, không thể thay đổi dữ liệu.';
+// PHUONG AN dung khung mo hinh moi han (w1/w2 + bien phap, theo doi cat/han/PAUT): "Cat thay" va "Cat nang gian
+// kiem tra" (nang ha gian kiem tra — co the khong thay ong nao, chi con moi han bien phap; so doan ong co the = 0).
+const PA_NANG_GIAN = 'Cắt nâng giàn kiểm tra';
+function isCatLike(pa){ return pa==='Cắt thay' || pa===PA_NANG_GIAN; }
+function doanOngOf(s){ const n = parseInt(s.soDoanOng,10); return isNaN(n) ? 1 : n; }
 // Khi dang GUI LAI hang doi outbox (ban ghi cu luu tu luc loi mang) thi khai bao phien ban 0 de trigger bao ve
 // tren Supabase coi do la du lieu cu va KHONG cho no "ha cap" (bo cho phep, mat moi han da han...) len du lieu moi.
 let _replayStale = false;
@@ -1421,7 +1426,7 @@ function mapSheetSuaChua(itemRows, weldRows){
   // thao tac lai) — vi bao cao Telegram dinh ky va file xuat Excel doc TRUC TIEP cot "Trang thai" tren
   // Sheet, khong tu tinh lai nhu app; neu khong dong bo lai thi bao cao/xuat file se tiep tuc lech voi app.
   items.forEach(item=>{
-    if((item.phuongAn||'Cắt thay')==='Cắt thay'){
+    if(isCatLike(item.phuongAn||'Cắt thay')){
       const truocTT = item.trangThai, truocNgayHT = item.ngayHoanThanh;
       recomputeStatus(item);
       if(item.trangThai!==truocTT || item.ngayHoanThanh!==truocNgayHT){
@@ -3395,7 +3400,7 @@ async function syncSuaChua(){
       activeItem.ngoaiDangGanNhat = latest.ngoaiDang||'';
       if(doi && !isDataStale()) sbPatch('sua_chua_hang_muc', 'id', activeItem.id, {phan_tram_con_lai:activeItem.phanTramConLai||'', ngoai_dang_gan_nhat:activeItem.ngoaiDangGanNhat||''}, null);
     }
-    if(activeItem.phuongAn==='Cắt thay') recomputeStatus(activeItem);
+    if(isCatLike(activeItem.phuongAn)) recomputeStatus(activeItem);
   });
   await persist('sua-chua', state.suaChua, true);
 }
@@ -3435,7 +3440,8 @@ window.setSoDoanOng = async function(itemId, value){
   if(!can('hanCat')){ noPermAlert(); render(); return; }
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const n = parseInt(value,10);
-  item.soDoanOng = (!isNaN(n) && n>0) ? n : 1;
+  // "Cat nang gian kiem tra" cho phep 0 doan ong (chi nang ha gian, khong thay ong); Cat thay toi thieu 1
+  item.soDoanOng = item.phuongAn===PA_NANG_GIAN ? ((!isNaN(n) && n>=0) ? n : 0) : ((!isNaN(n) && n>0) ? n : 1);
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_item', {...item, _cot:['so_doan_ong']});
   render();
@@ -3450,7 +3456,7 @@ window.setPhuongAn = async function(itemId, value){
   // han chinh thuc (w1, w2), giong het nhu khi he thong tu dong sinh hang muc voi phuong an Cat thay — chi
   // tao khi hang muc dang chua co moi han nao (tranh tao trung neu vi ly do nao do da co san).
   const weldsMoiTao = [];
-  if(value==='Cắt thay' && phuongAnCu!=='Cắt thay'){
+  if(isCatLike(value) && !isCatLike(phuongAnCu)){
     if(!item.welds || item.welds.length===0){
       const welds = taoMoiHanChinhThucMacDinh(item.id);
       item.welds = welds;
@@ -3458,14 +3464,18 @@ window.setPhuongAn = async function(itemId, value){
     }
     // Mac dinh 1 doan ong khi chuyen sang Cat thay (neu truoc do chua co gia tri nao) — nguoi dung tu sua
     // lai so thuc te sau neu 1 vi tri can thay nhieu hon 1 doan ong rieng le.
-    if(!item.soDoanOng) item.soDoanOng = 1;
+    if(value!==PA_NANG_GIAN && !item.soDoanOng) item.soDoanOng = 1;
   }
+  // Chuyen qua lai giua Cat thay <-> Cat nang gian: giu nguyen cac moi han; chinh so doan ong mac dinh cho hop ly
+  if(value===PA_NANG_GIAN && phuongAnCu==='Cắt thay' && item.soDoanOng===1) item.soDoanOng = 0;
+  if(value==='Cắt thay' && phuongAnCu===PA_NANG_GIAN && !item.soDoanOng) item.soDoanOng = 1;
+  if(value===PA_NANG_GIAN && !isCatLike(phuongAnCu)) item.soDoanOng = 0;
   // Nguoc lai: doi TU Cat thay SANG phuong an khac (Han phu/Sua op) -> khong con dung khai niem moi han nua,
   // xoa toan bo moi han hien co (ca chinh thuc lan bien phap, neu co) ca cuc bo lan tren Supabase — tranh de
   // lai du lieu moi han "mo coi" khong con gan voi phuong an nao dung.
-  const weldIdsCanXoa = (value!=='Cắt thay' && phuongAnCu==='Cắt thay' && item.welds && item.welds.length) ? item.welds.map(w=>w.id) : [];
+  const weldIdsCanXoa = (!isCatLike(value) && isCatLike(phuongAnCu) && item.welds && item.welds.length) ? item.welds.map(w=>w.id) : [];
   if(weldIdsCanXoa.length) item.welds = [];
-  if(value!=='Cắt thay'){
+  if(!isCatLike(value)){
     // phương án Hàn phủ/Sửa ốp theo dõi bằng trạng thái thủ công, không dùng khung mối hàn w1/w2
     if(item.trangThai==='Hoàn thành' && !item.ngayHoanThanh) item.ngayHoanThanh = todayStr();
   } else {
@@ -3550,7 +3560,7 @@ window.addBienPhapWeld = async function(itemId){
   let bpNext = 1; while(bpUsed.has(bpNext)) bpNext++;
   const newWeld = {id:itemId+'-wbp'+bpNext, loai:'bien_phap', daCat:false, daHan:false, paut:'Chưa kiểm tra', ngayHan:'', thoHan:'', ghiChu:'', nguoiThucHien: state.session?state.session.name:'', nguoiXacNhanPAUT:'', viTriThucTe:viTriThucTe.trim()};
   item.welds.push(newWeld);
-  if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
+  if(isCatLike(item.phuongAn||'Cắt thay')) recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
   // QUAN TRONG: moi han (ke ca bien phap) duoc luu o BANG RIENG "sua_chua_weld" tren Supabase — bang
   // "sua_chua_item" (recordToRow) KHONG co cot nao chua mang welds ca. Truoc day cho nay CHI goi
@@ -3567,7 +3577,13 @@ window.removeWeld = async function(itemId, weldId){
   const item = state.suaChua.find(s=>s.id===itemId); if(!item) return;
   const w = item.welds.find(x=>x.id===weldId);
   if(!w) return;
-  if(w.loai==='chinh_thuc'){
+  if(w.loai==='chinh_thuc' && item.phuongAn===PA_NANG_GIAN){
+    // "Cat nang gian kiem tra": co the khong thay ong nao (chi co moi han bien phap de nang ha gian) nen cho
+    // xoa CA 2 moi han chinh thuc (ke ca w1), khong bat buoc ly do rieng — chi can xac nhan; van ghi lich su xoa.
+    if(!confirm('Xác nhận xóa mối hàn chính thức "'+weldId+'" (phương án Cắt nâng giàn kiểm tra — không thay ống)?\n\nHành động này sẽ được ghi lại vào lịch sử hạng mục, không thể hoàn tác.')) return;
+    const stampNg = '['+fmtDate(todayStr())+' · '+(state.session?state.session.name:'—')+'] Xóa '+weldId+' — Phương án Cắt nâng giàn kiểm tra (không thay ống)';
+    item.ghiChuXoaMoiHan = (item.ghiChuXoaMoiHan ? item.ghiChuXoaMoiHan+'\n' : '') + stampNg;
+  } else if(w.loai==='chinh_thuc'){
     // Mối 1 (w1) luôn bắt buộc phải có — chỉ cho phép xóa mối 2 trở đi, dùng cho trường hợp 2 hạng mục
     // Cắt thay liền kề nhau dùng chung 1 mối hàn ranh giới thay vì mỗi bên tự có đủ 2 mối hàn riêng.
     if(weldId.endsWith('-w1')){
@@ -3585,7 +3601,7 @@ window.removeWeld = async function(itemId, weldId){
     if(!confirm('Xác nhận xóa mối hàn biện pháp "'+weldId+'"'+(w.viTriThucTe?(' (vị trí thực tế: '+w.viTriThucTe+')'):'')+'?\n\nHành động này không thể hoàn tác.')) return;
   }
   item.welds = item.welds.filter(x=>x.id!==weldId);
-  if((item.phuongAn||'Cắt thay')==='Cắt thay') recomputeStatus(item);
+  if(isCatLike(item.phuongAn||'Cắt thay')) recomputeStatus(item);
   await persist('sua-chua', state.suaChua, true);
   syncToSheet('sua_chua_item', {...item, _cot:['ghi_chu_xoa_moi_han','trang_thai','ngay_hoan_thanh']});
   render();
@@ -3724,7 +3740,7 @@ window.exportSuaChua = async function(){
     let stt=1;
     items.forEach(item=>{
       const phuongAn = item.phuongAn || 'Cắt thay';
-      if(phuongAn==='Cắt thay' && item.welds.length){
+      if(isCatLike(phuongAn) && item.welds.length){
         item.welds.forEach(w=>{
           aoa.push([stt++, item.heThong, item.id, phuongAn, item.phanTramConLai, item.trangThai, fmtDate(item.ngayTao), fmtDate(item.ngayHoanThanh), w.id, w.loai==='chinh_thuc'?'Chính thức':'Biện pháp', w.daCat?'X':'', w.daHan?'X':'', w.paut, w.ngayHan, w.thoHan, w.ghiChu]);
         });
@@ -4723,7 +4739,7 @@ function computeDotStats(dotId){
   // chua chinh thuc trong khoi luong dang trien khai, tranh gay hieu lam ve tien do thi cong thuc te.
   const sc = scAll.filter(s=>s.choPhepThiCong);
   const chuaChoPhep = scAll.length - sc.length;
-  const catThay = sc.filter(s=>(s.phuongAn||'Cắt thay')==='Cắt thay');
+  const catThay = sc.filter(s=>isCatLike(s.phuongAn||'Cắt thay')); // gom ca "Cat nang gian kiem tra" vao Vi tri cat thay
   const hanPhu = sc.filter(s=>s.phuongAn==='Hàn phủ');
   const suaOp = sc.filter(s=>s.phuongAn==='Sửa ốp');
   // Tach rieng 2 chi so: "Da han" = da tich cat+han xong (BAT KE PAUT dat hay chua), va "Da PAUT dat" =
@@ -4792,7 +4808,6 @@ function computeDotStats(dotId){
   // "Vi tri cat thay" (hang muc/doi tuong) khac voi "Doan ong cat thay" THUC TE — 1 vi tri co the phai
   // thay 2-3 doan ong rieng le (truong soDoanOng, xem setSoDoanOng), nen tong hop rieng 2 chi so nay de
   // khong nham lan khi bao cao khoi luong thuc te thi cong.
-  const doanOngOf = s => (parseInt(s.soDoanOng,10)||1);
   const doanOngTotal = catThay.reduce((sum,s)=>sum+doanOngOf(s), 0);
   const doanOngDone = catThay.filter(s=>s.trangThai==='Hoàn thành').reduce((sum,s)=>sum+doanOngOf(s), 0);
   return {uniquePipes, catThay:catThay.length, hanPhu:hanPhu.length, suaOp:suaOp.length,
@@ -4830,7 +4845,7 @@ function renderOvMetricDetail(dotId, s){
     const items = metric==='catThay'?s.catThayItems:(metric==='hanPhu'?s.hanPhuItems:s.suaOpItems);
     const st = it => it.trangThai==='Hoàn thành'?'good':(it.trangThai==='Đang tiến hành'?'warn':'danger');
     inner = items.length ? items.map(it=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>${esc(it.heThong)} <span style="color:var(--muted);font-weight:400;">· vị trí ${esc(it.viTri)}/${esc(it.lopOng)}</span></div><span class="status ${st(it)}">${esc(it.trangThai)}</span></div>
-      <div class="record-meta"><span>${pctDisplay(it.phanTramConLai)}</span>${metric==='catThay'?`<span>${parseInt(it.soDoanOng,10)||1} đoạn ống</span>`:''}<span>Tạo: ${fmtDate(it.ngayTao)}</span><span>${it.ngayHoanThanh?('Hoàn thành: '+fmtDate(it.ngayHoanThanh)):'Chưa hoàn thành'}</span></div></div>`).join('')
+      <div class="record-meta"><span>${pctDisplay(it.phanTramConLai)}</span>${metric==='catThay'?`<span>${doanOngOf(it)} đoạn ống</span>`:''}<span>Tạo: ${fmtDate(it.ngayTao)}</span><span>${it.ngayHoanThanh?('Hoàn thành: '+fmtDate(it.ngayHoanThanh)):'Chưa hoàn thành'}</span></div></div>`).join('')
       : '<div class="empty">Chưa có hạng mục nào thuộc loại này trong đợt.</div>';
   } else if(metric==='welds'){
     inner = s.weldRows.length ? s.weldRows.map(r=>`<div class="record"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(r.weld.id)}</span>${r.weld.loai==='chinh_thuc'?'Chính thức':'Biện pháp'} <span style="color:var(--muted);font-weight:400;">· thuộc ${esc(r.item.id)}</span></div><span class="status ${(r.weld.daHan&&r.weld.paut==='Đạt')?'good':'warn'}">${esc(r.weld.paut)}</span></div>
@@ -5050,7 +5065,7 @@ function renderOvSearch(){
         // nay hien day du danh sach tung mo han (chi de xem) cho moi chu ky da hoan thanh.
         detail = r.completedItems.map(it=>`<div class="record" style="margin-bottom:8px;"><div class="record-top"><div class="record-loc"><span class="tag-chip">${esc(it.id)}</span>Chu kỳ ${esc(it.chuKy)}</div><span class="status good">${esc(it.trangThai)}</span></div>
           <div class="record-meta"><span>${esc(it.phuongAn||'Cắt thay')}</span><span>Hoàn thành: ${it.ngayHoanThanh?fmtDate(it.ngayHoanThanh):'—'}</span><span>${it.welds.length} mối hàn (${it.welds.filter(w=>w.loai==='chinh_thuc').length} chính thức, ${it.welds.filter(w=>w.loai==='bien_phap').length} biện pháp)</span></div>
-          ${(it.phuongAn||'Cắt thay')==='Cắt thay' ? renderWeldListReadOnly(it.welds) : ''}
+          ${isCatLike(it.phuongAn||'Cắt thay') ? renderWeldListReadOnly(it.welds) : ''}
           </div>`).join('');
       } else {
         detail = `<div class="settings-note">Chưa có hạng mục sửa chữa nào cho vị trí này (hệ thống chỉ tự tạo khi kết quả kiểm tra ≤ 70% hoặc ngoại dạng bất thường). Lần ghi nhận gần nhất: ${r.latest.chieuDayDo?esc(r.latest.chieuDayDo)+'mm':'chưa đo chiều dày'} ngày ${fmtDate(r.latest.ngay)}, người kiểm tra: ${esc(r.latest.nguoiKiemTra||'—')}${(r.latest.ngoaiDang && r.latest.ngoaiDang!=='Bình thường')?(', ngoại dạng: '+esc(r.latest.ngoaiDang)):''}.</div>`;
@@ -5435,6 +5450,7 @@ function renderSuaChuaItemCard(item){
     ? `<span class="tag-chip" style="background:transparent;border:1px solid var(--danger);color:var(--danger);">${esc(phuongAn)} · chưa cho phép thi công</span>`
     : `<select ${disHanCat} onclick="event.stopPropagation()" onchange="setPhuongAn('${item.id}', this.value)" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;">
     <option ${phuongAn==='Cắt thay'?'selected':''}>Cắt thay</option>
+    <option ${phuongAn===PA_NANG_GIAN?'selected':''}>Cắt nâng giàn kiểm tra</option>
     <option ${phuongAn==='Hàn phủ'?'selected':''}>Hàn phủ</option>
     <option ${phuongAn==='Sửa ốp'?'selected':''}>Sửa ốp</option>
   </select>`;
@@ -5443,7 +5459,7 @@ function renderSuaChuaItemCard(item){
     // An han (khong render) toan bo bang mo hinh/cac dieu khien cat-han/trang thai thu cong cho nha thau
     // khi chua duoc cho phep — bang choPhepPanel o tren da giai thich ly do, o day chi con lich su (neu co).
     bodyHtml = item.ghiChuXoaMoiHan?`<div style="font-size:11px;color:var(--muted);white-space:pre-line;"><b>Lịch sử xóa mối hàn chính thức:</b>\n${esc(item.ghiChuXoaMoiHan)}</div>`:'';
-  } else if(phuongAn==='Cắt thay'){
+  } else if(isCatLike(phuongAn)){
     const weldRows = item.welds.map(w=>`<div class="weld-row">
       <span class="weld-id">${esc(w.id)}</span>
       <span class="weld-badge ${w.loai==='bien_phap'?'bp':'official'}">${w.loai==='bien_phap'?'Biện pháp':'Chính thức'}</span>
@@ -5463,7 +5479,7 @@ function renderSuaChuaItemCard(item){
     // So doan ong THUC TE can thay cho vi tri nay — 1 vi tri co the phai cat/thay 2-3 doan ong rieng le,
     // khac voi khai niem "mo han" (van chi tu dong 2 moi han chinh, cac doan/moi them vao do nguoi dung tu
     // tao mo han bien phap) — truong nay CHI dung de tong hop bao cao "Doan ong cat thay (Xong/Tong)".
-    const soDoanOngField = `<div class="field" style="max-width:220px;margin-bottom:10px;"><label>Số đoạn ống thực tế cần thay (vị trí này)</label><input type="number" min="1" step="1" ${disHanCat} value="${esc(item.soDoanOng||1)}" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-size:12.5px;width:100%;" onchange="setSoDoanOng('${item.id}', this.value)"></div>`;
+    const soDoanOngField = `<div class="field" style="max-width:220px;margin-bottom:10px;"><label>Số đoạn ống thực tế cần thay (vị trí này)${phuongAn===PA_NANG_GIAN?' — có thể nhập 0 nếu chỉ nâng hạ giàn, không thay ống':''}</label><input type="number" min="${phuongAn===PA_NANG_GIAN?0:1}" step="1" ${disHanCat} value="${esc(doanOngOf(item))}" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-size:12.5px;width:100%;" onchange="setSoDoanOng('${item.id}', this.value)"></div>`;
     bodyHtml = `${soDoanOngField}${weldRows}${canHanCat?`<button class="mini-btn" style="margin-top:6px;" onclick="addBienPhapWeld('${item.id}')">+ Thêm mối hàn biện pháp</button>`:''}
       ${item.ghiChuXoaMoiHan?`<div style="margin-top:10px;font-size:11px;color:var(--muted);white-space:pre-line;border-top:1px dashed var(--border-soft);padding-top:8px;"><b>Lịch sử xóa mối hàn chính thức:</b>\n${esc(item.ghiChuXoaMoiHan)}</div>`:''}`;
   } else {
@@ -5476,7 +5492,7 @@ function renderSuaChuaItemCard(item){
   const canXoaSc = can('xoaSuaChua');
   return `<div class="repair-item">
     <div class="repair-head" onclick="toggleRepairExpand('${item.id}')">
-      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${phuongAn==='Cắt thay'?((item.soDoanOng>1?(item.soDoanOng+' đoạn ống · '):'')+doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${pctDisplay(item.phanTramConLai)}${(item.ngoaiDangGanNhat && item.ngoaiDangGanNhat!=='Bình thường')?(' · Ngoại dạng: '+esc(item.ngoaiDangGanNhat)):''}</span></div>
+      <div><span class="tag-chip">${esc(item.id)}</span>${phuongAnSelect} <span class="progress-mini">${esc(item.thietBi||'')} - ${esc(item.viTri)}/${esc(item.lopOng)} · ${isCatLike(phuongAn)?((phuongAn===PA_NANG_GIAN?'nâng giàn · ':'')+(doanOngOf(item)>1?(doanOngOf(item)+' đoạn ống · '):'')+doneW+'/'+totalWelds+' mối hàn đạt (gồm biện pháp) · '):''}${pctDisplay(item.phanTramConLai)}${(item.ngoaiDangGanNhat && item.ngoaiDangGanNhat!=='Bình thường')?(' · Ngoại dạng: '+esc(item.ngoaiDangGanNhat)):''}</span></div>
       <span class="status ${s}">${esc(item.trangThai)}</span>
     </div>
     ${expanded ? `<div style="margin-top:12px;" onclick="event.stopPropagation()">${choPhepPanel}${bodyHtml}
@@ -5491,7 +5507,7 @@ function renderSuaChua(){
   // Thiet bi: neu da chon 1 He thong thi chi liet ke Thiet bi thuoc He thong do (danh sach ngan gon, de chon hon)
   const thietBiScope = state.scFilter.heThong ? allActive.filter(i=>i.heThong===state.scFilter.heThong) : allActive;
   const thietBiOpts = uniq(thietBiScope.map(i=>i.thietBi).filter(Boolean));
-  const phuongAnOpts = ['Cắt thay','Hàn phủ','Sửa ốp'];
+  const phuongAnOpts = ['Cắt thay','Cắt nâng giàn kiểm tra','Hàn phủ','Sửa ốp'];
   const filtered = allActive.filter(i=>
     (!state.scFilter.toMay||i.toMay===state.scFilter.toMay) &&
     (!state.scFilter.heThong||i.heThong===state.scFilter.heThong) &&
@@ -5564,7 +5580,7 @@ function scWeldRowsOf(filteredItems){
   const isContractor = curRole === 'ktv_han_cat';
   const rows = [];
   filteredItems.forEach(item=>{
-    if((item.phuongAn||'Cắt thay')!=='Cắt thay') return;
+    if(!isCatLike(item.phuongAn||'Cắt thay')) return;
     const thiCongLocked = isContractor && !item.choPhepThiCong;
     (item.welds||[]).forEach(w=>{
       rows.push({item, w, thiCongLocked});
