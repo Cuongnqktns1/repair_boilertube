@@ -5472,7 +5472,8 @@ function renderSuaChuaItemCard(item){
       </select>
       <input placeholder="Thợ hàn" ${disHanCat} value="${esc(w.thoHan)}" style="width:110px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11.5px;" onchange="setWeldField('${item.id}','${w.id}','thoHan', this.value)">
       ${(w.loai==='bien_phap' && canHanCat)?`<button class="mini-btn" onclick="removeWeld('${item.id}','${w.id}')">Xóa</button>`:''}
-      ${(w.loai==='chinh_thuc' && !w.id.endsWith('-w1') && canHanCat)?`<button class="mini-btn" style="color:var(--danger);" onclick="removeWeld('${item.id}','${w.id}')" title="Chỉ dùng khi đoạn ống này liền kề, dùng chung mối hàn với hạng mục bên cạnh — bắt buộc nhập lý do">Xóa (cần lý do)</button>`:''}
+      ${(w.loai==='chinh_thuc' && phuongAn===PA_NANG_GIAN && canHanCat)?`<button class="mini-btn" style="color:var(--danger);" onclick="removeWeld('${item.id}','${w.id}')" title="Phương án Cắt nâng giàn kiểm tra (không thay ống): cho phép xóa cả mối chính thức, chỉ cần xác nhận">Xóa</button>`:''}
+      ${(w.loai==='chinh_thuc' && phuongAn!==PA_NANG_GIAN && !w.id.endsWith('-w1') && canHanCat)?`<button class="mini-btn" style="color:var(--danger);" onclick="removeWeld('${item.id}','${w.id}')" title="Chỉ dùng khi đoạn ống này liền kề, dùng chung mối hàn với hạng mục bên cạnh — bắt buộc nhập lý do">Xóa (cần lý do)</button>`:''}
       ${w.viTriThucTe?`<div style="width:100%;font-size:10.5px;color:var(--muted);margin-top:3px;">Vị trí thực tế: ${esc(w.viTriThucTe)}</div>`:''}
       ${(w.nguoiThucHien||w.nguoiXacNhanPAUT)?`<div style="width:100%;font-size:10.5px;color:var(--dim);margin-top:3px;">${w.nguoiThucHien?('Cắt/hàn bởi: '+esc(w.nguoiThucHien)):''}${(w.nguoiThucHien&&w.nguoiXacNhanPAUT)?' · ':''}${w.nguoiXacNhanPAUT?('PAUT xác nhận bởi: '+esc(w.nguoiXacNhanPAUT)):''}</div>`:''}
     </div>`).join('');
