@@ -310,7 +310,7 @@ const NAV = [
   {id:'history',  tag:'LS', label:'Lịch sử & xu hướng'},
   {id:'analysis', tag:'PT', label:'Phân tích & khuyến nghị'},
   {id:'auditlog', tag:'NKTT', label:'Nhật ký thao tác', adminOnly:true},
-  {id:'quantri',  tag:'QT',   label:'Quản trị tài khoản', adminOnly:true},
+  {id:'quantri',  tag:'QT',   label:'Quản trị (tài khoản & báo cáo)', adminOnly:true},
 ];
 // Tren dien thoai, thanh dieu huong duoi cung chi hien Trang chu + 3 module hay dung nhat (tranh 9 muc phai cuon ngang).
 // Cac module con lai truy cap qua luoi module o trang Tong quan (dong vai tro trang chu).
@@ -1516,6 +1516,7 @@ function isUserActivelyEditing(){
   // dang go do trong form nay. Vi dien nhat ky thuong mat 10-15 phut (lau hon nhieu chu ky dong bo), dong
   // bo nen se render lai toan trang giua chung, xoa mat noi dung chua luu trong cac o nhap — day chinh la
   // nguyen nhan "dien nhat ky khong luu duoc" ma nguoi dung gap phai khi SUA lai nhat ky.
+  if(state.tab==='quantri') return true; // dang nhap cau hinh o modul Quan tri — khong tu render lai lam mat noi dung dang go
   if(state.nkEditingId) return true;
   if(state.nkApprovingId) return true;
   return false;
@@ -4595,6 +4596,10 @@ async function loadQuanTri(){
     const res = await fetch(sbUrl('users','select=*&order=created_at.asc'), {headers: sbHeaders()});
     if(!res.ok) throw new Error(await sbErrMsg(res));
     q.users = await res.json(); q.loaded = true;
+    try{
+      const r2 = await fetch(sbUrl('cau_hinh','select=*&id=eq.1'), {headers: sbHeaders()});
+      if(r2.ok){ const rows = await r2.json(); q.cfg = (Array.isArray(rows) && rows[0]) ? rows[0] : {}; }
+    }catch(e2){ q.cfg = q.cfg || {}; }
   }catch(e){ q.err = 'Không tải được danh sách tài khoản: '+(e.message||e); }
   q.loading = false; render();
 }
@@ -4609,6 +4614,53 @@ window.qtSetRole = async function(email, role){
   await persist('users', state.users, true);
   const qu = qtState().users.find(x=>x.email===email); if(qu) qu.role = role;
   render();
+};
+// ---- CAU HINH BAO CAO TELEGRAM (chi admin) ----
+window.qtToggleBaoCao = async function(){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  const q = qtState(); const on = !(q.cfg && q.cfg.bat_bao_cao === false);
+  if(on && !confirm('TẮT báo cáo định kỳ? Sẽ không gửi báo cáo tiến độ nào lên Telegram cho đến khi bạn BẬT lại.')) return;
+  const r = await sbPatch('cau_hinh','id',1,{bat_bao_cao: !on}, null);
+  if(!r.ok){ alert('Không đổi được (đã chạy cau-hinh-bao-cao.sql chưa?): '+r.error); return; }
+  q.cfg = Object.assign({}, q.cfg, {bat_bao_cao: !on}); render();
+};
+window.qtSaveCfg = async function(){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  const gv = id => String((document.getElementById(id)||{}).value||'').trim();
+  const splitList = t => t.split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+  const kieu = (gv('qt-cfg-kieu')||'GIO').toUpperCase()==='NGAY' ? 'NGAY' : 'GIO';
+  const chatBc = splitList(gv('qt-cfg-chat-bc')), chatCb = splitList(gv('qt-cfg-chat-cb'));
+  const reId = /^-?\d+$/;
+  if(chatBc.some(x=>!reId.test(x)) || chatCb.some(x=>!reId.test(x))){ alert('Chat ID chỉ gồm chữ số (có thể bắt đầu bằng dấu -), nhiều ID cách nhau bằng dấu phẩy.'); return; }
+  const gio = gv('qt-cfg-gio');
+  if(kieu==='GIO' && !(parseFloat(gio)>0)){ alert('Kiểu lịch GIỜ: "Số giờ mỗi lần gửi" phải là số lớn hơn 0 (VD: 4).'); return; }
+  const gioCdList = splitList(gv('qt-cfg-gio-cd'));
+  const reHm = /^([01]?\d|2[0-3])(:[0-5]\d)?$/;
+  if(gioCdList.some(x=>!reHm.test(x))){ alert('Giờ gửi cố định phải dạng HH:MM, nhiều giờ cách nhau dấu phẩy (VD: 07:00, 15:00).'); return; }
+  if(kieu==='NGAY' && !gioCdList.length){ alert('Kiểu lịch NGÀY: cần nhập ít nhất một giờ gửi cố định (VD: 07:00).'); return; }
+  const gioCd = gioCdList.map(x=>{ const [h,m] = x.split(':'); return String(h).padStart(2,'0')+':'+(m||'00'); }).join(',');
+  const token = gv('qt-cfg-token');
+  const cols = {chat_ids_bao_cao: chatBc.join(','), chat_ids_canh_bao: chatCb.join(','), kieu_lich: kieu, tan_suat_gio: gio, gio_co_dinh: gioCd};
+  if(token) cols.bot_token = token;
+  if(!confirm('Lưu cấu hình báo cáo Telegram?'+(token?'\n(Bot Token sẽ được thay bằng giá trị mới nhập.)':''))) return;
+  const r = await sbPatch('cau_hinh','id',1,cols, null);
+  if(!r.ok){ alert('Không lưu được: '+r.error); return; }
+  state.telegram = Object.assign({}, state.telegram, {
+    botToken: token || state.telegram.botToken, chatIdsBaoCao: chatBc, chatIdsCanhBao: chatCb, kieuLich: kieu, tanSuatGio: gio, gioCoDinh: gioCd });
+  alert('Đã lưu cấu hình báo cáo.');
+  loadQuanTri();
+};
+window.qtSendNow = async function(){
+  if(!isAdminUser()){ noPermAlert(); return; }
+  const note = String((document.getElementById('qt-cfg-note')||{}).value||'').trim();
+  if(!confirm('Gửi NGAY 1 báo cáo cập nhật tới tất cả nhóm trong "Chat ID báo cáo tổng hợp"?'+(note?('\n\nGhi chú mở đầu: '+note):'\n\n(Không có ghi chú mở đầu.)')+'\n\nLịch gửi định kỳ không bị ảnh hưởng.')) return;
+  try{
+    const res = await fetch(SUPABASE_URL+'/rest/v1/rpc/gui_bao_cao_ngay', { method:'POST', headers: sbHeaders(), body: JSON.stringify({p_ghi_chu: note}) });
+    if(!res.ok){ alert('Không gửi được (đã chạy cau-hinh-bao-cao.sql chưa?): '+(await sbErrMsg(res))); return; }
+    const out = await res.json();
+    alert(out==='OK' ? 'Đã gửi báo cáo cập nhật lên Telegram.' : ('Chưa gửi: '+out));
+    loadQuanTri();
+  }catch(e){ alert('Lỗi mạng: '+(e.message||e)); }
 };
 // Bat/tat (ON/OFF) tai khoan: tai khoan OFF khong dang nhap duoc va bi dang xuat o lan dong bo ke tiep.
 // Dung khi nha thau ket thuc cong viec (khoa tam, mo lai khi can) ma khong phai xoa tai khoan.
@@ -4681,8 +4733,37 @@ function renderQuanTri(){
       </div>
     </div>`;
   }).join('');
-  return `<div class="page-head"><div><div class="page-eyebrow">Chỉ dành cho Quản trị</div><div class="page-title">Quản trị tài khoản</div></div>
+  const cfg = q.cfg || {};
+  const baoCaoOn = cfg.bat_bao_cao !== false;
+  const lastSent = cfg.last_sent_ts ? new Date(Number(cfg.last_sent_ts)).toLocaleString('vi-VN') : (cfg.last_sent_date ? (cfg.last_sent_date+(cfg.last_sent_hours?(' · giờ '+cfg.last_sent_hours):'')) : '—');
+  const tokenHint = cfg.bot_token ? ('Đang dùng token kết thúc …'+esc(String(cfg.bot_token).slice(-4))+' (để trống = giữ nguyên)') : 'Chưa có token';
+  const inpStyle = 'width:100%;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 9px;font-size:13px;';
+  const cfgCard = `<div class="form-panel" style="margin-bottom:18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <div><b>Báo cáo Telegram định kỳ</b> ${baoCaoOn?'<span class="status good">ĐANG BẬT</span>':'<span class="status danger">ĐANG TẮT</span>'}
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Lần gửi gần nhất: ${esc(lastSent)}</div></div>
+      <button class="mini-btn" style="${baoCaoOn?'color:var(--danger);':''}" onclick="qtToggleBaoCao()">${baoCaoOn?'Tắt báo cáo':'Bật báo cáo'}</button>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Kiểu lịch</label>
+        <select id="qt-cfg-kieu" style="${inpStyle}"><option value="GIO" ${String(cfg.kieu_lich||'GIO').toUpperCase()==='GIO'?'selected':''}>Theo số giờ (mỗi N giờ)</option><option value="NGAY" ${String(cfg.kieu_lich||'').toUpperCase()==='NGAY'?'selected':''}>Giờ cố định hằng ngày</option></select></div>
+      <div class="field"><label>Số giờ mỗi lần gửi (kiểu "Theo số giờ")</label><input id="qt-cfg-gio" type="number" min="1" step="0.5" value="${esc(cfg.tan_suat_gio||'')}" placeholder="VD: 4" style="${inpStyle}"></div>
+      <div class="field full"><label>Giờ gửi cố định (kiểu "Giờ cố định") — nhiều giờ cách nhau dấu phẩy</label><input id="qt-cfg-gio-cd" value="${esc(cfg.gio_co_dinh||'')}" placeholder="VD: 07:00, 15:00" style="${inpStyle}"></div>
+      <div class="field full"><label>Chat ID nhận BÁO CÁO tổng hợp (nhiều ID cách nhau dấu phẩy)</label><input id="qt-cfg-chat-bc" value="${esc(cfg.chat_ids_bao_cao||'')}" placeholder="VD: -1001234567890" style="${inpStyle}"></div>
+      <div class="field full"><label>Chat ID nhận CẢNH BÁO dưới 70%</label><input id="qt-cfg-chat-cb" value="${esc(cfg.chat_ids_canh_bao||'')}" style="${inpStyle}"></div>
+      <div class="field full"><label>Bot Token <span style="color:var(--muted);font-weight:400;">— ${tokenHint}</span></label><input id="qt-cfg-token" type="password" autocomplete="off" placeholder="Nhập token mới nếu cần thay" style="${inpStyle}"></div>
+    </div>
+    <div class="form-actions" style="justify-content:flex-start;"><button class="btn" onclick="qtSaveCfg()">Lưu cấu hình</button></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border-soft);">
+      <div class="field full"><label>Gửi NGAY một báo cáo cập nhật (ngoài lịch) — ghi chú mở đầu (tuỳ chọn)</label><input id="qt-cfg-note" placeholder="VD: Báo cáo cập nhật sau khi hiệu chỉnh khối lượng" style="${inpStyle}"></div>
+      <button class="mini-btn" style="margin-top:8px;" onclick="qtSendNow()">Gửi báo cáo cập nhật ngay</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5;">Báo cáo chỉ gửi cho các đợt đang ở trạng thái "Đang diễn ra". Muốn dừng hẳn: bấm <b>Tắt báo cáo</b>, hoặc đóng đợt ở modul Đợt kiểm tra/sửa chữa.</div>
+  </div>`;
+  return `<div class="page-head"><div><div class="page-eyebrow">Chỉ dành cho Quản trị</div><div class="page-title">Quản trị</div></div>
     <button class="btn-ghost" onclick="qtReload()">Tải lại</button></div>
+  ${cfgCard}
+  <div style="font-weight:600;margin:6px 0 10px;">Tài khoản người dùng</div>
   <div class="settings-note" style="margin-bottom:14px;">Tổng ${q.users.length} tài khoản. Chỉ tài khoản <b>${esc(SUPER_ADMIN_EMAIL)}</b> là admin. Vai trò <b>Khách</b> được xem mọi module nhưng không thay đổi được dữ liệu. Thay đổi quyền có hiệu lực ở lần đồng bộ kế tiếp của người dùng (tối đa vài chục giây, hoặc khi họ tải lại trang).</div>
   ${body}`;
 }
