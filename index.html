@@ -5656,6 +5656,7 @@ function renderSuaChua(){
       ${(state.scExportHeThong.length || state.scExportThietBi.length) ? `<button class="btn-ghost" onclick="state.scExportHeThong=[]; state.scExportThietBi=[]; render();" style="padding:4px 10px;">Xóa lọc xuất</button>` : ''}
       <button class="btn-ghost" onclick="toggleScViewMode()">${state.scViewMode==='welds'?'📋 Xem theo hạng mục':'🔩 Xem theo mối hàn (checklist)'}</button>
       ${state.scViewMode==='welds' ? `<button class="btn-ghost" onclick="exportScWeldList()">Xuất Excel (danh sách mối hàn)</button>` : `<button class="btn-ghost" onclick="exportSuaChua()">Xuất Excel (báo cáo in ấn)</button>`}
+      <button class="btn-ghost" onclick="exportDoanOngCatThay()">Xuất Excel (đoạn ống cắt thay)</button>
     </div></div>
   ${filterBar}
   ${state.scViewMode==='welds'
@@ -5727,6 +5728,42 @@ function renderScWeldList(filteredItems){
     </div>`;
   }).join('');
 }
+// Xuat "Danh sach doan ong cat thay": 1 dong / 1 vi tri cat thay (Cat thay + Cat nang gian kiem tra), kem
+// so doan ong thuc te thay (soDoanOng). Dung chung bo loc xuat (dot/he thong/thiet bi) voi bao cao in an.
+// Vi tri co so doan = 0 (chi nang ha gian, khong thay ong) duoc bo qua. Them cot "Cho phep thi cong" de doi
+// chieu voi Tong quan (Tong quan chi tinh hang muc da duoc cho phep thi cong).
+window.exportDoanOngCatThay = async function(){
+  if(!(await withXLSXReady())) return;
+  const items = scApplyExportFilter(state.suaChua).filter(i=>isCatLike(i.phuongAn||'Cắt thay') && doanOngOf(i)>0);
+  if(!items.length){ alert('Không có vị trí cắt thay nào (với bộ lọc xuất đang chọn).'); return; }
+  const dotOf = id=>state.dots.find(d=>d.id===id);
+  const rows = items.map(i=>({i, d:dotOf(i.dotId)}));
+  rows.sort((a,b)=> ((a.d&&a.d.ten)||'').localeCompare((b.d&&b.d.ten)||'') || (a.i.toMay||'').localeCompare(b.i.toMay||'')
+    || (a.i.heThong||'').localeCompare(b.i.heThong||'') || (a.i.thietBi||'').localeCompare(b.i.thietBi||'')
+    || String(a.i.viTri||'').localeCompare(String(b.i.viTri||''),'vi',{numeric:true}) || String(a.i.lopOng||'').localeCompare(String(b.i.lopOng||''),'vi',{numeric:true}));
+  const NCOL = 11;
+  const aoa = [];
+  aoa.push(['DANH SÁCH ĐOẠN ỐNG CẮT THAY']);
+  aoa.push(['NHIỆT ĐIỆN NGHI SƠN']);
+  aoa.push(['Ngày xuất: '+fmtDate(todayStr())]);
+  aoa.push([]);
+  aoa.push(['STT','Đợt sửa chữa','Tổ máy','Hệ thống','Thiết bị','Vị trí','Lớp ống','Số đoạn thay thế','Phương án','Trạng thái','Cho phép thi công']);
+  let tong=0, tongChoPhep=0;
+  rows.forEach(({i,d},idx)=>{
+    const n = doanOngOf(i); tong+=n; if(i.choPhepThiCong) tongChoPhep+=n;
+    aoa.push([idx+1, d?d.ten:(i.dotId||''), i.toMay||(d?d.toMay:'')||'', i.heThong||'', i.thietBi||'', i.viTri||'', i.lopOng||'', n, i.phuongAn||'Cắt thay', i.trangThai||'', i.choPhepThiCong?'X':'']);
+  });
+  aoa.push(['','','','','','','Tổng cộng', tong]);
+  aoa.push([]);
+  aoa.push(['Tổng số vị trí: '+rows.length+' · Tổng số đoạn ống: '+tong+' (đã cho phép thi công: '+tongChoPhep+', chưa cho phép: '+(tong-tongChoPhep)+')']);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [0,1,2].map(r=>({s:{r,c:0},e:{r,c:NCOL-1}})).concat([{s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:NCOL-1}}]);
+  ws['!cols'] = [{wch:5},{wch:28},{wch:8},{wch:18},{wch:16},{wch:8},{wch:8},{wch:10},{wch:22},{wch:14},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'DoanOngCatThay');
+  XLSX.writeFile(wb, 'danh-sach-doan-ong-cat-thay.xlsx');
+};
+
 window.exportScWeldList = async function(){
   if(!(await withXLSXReady())) return;
   const allActive = state.suaChua.filter(item=>{ const d = state.dots.find(x=>x.id===item.dotId); return !d || d.trangThai==='Đang diễn ra'; });
