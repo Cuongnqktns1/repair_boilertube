@@ -6075,4 +6075,10 @@ setTimeout(()=>{ if(state.booting){ state.booting = false; render(); } }, 30000)
 })();
 startAutoSync();
 // Hang doi gui lai: thu ngay 1 lan luc mo app (phong con sot lai tu phien truoc do dong/mat mang giua
-// chung), sau do dinh ky 20 giay/lan, va thu ngay
+// chung), sau do dinh ky 20 giay/lan, va thu ngay khi trinh duyet bao co mang tro lai.
+setTimeout(flushOutbox, 3000);
+setInterval(flushOutbox, 20000);
+window.addEventListener('online', flushOutbox);
+</script>
+</body>
+</html>
