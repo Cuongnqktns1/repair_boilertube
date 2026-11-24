@@ -268,8 +268,8 @@ const SHEET_URL = 'https://script.google.com/macros/s/AKfycbySGTzgApl65EoN1dQt66
 // xoa) — chua chuyen sang Supabase Storage o dot nay (lam sau, giai doan 2), vi day la phan it thao tac
 // nhat va khong phai nguyen nhan gay cham khi nhieu nguoi cung dung (Kiem tra/Sua chua/Vat tu moi la noi
 // bi ghi lien tuc, da chuyen het sang Supabase de giai quyet dung cho nghen do LockService toan cuc).
-const SUPABASE_URL = 'https://xhwyumxwpptyjceuontv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhod3l1bXh3cHB0eWpjZXVvbnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyMDcyNjAsImV4cCI6MjEwNTc4MzI2MH0.3f79n71g7xBlZi7DlMIDe0oe-sbHwZmHIgJMqHpszBg';
+const SUPABASE_URL = 'https://fpbpimuipgptsuwccmlx.supabase.co'; // 24/11/2026: chuyen sang project moi (org QLSC Nghi Son) do project cu bi khoa quota
+const SUPABASE_ANON_KEY = 'sb_publishable_r5ZoKJSEuPd-pp-Gc8G5YA_r-GtsZuJ';
 // Lớp lưu trữ tương thích 2 môi trường: window.storage khi chạy trong Claude.ai,
 // localStorage khi chạy độc lập (VD: host trên GitHub Pages) — window.storage không tồn tại ở đó.
 const HAS_CLAUDE_STORAGE = (typeof window !== 'undefined' && !!window.storage);
@@ -1000,7 +1000,7 @@ async function fetchWithTimeout(url, ms, headers){
 // (xem bao-ve-chong-ghi-de.sql) chi cho phep "ha cap" du lieu (bo Cho phep thi cong, mat moi han da han,
 // lui trang thai...) khi request den tu ban app co phien ban >= 43. May dang giu ban HTML cu trong trinh
 // duyet khong gui header nay nen khong the ghi de lui du lieu nua, du co mo lai app sau nay.
-const APP_VERSION = 44;
+const APP_VERSION = 45;
 // ---- QUYEN ADMIN CO DINH: CHI DUY NHAT tai khoan nay la admin. Moi tai khoan khac co role 'admin' (du trong
 // du lieu server) deu bi HA xuong '' (chua phan quyen) o phia app; server cung co trigger chan (xem quan-tri-tai-khoan.sql).
 const SUPER_ADMIN_EMAIL = 'nguyencuongbkdn@gmail.com';
@@ -1036,7 +1036,10 @@ function sbHeaders(extra){
   // "request.headers" (dang JSON) ma cac trigger nhat ky thao tac (audit_log) doc duoc, giup biet
   // CHINH XAC ai vua Them/Sua/Xoa ma khong can dang nhap rieng qua Supabase Auth.
   const userHeader = state.session ? encodeURIComponent(state.session.name||state.session.email||'') : '';
-  return Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json', 'X-App-User': userHeader, 'X-App-Version': String(_replayStale ? 0 : APP_VERSION) }, extra||{});
+  // Khoa moi dang sb_publishable_ KHONG phai JWT -> chi gui qua header apikey, khong gui Authorization: Bearer
+  // (chi khoa anon kieu cu eyJ... moi gui kem Authorization).
+  const authHdr = SUPABASE_ANON_KEY.startsWith('eyJ') ? {'Authorization': 'Bearer '+SUPABASE_ANON_KEY} : {};
+  return Object.assign({ 'apikey': SUPABASE_ANON_KEY }, authHdr, { 'Content-Type':'application/json', 'X-App-User': userHeader, 'X-App-Version': String(_replayStale ? 0 : APP_VERSION) }, extra||{});
 }
 function sbUrl(table, query){ return SUPABASE_URL+'/rest/v1/'+table+(query?('?'+query):''); }
 // QUAN TRONG: PHAI dinh kem header apikey/Authorization khi doc (GET) tu Supabase, neu khong se bi tra ve
@@ -6072,10 +6075,4 @@ setTimeout(()=>{ if(state.booting){ state.booting = false; render(); } }, 30000)
 })();
 startAutoSync();
 // Hang doi gui lai: thu ngay 1 lan luc mo app (phong con sot lai tu phien truoc do dong/mat mang giua
-// chung), sau do dinh ky 20 giay/lan, va thu ngay khi trinh duyet bao co mang tro lai.
-setTimeout(flushOutbox, 3000);
-setInterval(flushOutbox, 20000);
-window.addEventListener('online', flushOutbox);
-</script>
-</body>
-</html>
+// chung), sau do dinh ky 20 giay/lan, va thu ngay
