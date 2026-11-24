@@ -1000,7 +1000,7 @@ async function fetchWithTimeout(url, ms, headers){
 // (xem bao-ve-chong-ghi-de.sql) chi cho phep "ha cap" du lieu (bo Cho phep thi cong, mat moi han da han,
 // lui trang thai...) khi request den tu ban app co phien ban >= 43. May dang giu ban HTML cu trong trinh
 // duyet khong gui header nay nen khong the ghi de lui du lieu nua, du co mo lai app sau nay.
-const APP_VERSION = 43;
+const APP_VERSION = 44;
 // ---- QUYEN ADMIN CO DINH: CHI DUY NHAT tai khoan nay la admin. Moi tai khoan khac co role 'admin' (du trong
 // du lieu server) deu bi HA xuong '' (chua phan quyen) o phia app; server cung co trigger chan (xem quan-tri-tai-khoan.sql).
 const SUPER_ADMIN_EMAIL = 'nguyencuongbkdn@gmail.com';
@@ -1532,13 +1532,17 @@ function isUserActivelyEditing(){
   if(state.nkApprovingId) return true;
   return false;
 }
+// TIET KIEM BANG THONG (Egress Supabase goi Free 5GB/thang): moi lan dong bo tai TOAN BO 10 bang,
+// nen giam tu 90 giay xuong 5 phut/lan, va khi quay lai tab chi dong bo neu lan truoc da cach >= 3 phut.
+const AUTO_SYNC_MS = 5*60*1000, MIN_RESYNC_MS = 3*60*1000;
+function _syncDue(){ return !state.lastSyncAt || (Date.now() - new Date(state.lastSyncAt).getTime()) >= MIN_RESYNC_MS; }
 function startAutoSync(){
   setInterval(()=>{
     if(document.hidden || !state.session || state.syncing || isUserActivelyEditing()) return;
     syncFromSheetInBackground();
-  }, 90000); // 90 giây/lần
+  }, AUTO_SYNC_MS); // 5 phút/lần
   document.addEventListener('visibilitychange', ()=>{
-    if(!document.hidden && state.session && !state.syncing && !isUserActivelyEditing()) syncFromSheetInBackground();
+    if(!document.hidden && state.session && !state.syncing && !isUserActivelyEditing() && _syncDue()) syncFromSheetInBackground();
   });
 }
 async function syncFromSheetInBackground(){
